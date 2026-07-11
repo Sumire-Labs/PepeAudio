@@ -40,6 +40,17 @@ if (dependencyReport.includes('- sodium-native: not found')) {
 const client = new Client({
   intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildVoiceStates],
   partials: [Partials.Channel],
+  // Never let message CONTENT trigger a mention notification. Track titles and
+  // artist names come from external metadata (a YouTube video an attacker can
+  // name "@everyone" or "<@&roleId>") and are echoed into PUBLIC messages — the
+  // queued-added confirmation card and the now-playing panel. escapeMd (see
+  // panelMarkdown.ts) only neutralizes markdown, not mention tokens, so without
+  // this Discord's default (parse every mention in content) would let a crafted
+  // title ping @everyone/a role/a user. `parse: []` still RENDERS mentions as
+  // highlighted pills — including the panel's intentional "<@requester>" — but
+  // suppresses the actual notification, which also stops the panel from
+  // re-pinging the requester on every periodic refresh.
+  allowedMentions: { parse: [] },
   makeCache: Options.cacheWithLimits({
     MessageManager: 0, // panelManager holds its own Message references directly from channel.send()'s return value - never re-fetched via this cache, so capping it to 0 has no effect on the panel.
     UserManager: 100,
