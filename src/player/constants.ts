@@ -77,17 +77,13 @@ export const MAX_HRIR_CONCURRENCY = Math.max(1, Math.min(4, os.cpus().length - 1
  * Volume here is attenuation-only, matching how most well-behaved music players
  * treat "volume" above the source's own mastered level.
  */
-export const VOLUME_PRESETS = [0, 10, 25, 50, 75, 100] as const;
+export const VOLUME_PRESETS = [
+  0, 5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55, 60, 65, 70, 75, 80, 85, 90, 95, 100,
+] as const; // 5% steps (21 options, within Discord's 25-option select limit); DEFAULT_VOLUME_PERCENT must be one of these
 export const MAX_VOLUME_PERCENT = 100;
 
-/**
- * Gates the "360° Sound" panel button/status line and the toggle handler; while
- * false a guild's persisted defaultSpatialMode is also forced to 'off' at load
- * time so no one is stuck with it silently on with no way to turn it off.
- *
- * Re-enabled after the sound-quality rework: the toggle now drives a
- * level-matched afir BRIR virtualization (audio/hrirFilterComplex.ts) — static,
- * out-of-head, full-band — with an asset-free wide fallback, replacing the raw
- * MIT KEMAR sofalizer path that sounded muffled.
- */
-export const SPATIAL_AUDIO_ENABLED = true;
+/** Volume every guild starts at, pinned at construction (not restored from the persisted per-guild default). Must be one of VOLUME_PRESETS. */
+export const DEFAULT_VOLUME_PERCENT = 45;
+
+// 360° Sound is now ALWAYS ON with no user toggle (GuildPlayer pins spatialMode
+// to 'on'), so the old SPATIAL_AUDIO_ENABLED UI-gate flag was removed.

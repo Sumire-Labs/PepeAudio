@@ -7,7 +7,7 @@ import {
 } from 'discord.js';
 import type { GuildPlayer } from '../player/GuildPlayer.js';
 import { buildCustomId, type PanelAction } from './customIds.js';
-import { SPATIAL_AUDIO_ENABLED, VOLUME_PRESETS } from '../player/constants.js';
+import { VOLUME_PRESETS } from '../player/constants.js';
 import { loopLabel } from './panelLabels.js';
 
 function btn(action: PanelAction, guildId: string, label: string, style: ButtonStyle, disabled = false): ButtonBuilder {
@@ -15,8 +15,8 @@ function btn(action: PanelAction, guildId: string, label: string, style: ButtonS
 }
 
 /** Builds and adds the control rows to `container`: row1 (prev/playpause/skip),
- * row2 (stop/shuffle/loop), the conditional row2b (spatial toggle), and row3
- * (the volume select menu). */
+ * row2 (stop/shuffle/loop), row3 (the volume select menu), and row4 (add-to-queue).
+ * There is no spatial toggle row — 360° Sound is always on. */
 export function addControlRows(container: ContainerBuilder, player: GuildPlayer): void {
   const track = player.currentTrack;
 
@@ -38,19 +38,7 @@ export function addControlRows(container: ContainerBuilder, player: GuildPlayer)
     ),
   );
 
-  // Gated by SPATIAL_AUDIO_ENABLED (see constants.ts) — kept as its own row so
-  // toggling the flag doesn't require re-adding UI from scratch.
-  const row2b = SPATIAL_AUDIO_ENABLED
-    ? new ActionRowBuilder<ButtonBuilder>().addComponents(
-        btn(
-          'spatial',
-          player.guildId,
-          '🌌 360°サウンド',
-          player.spatialMode === 'off' ? ButtonStyle.Secondary : ButtonStyle.Success,
-          !track,
-        ),
-      )
-    : null;
+  // 360° Sound is always on with no user toggle, so there is no spatial button row.
 
   const volumeSelect = new StringSelectMenuBuilder()
     .setCustomId(buildCustomId('volume', player.guildId))
@@ -78,7 +66,6 @@ export function addControlRows(container: ContainerBuilder, player: GuildPlayer)
   // which a single mixed rest-args call can't type-check against.
   container.addActionRowComponents(row1);
   container.addActionRowComponents(row2);
-  if (row2b) container.addActionRowComponents(row2b);
   container.addActionRowComponents(row3);
   container.addActionRowComponents(row4);
 }

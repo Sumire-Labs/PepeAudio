@@ -10,9 +10,8 @@ import {
 import type { GuildPlayer } from '../player/GuildPlayer.js';
 import { renderProgressBar } from './progressBar.js';
 import { formatDuration } from '../util/time.js';
-import { SPATIAL_AUDIO_ENABLED } from '../player/constants.js';
 import { escapeMd, mdLink } from './panelMarkdown.js';
-import { loopLabel, sourceIcon, spatialLabel, statusGlyph } from './panelLabels.js';
+import { loopLabel, sourceIcon, statusGlyph } from './panelLabels.js';
 
 export interface PanelBuildOptions {
   sofalizerAvailable: boolean;
@@ -20,9 +19,8 @@ export interface PanelBuildOptions {
 
 /** Adds the now-playing section to `container`: the empty-state message when
  * there's no current track, otherwise the track info (title/artist/requester/
- * source), the separator, the progress bar + status line (queue/loop/shuffle,
- * plus the 3D-audio line when SPATIAL_AUDIO_ENABLED), and the optional
- * lastError warning line. */
+ * source), the separator, the progress bar + status line (queue/loop/shuffle),
+ * and the optional lastError warning line. */
 export function addNowPlayingSection(container: ContainerBuilder, player: GuildPlayer, opts: PanelBuildOptions): void {
   const track = player.currentTrack;
   const elapsed = player.getElapsedMs();
@@ -59,7 +57,6 @@ export function addNowPlayingSection(container: ContainerBuilder, player: GuildP
       `キュー: ${player.queue.length}`,
       `ループ: ${loopLabel(player.loopMode)}`,
       `シャッフル: ${player.shuffleEnabled ? 'オン' : 'オフ'}`,
-      ...(SPATIAL_AUDIO_ENABLED ? [`360°サウンド: ${spatialLabel(player)}`] : []),
     ].join(' • ');
 
     container.addTextDisplayComponents(progressText, new TextDisplayBuilder().setContent(statusLine));

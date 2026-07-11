@@ -12,9 +12,9 @@ import {
 } from '@discordjs/voice';
 import type { QueueItem } from './QueueItem.js';
 import {
+  DEFAULT_VOLUME_PERCENT,
   MAX_FFMPEG_CRASH_RETRIES,
   MAX_VOLUME_PERCENT,
-  SPATIAL_AUDIO_ENABLED,
   type LoopMode,
   type PermissionMode,
   type SpatialMode,
@@ -112,10 +112,11 @@ export class GuildPlayer extends EventEmitter {
     this.log = childLogger({ guildId: this.guildId });
 
     const settings: GuildSettings = getGuildSettings(this.guildId);
-    // Clamp defensively: a guild's saved default_volume may predate the
-    // >100% presets being removed (they reliably hard-clipped audio).
-    this.volume = Math.min(MAX_VOLUME_PERCENT, settings.defaultVolume);
-    this.spatialMode = SPATIAL_AUDIO_ENABLED ? settings.defaultSpatialMode : 'off';
+    // Default volume is pinned to DEFAULT_VOLUME_PERCENT and 360° Sound is
+    // always on (no user toggle) — both intentionally ignore the persisted
+    // per-guild defaults.
+    this.volume = DEFAULT_VOLUME_PERCENT;
+    this.spatialMode = 'on';
     this.hrirProfile = getHrirProfiles()[0]?.id ?? null;
     this.permissionMode = settings.permissionMode;
 
