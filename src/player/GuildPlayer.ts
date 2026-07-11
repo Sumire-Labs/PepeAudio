@@ -94,6 +94,7 @@ export class GuildPlayer extends EventEmitter {
   readonly hrirProfile: string | null;
   volume: number;
   permissionMode: PermissionMode;
+  djRoleId: string | null;
   lastError: string | null = null;
   destroyed = false;
 
@@ -119,6 +120,7 @@ export class GuildPlayer extends EventEmitter {
     this.spatialMode = 'on';
     this.hrirProfile = getHrirProfiles()[0]?.id ?? null;
     this.permissionMode = settings.permissionMode;
+    this.djRoleId = settings.djRoleId;
 
     this.connection = joinVoiceChannel({
       guildId: opts.guildId,
@@ -286,6 +288,18 @@ export class GuildPlayer extends EventEmitter {
   setStay247(enabled: boolean): void {
     if (this.destroyed) return;
     this.timers.setStay247(enabled);
+  }
+
+  /**
+   * Applies updated per-guild control-permission settings (from /settings) to
+   * this live player so the change takes effect on the very next interaction,
+   * not only after the player is next re-created. Pure in-memory gate state —
+   * no effect on playback.
+   */
+  setPermissionSettings(permissionMode: PermissionMode, djRoleId: string | null): void {
+    if (this.destroyed) return;
+    this.permissionMode = permissionMode;
+    this.djRoleId = djRoleId;
   }
 
   /** Public entry — used by play.command.ts to start initial playback, and internally by the natural-track-end listener. */

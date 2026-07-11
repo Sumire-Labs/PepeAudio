@@ -6,8 +6,9 @@ import { skipCommand } from './skip.command.js';
 import { stopCommand } from './stop.command.js';
 import { quitCommand } from './quit.command.js';
 import { stayCommand } from './stay.command.js';
+import { settingsCommand } from './settings.command.js';
 
 export const commands = new Collection<string, BotCommand>();
-for (const cmd of [playCommand, nowCommand, skipCommand, stopCommand, quitCommand, stayCommand]) {
+for (const cmd of [playCommand, nowCommand, skipCommand, stopCommand, quitCommand, stayCommand, settingsCommand]) {
   commands.set(cmd.data.name, cmd);
 }
