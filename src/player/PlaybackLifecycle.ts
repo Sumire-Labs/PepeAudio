@@ -1,6 +1,6 @@
 import type { ChildProcess } from 'node:child_process';
 import type { Readable } from 'node:stream';
-import { AudioPlayer, AudioResource } from '@discordjs/voice';
+import { type AudioPlayer, type AudioResource } from '@discordjs/voice';
 import { createTrackResource, destroyFfmpegProcess } from '../audio/resourceFactory.js';
 import type { QueueItem } from './QueueItem.js';
 import type { SpatialMode } from './constants.js';

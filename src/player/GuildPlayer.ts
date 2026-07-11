@@ -1,12 +1,12 @@
 import { EventEmitter } from 'node:events';
 import {
-  AudioPlayer,
+  type AudioPlayer,
   AudioPlayerStatus,
   createAudioPlayer,
   entersState,
   joinVoiceChannel,
   NoSubscriberBehavior,
-  VoiceConnection,
+  type VoiceConnection,
   VoiceConnectionStatus,
   type DiscordGatewayAdapterCreator,
 } from '@discordjs/voice';

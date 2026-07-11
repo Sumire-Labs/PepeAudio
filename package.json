@@ -14,7 +14,9 @@
     "start:single": "node dist/index.js",
     "deploy-commands": "tsx scripts/register-commands.ts",
     "setup-ffmpeg": "node scripts/setup-ffmpeg.mjs",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix"
   },
   "dependencies": {
     "@discordjs/voice": "^0.19.2",
@@ -37,11 +39,15 @@
   },
   "devDependencies": {
     "7zip-min": "^1.4.5",
+    "@eslint/js": "^10.0.1",
     "@types/better-sqlite3": "^7.6.13",
     "@types/node": "^22.10.0",
+    "eslint": "^10.6.0",
+    "globals": "^17.7.0",
     "pino-pretty": "^11.3.0",
     "tsx": "^4.23.0",
     "typescript": "^5.7.2",
+    "typescript-eslint": "^8.63.0",
     "unzipper": "^0.12.3"
   }
 }

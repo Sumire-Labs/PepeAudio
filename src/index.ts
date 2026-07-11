@@ -91,7 +91,7 @@ async function shutdown(reason: string, exitCode = 0): Promise<void> {
   watchdog.unref();
   try {
     await Promise.all(GuildPlayerManager.all().map((player) => player.stop()));
-    client.destroy();
+    await client.destroy();
   } catch (err) {
     logger.error({ err }, 'Error during shutdown cleanup');
   } finally {

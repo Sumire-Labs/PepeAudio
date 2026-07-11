@@ -24,7 +24,7 @@ function requiredSecret(name: string): string {
     try {
       contents = readFileSync(filePath, 'utf8');
     } catch (err) {
-      throw new Error(`Failed to read ${name}_FILE (${filePath}): ${(err as Error).message}`);
+      throw new Error(`Failed to read ${name}_FILE (${filePath}): ${(err as Error).message}`, { cause: err });
     }
     const value = contents.trim();
     if (!value) {

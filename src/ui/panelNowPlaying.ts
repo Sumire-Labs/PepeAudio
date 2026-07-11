@@ -1,7 +1,7 @@
 import {
   ButtonBuilder,
   ButtonStyle,
-  ContainerBuilder,
+  type ContainerBuilder,
   SectionBuilder,
   SeparatorBuilder,
   TextDisplayBuilder,
@@ -21,7 +21,10 @@ export interface PanelBuildOptions {
  * there's no current track, otherwise the track info (title/artist/requester/
  * source), the separator, the progress bar + status line (queue/loop/shuffle),
  * and the optional lastError warning line. */
-export function addNowPlayingSection(container: ContainerBuilder, player: GuildPlayer, opts: PanelBuildOptions): void {
+// `_opts` is currently unused (the spatial status line was removed); it and the
+// PanelBuildOptions/sofalizerAvailable threading are dead pending the sofalizer
+// cleanup. Kept prefixed rather than removed to avoid that wider refactor here.
+export function addNowPlayingSection(container: ContainerBuilder, player: GuildPlayer, _opts: PanelBuildOptions): void {
   const track = player.currentTrack;
   const elapsed = player.getElapsedMs();
   const duration = track?.durationMs ?? null;
