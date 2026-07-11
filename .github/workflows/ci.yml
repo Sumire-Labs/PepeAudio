@@ -1,0 +1,51 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+# Only keep the latest run per branch/PR alive — a new push cancels the previous,
+# still-running check instead of queueing behind it.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+# Least privilege: the checks only need to read the repo.
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Type-check & build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # pnpm must be set up BEFORE setup-node so `cache: pnpm` can find it.
+      # Pinned to 11.x to match the local toolchain and the lockfileVersion 9.0.
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 11
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          # 22 matches the production runtime (node:22-bookworm-slim in the
+          # Dockerfile) and the engines floor (>=22.12.0).
+          node-version: 22
+          cache: pnpm
+
+      # --frozen-lockfile fails the build if pnpm-lock.yaml is out of date rather
+      # than silently resolving new versions. Native build scripts (better-sqlite3
+      # etc.) are the ones approved in pnpm-workspace.yaml's allowBuilds.
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # `pnpm build` is `tsc -p tsconfig.json` — the exact command that produces
+      # the shipped dist/, so this is a real compile + full type-check gate.
+      - name: Build (tsc)
+        run: pnpm build
