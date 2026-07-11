@@ -1,6 +1,7 @@
 import { Events, MessageFlags, type Client, type Interaction } from 'discord.js';
 import { commands } from '../commands/index.js';
 import { handleButtonOrSelect } from './panelActionHandler.js';
+import { handleAddQueueModalSubmit } from './addQueueModalHandler.js';
 import { logger } from '../logger.js';
 
 export function registerInteractionCreateEvent(client: Client): void {
@@ -14,6 +15,10 @@ export function registerInteractionCreateEvent(client: Client): void {
       }
       if (interaction.isButton() || interaction.isStringSelectMenu()) {
         await handleButtonOrSelect(interaction);
+        return;
+      }
+      if (interaction.isModalSubmit()) {
+        await handleAddQueueModalSubmit(interaction);
         return;
       }
     } catch (err) {

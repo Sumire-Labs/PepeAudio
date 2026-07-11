@@ -65,6 +65,14 @@ export function addControlRows(container: ContainerBuilder, player: GuildPlayer)
     );
   const row3 = new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(volumeSelect);
 
+  // Deliberately its own row placed last, and styled/colored apart from the
+  // playback-control cluster above (ButtonStyle.Success + ➕), per explicit
+  // request for visual separation. Never disabled - unlike the transport
+  // buttons, adding to the queue doesn't require a track to already be current.
+  const row4 = new ActionRowBuilder<ButtonBuilder>().addComponents(
+    btn('addQueue', player.guildId, '➕ 曲を追加', ButtonStyle.Success),
+  );
+
   // Called separately per row (rather than one variadic call) since the button
   // rows and row3 hold different component generics (Button vs StringSelectMenu),
   // which a single mixed rest-args call can't type-check against.
@@ -72,4 +80,5 @@ export function addControlRows(container: ContainerBuilder, player: GuildPlayer)
   container.addActionRowComponents(row2);
   if (row2b) container.addActionRowComponents(row2b);
   container.addActionRowComponents(row3);
+  container.addActionRowComponents(row4);
 }

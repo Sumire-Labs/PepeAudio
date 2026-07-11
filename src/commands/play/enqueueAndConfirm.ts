@@ -1,4 +1,4 @@
-import { MessageFlags, type ChatInputCommandInteraction } from 'discord.js';
+import { MessageFlags, type RepliableInteraction } from 'discord.js';
 import type { GuildPlayer } from '../../player/GuildPlayer.js';
 import type { QueueItem } from '../../player/QueueItem.js';
 import { sendOrReplacePanel, type SendableChannel } from '../../ui/panelManager.js';
@@ -12,7 +12,7 @@ import { logger } from '../../logger.js';
  * handles every remaining reply/confirmation itself.
  */
 export async function enqueueAndConfirm(
-  interaction: ChatInputCommandInteraction<'cached'>,
+  interaction: RepliableInteraction<'cached'>,
   player: GuildPlayer,
   items: QueueItem[],
 ): Promise<void> {

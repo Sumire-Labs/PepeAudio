@@ -1,4 +1,4 @@
-import type { ChatInputCommandInteraction } from 'discord.js';
+import type { RepliableInteraction } from 'discord.js';
 import {
   resolveInput,
   SourceResolutionError,
@@ -30,7 +30,7 @@ const KNOWN_ERROR_TYPES = [
 export async function resolvePlayQuery(
   query: string,
   userId: string,
-  interaction: ChatInputCommandInteraction,
+  interaction: RepliableInteraction,
 ): Promise<QueueItem[] | null> {
   let items: QueueItem[];
   try {

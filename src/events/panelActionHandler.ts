@@ -4,6 +4,7 @@ import {
   type StringSelectMenuInteraction,
 } from 'discord.js';
 import { parseCustomId } from '../ui/customIds.js';
+import { buildAddQueueModal } from '../ui/addQueueModal.js';
 import * as GuildPlayerManager from '../player/GuildPlayerManager.js';
 import { checkControlPermission } from '../ui/permissions.js';
 import { checkCooldown } from '../util/rateLimiter.js';
@@ -40,6 +41,12 @@ export async function handleButtonOrSelect(interaction: ButtonInteraction | Stri
   const cooldownMs = parsed.action === 'volume' ? VOLUME_COOLDOWN_MS : BUTTON_COOLDOWN_MS;
   if (!checkCooldown(`panel:${parsed.action}`, interaction.user.id, cooldownMs)) {
     await interaction.reply({ content: '少し間隔を空けてください。', flags: MessageFlags.Ephemeral });
+    return;
+  }
+
+  if (parsed.action === 'addQueue') {
+    // showModal() must be the interaction's first/only response - it cannot follow deferUpdate() below, unlike every other action.
+    await interaction.showModal(buildAddQueueModal(parsed.guildId));
     return;
   }
 

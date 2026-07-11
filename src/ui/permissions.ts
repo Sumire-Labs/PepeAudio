@@ -1,4 +1,9 @@
-import type { ButtonInteraction, ChatInputCommandInteraction, StringSelectMenuInteraction } from 'discord.js';
+import type {
+  ButtonInteraction,
+  ChatInputCommandInteraction,
+  ModalSubmitInteraction,
+  StringSelectMenuInteraction,
+} from 'discord.js';
 import type { GuildPlayer } from '../player/GuildPlayer.js';
 
 export interface PermissionCheckResult {
@@ -6,7 +11,11 @@ export interface PermissionCheckResult {
   reason?: string;
 }
 
-type ControllableInteraction = ButtonInteraction | StringSelectMenuInteraction | ChatInputCommandInteraction;
+type ControllableInteraction =
+  | ButtonInteraction
+  | StringSelectMenuInteraction
+  | ChatInputCommandInteraction
+  | ModalSubmitInteraction;
 
 /**
  * Phase 1 hardcodes 'same-voice-channel'. player.permissionMode is read (not
