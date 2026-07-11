@@ -9,7 +9,12 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
       libmysofa-dev ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 WORKDIR /build
-RUN git clone --depth 1 https://git.ffmpeg.org/ffmpeg.git ffmpeg
+# Pin to a tagged FFmpeg release instead of building from master HEAD. HEAD is a
+# moving, unreleased target: two rebuilds weeks apart could produce different
+# (or broken/unaudited) binaries, with no record of which commit shipped. A
+# signed release tag is reproducible; bump FFMPEG_VERSION deliberately to update.
+ARG FFMPEG_VERSION=n8.1.2
+RUN git clone --depth 1 --branch "${FFMPEG_VERSION}" https://git.ffmpeg.org/ffmpeg.git ffmpeg
 WORKDIR /build/ffmpeg
 RUN ./configure \
       --enable-gpl --enable-version3 \
