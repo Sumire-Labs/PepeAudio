@@ -26,10 +26,12 @@ export function loopLabel(mode: string): string {
   }
 }
 
-export function spatialLabel(player: GuildPlayer, sofalizerAvailable: boolean): string {
+// Reflects the engine ACTUALLY applied to the current resource (player.usingHrir),
+// not just whether the toggle is on: with a BRIR file present it's the real
+// virtual-surround convolution, otherwise the asset-free wide fallback.
+export function spatialLabel(player: GuildPlayer): string {
   if (player.spatialMode === 'off') return 'オフ';
-  const engine = sofalizerAvailable ? 'バイノーラル' : '簡易';
-  return `オン(${engine}・非推奨)`;
+  return player.usingHrir ? 'オン(バーチャルサラウンド)' : 'オン(ワイド)';
 }
 
 export function statusGlyph(player: GuildPlayer): string {

@@ -81,9 +81,13 @@ export const VOLUME_PRESETS = [0, 10, 25, 50, 75, 100] as const;
 export const MAX_VOLUME_PERCENT = 100;
 
 /**
- * Temporarily disabled pending a sound-quality rework (bare sofalizer was judged
- * unsatisfying). Gates the panel button/status line and the toggle handler; a
- * guild's persisted defaultSpatialMode is also forced to 'off' at load time while
- * this is false, so no one gets stuck with it silently on with no way to turn it off.
+ * Gates the "360° Sound" panel button/status line and the toggle handler; while
+ * false a guild's persisted defaultSpatialMode is also forced to 'off' at load
+ * time so no one is stuck with it silently on with no way to turn it off.
+ *
+ * Re-enabled after the sound-quality rework: the toggle now drives a
+ * level-matched afir BRIR virtualization (audio/hrirFilterComplex.ts) — static,
+ * out-of-head, full-band — with an asset-free wide fallback, replacing the raw
+ * MIT KEMAR sofalizer path that sounded muffled.
  */
-export const SPATIAL_AUDIO_ENABLED = false;
+export const SPATIAL_AUDIO_ENABLED = true;

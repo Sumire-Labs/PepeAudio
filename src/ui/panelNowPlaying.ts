@@ -59,7 +59,7 @@ export function addNowPlayingSection(container: ContainerBuilder, player: GuildP
       `キュー: ${player.queue.length}`,
       `ループ: ${loopLabel(player.loopMode)}`,
       `シャッフル: ${player.shuffleEnabled ? 'オン' : 'オフ'}`,
-      ...(SPATIAL_AUDIO_ENABLED ? [`3Dオーディオ: ${spatialLabel(player, opts.sofalizerAvailable)}`] : []),
+      ...(SPATIAL_AUDIO_ENABLED ? [`360°サウンド: ${spatialLabel(player)}`] : []),
     ].join(' • ');
 
     container.addTextDisplayComponents(progressText, new TextDisplayBuilder().setContent(statusLine));

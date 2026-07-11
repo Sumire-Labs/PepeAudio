@@ -135,6 +135,7 @@ export class PlaybackLifecycle {
         volumePercent: this.cb.getVolume(),
         hrirFilePath: hrirProfile?.filePath ?? null,
         hrirFormat: hrirProfile?.format ?? null,
+        hrirMakeupDb: hrirProfile?.makeupDb ?? 0,
       });
     } catch (err) {
       stream.destroy();

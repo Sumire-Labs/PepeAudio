@@ -3,6 +3,7 @@ import { spawnSync } from 'node:child_process';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { logger } from '../logger.js';
+import { buildHrirMeasureGraph } from '../audio/hrirFilterComplex.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PROJECT_ROOT = path.resolve(__dirname, '..', '..');
@@ -13,6 +14,81 @@ export const DEFAULT_HRIR_PROFILES_DIR = path.join(PROJECT_ROOT, 'assets', 'hrir
 /** Bounds how long a single ffmpeg channel-count probe may run before we give up on that file. */
 const PROBE_TIMEOUT_MS = 10_000;
 
+/** Bounds the (one-per-loaded-profile) makeup-gain measurement convolution at startup. */
+const MAKEUP_MEASURE_TIMEOUT_MS = 20_000;
+
+/**
+ * Fallback makeup used only if the measurement below fails to produce a number
+ * (ffmpeg error/timeout/unparseable output). Room BRIRs cluster around ~20 dB
+ * of insertion loss; 18 is a deliberately conservative under-estimate so the
+ * fallback never over-boosts into the safety limiter. Real deployments measure
+ * their own value and never hit this.
+ */
+const DEFAULT_HRIR_MAKEUP_DB = 18;
+
+/**
+ * Decorrelated pink-noise reference signal, generated entirely in-process by
+ * ffmpeg's lavfi source (no temp files). Decorrelated (two seeds joined to
+ * stereo) rather than mono-duplicated because a stereo master's SIDE energy is
+ * what the BRIR spatialises — a correlated signal under-reads the level loss by
+ * ~2 dB. `join` with an explicit stereo layout is required so the downstream
+ * `pan=...|c0=FL...` can address channels by name; lavfi rejects a trailing
+ * output pad label, so the graph deliberately ends unlabelled.
+ */
+const MAKEUP_NOISE_LAVFI =
+  'anoisesrc=color=pink:amplitude=0.2:duration=4:seed=1:sample_rate=48000[l];' +
+  'anoisesrc=color=pink:amplitude=0.2:duration=4:seed=2:sample_rate=48000[r];' +
+  '[l][r]join=inputs=2:channel_layout=stereo';
+
+/** Parses the LAST `RMS level dB:` astats reports (its Overall block, printed after per-channel), or null. */
+function parseLastRmsDb(output: string): number | null {
+  const matches = [...output.matchAll(/RMS level dB:\s*(-?\d+(?:\.\d+)?)/g)];
+  if (matches.length === 0) return null;
+  const value = parseFloat(matches[matches.length - 1]![1]!);
+  return Number.isFinite(value) ? value : null;
+}
+
+/** Runs ffmpeg with the given args and returns the last astats RMS-level reading, or null on failure. */
+function measureRmsDb(ffmpegPath: string, args: string[]): number | null {
+  const result = spawnSync(ffmpegPath, args, { encoding: 'utf8', timeout: MAKEUP_MEASURE_TIMEOUT_MS });
+  if (result.error || result.signal) return null;
+  return parseLastRmsDb(`${result.stdout ?? ''}${result.stderr ?? ''}`);
+}
+
+/**
+ * Measures the makeup gain (dB) that level-matches this IR's convolved output
+ * back to the pristine input, by convolving the reference signal through the
+ * REAL production graph (at unity makeup) and comparing output RMS to input
+ * RMS. Running the actual graph — not a re-derived approximation — guarantees
+ * the number matches what plays. Clamped to [0, 30] dB and rounded to 0.1 dB;
+ * falls back to DEFAULT_HRIR_MAKEUP_DB if either measurement can't be read.
+ * The safety limiter in the production chain makes an over-estimate harmless,
+ * so this errs toward matching rather than under-shooting.
+ */
+export function measureHrirMakeupDb(ffmpegPath: string, filePath: string, format: HrirFormat): number {
+  const inRms = measureRmsDb(ffmpegPath, [
+    '-hide_banner', '-nostats',
+    '-f', 'lavfi', '-i', MAKEUP_NOISE_LAVFI,
+    '-af', 'astats=metadata=0', '-f', 'null', '-',
+  ]);
+  const outRms = measureRmsDb(ffmpegPath, [
+    '-hide_banner', '-nostats',
+    '-f', 'lavfi', '-i', MAKEUP_NOISE_LAVFI,
+    '-i', filePath,
+    '-filter_complex', buildHrirMeasureGraph(format),
+    '-map', '[out]', '-f', 'null', '-',
+  ]);
+  if (inRms === null || outRms === null) {
+    logger.warn(
+      { filePath, format, inRms, outRms },
+      'HRIR makeup-gain measurement failed - using the conservative default makeup for this file',
+    );
+    return DEFAULT_HRIR_MAKEUP_DB;
+  }
+  const makeup = Math.max(0, Math.min(30, Math.round((inRms - outRms) * 10) / 10));
+  return makeup;
+}
+
 export type HrirFormat = 'simple' | 'hesuvi14';
 
 export interface HrirProfile {
@@ -21,11 +97,18 @@ export interface HrirProfile {
   /** Absolute path to the WAV impulse-response file. */
   filePath: string;
   /**
-   * 'simple': plain mono/stereo IR, used directly by ffmpegFilters.HRIR_SIMPLE_FILTER_COMPLEX.
-   * 'hesuvi14': a genuine HeSuVi-style 14-channel HRIR (see ffmpegFilters.HRIR_HESUVI14_FILTER_COMPLEX
+   * 'simple': plain mono/stereo IR, used directly by audio/hrirFilterComplex.buildHrirFilterComplex.
+   * 'hesuvi14': a genuine HeSuVi-style 14-channel HRIR (see audio/hrirFilterComplex.ts
    * for the exact channel mapping this was verified against).
    */
   format: HrirFormat;
+  /**
+   * Makeup gain (dB) that level-matches this IR's convolved output to the
+   * pristine passthrough — measured against this exact file at load (see
+   * measureHrirMakeupDb), NOT a hardcoded constant, so any bring-your-own BRIR
+   * is auto-levelled. Baked into the filter chain by buildHrirFilterComplex.
+   */
+  makeupDb: number;
 }
 
 /**
@@ -103,7 +186,9 @@ export function loadHrirProfiles(ffmpegPath: string, dir: string = DEFAULT_HRIR_
       continue;
     }
     const id = filename.slice(0, -'.wav'.length);
-    return [{ id, filePath, format }];
+    const makeupDb = measureHrirMakeupDb(ffmpegPath, filePath, format);
+    logger.info({ id, format, makeupDb }, 'Measured HRIR makeup gain (level-matches the spatialised output to normal playback)');
+    return [{ id, filePath, format, makeupDb }];
   }
   return [];
 }

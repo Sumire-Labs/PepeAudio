@@ -38,14 +38,14 @@ export function addControlRows(container: ContainerBuilder, player: GuildPlayer)
     ),
   );
 
-  // Dormant while SPATIAL_AUDIO_ENABLED is false (see constants.ts) — kept as its
-  // own row so re-enabling the flag doesn't require re-adding UI from scratch.
+  // Gated by SPATIAL_AUDIO_ENABLED (see constants.ts) — kept as its own row so
+  // toggling the flag doesn't require re-adding UI from scratch.
   const row2b = SPATIAL_AUDIO_ENABLED
     ? new ActionRowBuilder<ButtonBuilder>().addComponents(
         btn(
           'spatial',
           player.guildId,
-          '🌌 3D Audio(非推奨)',
+          '🌌 360°サウンド',
           player.spatialMode === 'off' ? ButtonStyle.Secondary : ButtonStyle.Success,
           !track,
         ),

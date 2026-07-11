@@ -22,6 +22,8 @@ export interface CreateTrackResourceParams {
   hrirFilePath: string | null;
   /** Required alongside hrirFilePath — selects which filter_complex chain applies (see hrirFilterComplex.ts). */
   hrirFormat: HrirFormat | null;
+  /** Per-IR makeup gain (dB) measured at load, baked into the afir chain to level-match normal playback (see config/hrirProfiles.ts). */
+  hrirMakeupDb: number;
 }
 
 export interface TrackResource {
