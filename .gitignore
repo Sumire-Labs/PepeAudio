@@ -1,0 +1,19 @@
+node_modules/
+dist/
+bin/
+docs/
+.claude/
+.env
+# Docker/compose file-mounted secrets (see docker-compose.yml). Never commit.
+secrets/
+*.sqlite
+*.sqlite-journal
+*.sqlite-wal
+*.sqlite-shm
+*.log
+
+# Bring-your-own HRIR/BRIR files for the optional 3D-audio preset picker — see
+# assets/hrir_profiles/README.md. Never commit these (unclear redistribution
+# rights for anything captured from a commercial product).
+assets/hrir_profiles/*.wav
+assets/hrtf/*.sofa

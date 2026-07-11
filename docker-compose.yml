@@ -1,0 +1,40 @@
+# Production-oriented Compose file. Ties together the hardening pieces:
+#   - non-root container (see Dockerfile `USER node`)
+#   - persistent SQLite volume (guild settings survive `docker compose up -d` redeploys)
+#   - the bot TOKEN supplied as a FILE-mounted secret, never an env var
+#     (env vars leak via `docker inspect` / /proc/<pid>/environ / child processes)
+#   - restart policy — required, because an uncaughtException now exits the
+#     process on purpose so a supervisor can restart it clean.
+#
+# Setup:
+#   1) mkdir -p secrets && printf '%s' 'YOUR_BOT_TOKEN' > secrets/discord_token.txt
+#      chmod 600 secrets/discord_token.txt        # (secrets/ is gitignored)
+#   2) put CLIENT_ID (public application id) in a .env next to this file, or export it
+#   3) docker compose up -d --build
+services:
+  pepeaudio:
+    build: .
+    restart: unless-stopped
+    # ShardingManager's own graceful shutdown budget is 8s (see shard.ts) on
+    # top of each shard's 5s watchdog (index.ts) - 30s leaves comfortable
+    # headroom before Docker would otherwise SIGKILL on its own.
+    stop_grace_period: 30s
+    environment:
+      CLIENT_ID: "${CLIENT_ID:?set CLIENT_ID (public application id) in a .env or your shell}"
+      GUILD_ID: "${GUILD_ID:-}"
+      NODE_ENV: production
+      DATA_DIR: /data
+      # Read the token from the mounted secret file rather than an env var.
+      DISCORD_TOKEN_FILE: /run/secrets/discord_token
+    secrets:
+      - discord_token
+    volumes:
+      - pepeaudio-data:/data
+
+secrets:
+  discord_token:
+    # Contains ONLY the token, no KEY= prefix and no trailing newline needed.
+    file: ./secrets/discord_token.txt
+
+volumes:
+  pepeaudio-data:

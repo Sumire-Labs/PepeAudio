@@ -1,0 +1,8 @@
+allowBuilds:
+  '@discordjs/opus': true
+  better-sqlite3: true
+  esbuild: true
+  ffmpeg-static: true
+  ytdlp-nodejs: true
+minimumReleaseAgeExclude:
+  - discord.js@14.26.5
