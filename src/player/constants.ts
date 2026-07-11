@@ -83,7 +83,7 @@ export const VOLUME_PRESETS = [
 export const MAX_VOLUME_PERCENT = 100;
 
 /** Volume every guild starts at, pinned at construction (not restored from the persisted per-guild default). Must be one of VOLUME_PRESETS. */
-export const DEFAULT_VOLUME_PERCENT = 45;
+export const DEFAULT_VOLUME_PERCENT = 50;
 
 // 360° Sound is now ALWAYS ON with no user toggle (GuildPlayer pins spatialMode
 // to 'on'), so the old SPATIAL_AUDIO_ENABLED UI-gate flag was removed.

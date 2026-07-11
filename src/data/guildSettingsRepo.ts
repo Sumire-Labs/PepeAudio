@@ -35,7 +35,7 @@ interface GuildSettingsRow {
 }
 
 const DEFAULTS: Omit<GuildSettings, 'guildId' | 'updatedAt'> = {
-  defaultVolume: 45, // see DEFAULT_VOLUME_PERCENT — GuildPlayer pins the starting volume regardless, this keeps the persisted default consistent
+  defaultVolume: 50, // see DEFAULT_VOLUME_PERCENT — GuildPlayer pins the starting volume regardless, this keeps the persisted default consistent
   defaultSpatialMode: 'off',
   defaultHrirProfile: null,
   djRoleId: null,
