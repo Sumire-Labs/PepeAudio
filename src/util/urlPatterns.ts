@@ -22,7 +22,7 @@ function isYouTubeHost(host: string): boolean {
 function isSpotifyHost(host: string): boolean {
   return host === 'spotify.com' || host.endsWith('.spotify.com');
 }
-function isSoundCloudHost(host: string): boolean {
+export function isSoundCloudHost(host: string): boolean {
   return host === 'soundcloud.com' || host.endsWith('.soundcloud.com');
 }
 function isAppleMusicHost(host: string): boolean {

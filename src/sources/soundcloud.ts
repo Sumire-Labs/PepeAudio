@@ -2,9 +2,34 @@ import type { Readable } from 'node:stream';
 import scdl from '@vncsprd/soundcloud-downloader';
 import { createQueueItem, type QueueItem } from '../player/QueueItem.js';
 import { parseSoundCloudTimestamp } from '../util/timestamp.js';
+import { isSoundCloudHost } from '../util/urlPatterns.js';
 import { logger } from '../logger.js';
 
 export class SoundCloudUnavailableError extends Error {}
+
+/**
+ * Defense-in-depth before handing a URL to scdl (a downloader that will fetch
+ * whatever URL it's given). classifyInput() already routes only SoundCloud
+ * hosts here, but this resolver re-validates rather than trusting the caller,
+ * then rebuilds a clean URL from the validated parts: forces https and drops
+ * any embedded credentials, non-standard port, and fragment. The path and query
+ * are kept intact — SoundCloud private/unlisted shares carry a required
+ * `?secret_token=` in the query. Unlike the YouTube/Apple resolvers there's no
+ * numeric id to canonicalize against (a SoundCloud track's identity IS its
+ * path), so this is the strongest normalization available here.
+ */
+function sanitizeSoundCloudUrl(rawUrl: string): string {
+  let parsed: URL;
+  try {
+    parsed = new URL(rawUrl);
+  } catch {
+    throw new SoundCloudUnavailableError('SoundCloudのURLを認識できませんでした。');
+  }
+  if (!isSoundCloudHost(parsed.hostname.toLowerCase())) {
+    throw new SoundCloudUnavailableError('SoundCloudのURLではありません。');
+  }
+  return `https://${parsed.hostname}${parsed.pathname}${parsed.search}`;
+}
 
 interface ScdlTrackInfo {
   title?: string;
@@ -43,11 +68,16 @@ async function withClientIdRetry<T>(fn: () => Promise<T>): Promise<T> {
 }
 
 export async function resolveSoundCloudUrl(url: string, requestedBy: string): Promise<QueueItem[]> {
+  // Parse the timestamp from the ORIGINAL url (its `#t=` fragment) before
+  // sanitizing strips the fragment; everything downstream uses the clean url.
+  const initialOffsetMs = parseSoundCloudTimestamp(url);
+  const cleanUrl = sanitizeSoundCloudUrl(url);
+
   let info: ScdlTrackInfo;
   try {
-    info = (await withClientIdRetry(() => scdl.getInfo(url))) as ScdlTrackInfo;
+    info = (await withClientIdRetry(() => scdl.getInfo(cleanUrl))) as ScdlTrackInfo;
   } catch (err) {
-    logger.error({ err, url }, 'SoundCloud metadata resolution failed');
+    logger.error({ err, url: cleanUrl }, 'SoundCloud metadata resolution failed');
     throw new SoundCloudUnavailableError(
       'SoundCloudの情報取得に失敗しました。リンクが正しいか確認するか、しばらくしてから再度お試しください。',
     );
@@ -61,15 +91,15 @@ export async function resolveSoundCloudUrl(url: string, requestedBy: string): Pr
       durationMs: typeof info.duration === 'number' && info.duration > 0 ? info.duration : null,
       thumbnailUrl: info.artwork_url ?? null,
       sourceType: 'soundcloud',
-      sourceUrl: url,
+      sourceUrl: cleanUrl,
       requestedBy,
-      initialOffsetMs: parseSoundCloudTimestamp(url),
+      initialOffsetMs,
       getStream: async () => {
         try {
-          const stream = (await withClientIdRetry(() => scdl.download(url))) as unknown as Readable;
+          const stream = (await withClientIdRetry(() => scdl.download(cleanUrl))) as unknown as Readable;
           return { stream };
         } catch (err) {
-          logger.error({ err, url }, 'SoundCloud stream resolution failed');
+          logger.error({ err, url: cleanUrl }, 'SoundCloud stream resolution failed');
           throw new SoundCloudUnavailableError('SoundCloudのストリーム取得に失敗しました。');
         }
       },
