@@ -46,3 +46,26 @@ export async function resolveYouTubeVideoId(videoId: string, sourceUrl: string, 
     return buildFromYtDlp(sourceUrl, requestedBy);
   }
 }
+
+export interface YouTubeMetadata {
+  durationMs: number | null;
+  thumbnailUrl: string | null;
+}
+
+/**
+ * Lightweight metadata-only lookup for a video whose id is already known (used
+ * by youtubeMatch.ts to enrich a Spotify/Apple Music match with the matched
+ * video's real duration/thumbnail, instead of the panel falling back to a
+ * "live" progress bar + no-thumbnail state). Deliberately no yt-dlp fallback
+ * unlike resolveYouTubeVideoId above - this is a display nice-to-have, not
+ * required for playback, so a failure here degrades to null/null rather than
+ * blocking or retrying.
+ */
+export async function fetchYouTubeMetadata(videoId: string): Promise<YouTubeMetadata> {
+  const yt = await getInnertube();
+  const info = await yt.getBasicInfo(videoId);
+  return {
+    durationMs: secondsToMs(info.basic_info.duration ?? null),
+    thumbnailUrl: info.basic_info.thumbnail?.[0]?.url ?? null,
+  };
+}
