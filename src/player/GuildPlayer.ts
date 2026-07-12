@@ -22,7 +22,7 @@ import {
   type AuraToggle,
 } from './constants.js';
 import { getGuildSettings, type GuildSettings } from '../data/guildSettingsRepo.js';
-import { getHrirProfiles } from '../config/hrirProfilesState.js';
+import { getHrirProfiles, getHrirProfileById } from '../config/hrirProfilesState.js';
 import { childLogger } from '../logger.js';
 import type { FfmpegCapabilities } from '../config/ffmpegResolver.js';
 import { attachConnectionRecovery } from './voiceConnectionRecovery.js';
@@ -90,12 +90,13 @@ export class GuildPlayer extends EventEmitter {
   /** The Aura 360° effect (widening + bass), independent of hrirMode/Aura HRIR. */
   aura360Mode: AuraToggle;
   /**
-   * HRIR profile id (see config/hrirProfiles.ts), or null if none is configured.
-   * Fixed at construction to whatever's found in the HRIR folder - not user-selectable
-   * (there used to be a per-guild toggle here; the panel select menu was removed and
-   * this is now always "on" with the first/only available profile applied automatically).
+   * The guild's selected Aura Preset — an HRIR profile id (see config/hrirProfiles.ts),
+   * or null if no BRIR file is configured. Restored from the persisted
+   * defaultHrirProfile at construction (falling back to the first loaded profile),
+   * and changed live via setAuraPreset when the panel's Aura Preset select menu is
+   * used. Only meaningful while Aura HRIR is on.
    */
-  readonly hrirProfile: string | null;
+  hrirProfile: string | null;
   volume: number;
   permissionMode: PermissionMode;
   djRoleId: string | null;
@@ -124,7 +125,15 @@ export class GuildPlayer extends EventEmitter {
     this.volume = DEFAULT_VOLUME_PERCENT;
     this.hrirMode = AURA_ENABLED ? settings.defaultHrirMode : 'off';
     this.aura360Mode = AURA_ENABLED ? settings.defaultAura360Mode : 'off';
-    this.hrirProfile = getHrirProfiles()[0]?.id ?? null;
+    // Restore the guild's selected Aura Preset if it still resolves to a loaded
+    // profile (files can be added/removed between restarts); otherwise fall back
+    // to the first available profile, or null when the folder is empty.
+    const loadedProfiles = getHrirProfiles();
+    const persistedProfile = settings.defaultHrirProfile;
+    this.hrirProfile =
+      persistedProfile && loadedProfiles.some((p) => p.id === persistedProfile)
+        ? persistedProfile
+        : (loadedProfiles[0]?.id ?? null);
     this.permissionMode = settings.permissionMode;
     this.djRoleId = settings.djRoleId;
 
@@ -141,12 +150,13 @@ export class GuildPlayer extends EventEmitter {
     });
     this.connection.subscribe(this.audioPlayer);
 
-    this.playback = new PlaybackLifecycle(this.audioPlayer, opts.ffmpeg, this.hrirProfile, this.log, {
+    this.playback = new PlaybackLifecycle(this.audioPlayer, opts.ffmpeg, this.log, {
       emitUpdate: () => this.emit('update'),
       isDestroyed: () => this.destroyed,
       getVolume: () => this.volume,
       getHrirMode: () => this.hrirMode,
       getAura360Mode: () => this.aura360Mode,
+      getHrirProfileId: () => this.hrirProfile,
       setLastError: (message) => {
         this.lastError = message;
       },
@@ -412,6 +422,34 @@ export class GuildPlayer extends EventEmitter {
     this.emit('update');
     this.timers.scheduleSettingsSave({ defaultAura360Mode: mode });
     if (!this.currentTrack) return;
+
+    const wasPaused = this.isPaused();
+    const elapsed = this.getElapsedMs();
+    await this.playback.reseekCore(elapsed);
+    if (wasPaused && !this.destroyed && this.currentTrack) {
+      this.audioPlayer.pause();
+      this.playback.pausedAt = Date.now();
+      this.emit('update');
+    }
+  }
+
+  async setAuraPreset(id: string): Promise<void> {
+    await this.enqueueAction(() => this.setAuraPresetCore(id));
+  }
+
+  /**
+   * Switches the applied Aura Preset (the BRIR/HRIR impulse response used by Aura
+   * HRIR) and persists the choice. Respawns the current track ONLY when Aura HRIR
+   * is actually on — while it's off the preset isn't in the graph, so we just
+   * record the selection (it applies when Aura HRIR is next turned on). Ignores
+   * unknown ids (a stale panel select) and preserves pause state across a respawn.
+   */
+  private async setAuraPresetCore(id: string): Promise<void> {
+    if (this.destroyed || id === this.hrirProfile || !getHrirProfileById(id)) return;
+    this.hrirProfile = id;
+    this.emit('update');
+    this.timers.scheduleSettingsSave({ defaultHrirProfile: id });
+    if (this.hrirMode !== 'on' || !this.currentTrack) return;
 
     const wasPaused = this.isPaused();
     const elapsed = this.getElapsedMs();

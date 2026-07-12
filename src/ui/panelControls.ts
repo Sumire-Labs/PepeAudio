@@ -8,6 +8,7 @@ import {
 import type { GuildPlayer } from '../player/GuildPlayer.js';
 import { buildCustomId, type PanelAction } from './customIds.js';
 import { AURA_ENABLED, VOLUME_PRESETS } from '../player/constants.js';
+import { getHrirProfiles } from '../config/hrirProfilesState.js';
 import { loopLabel } from './panelLabels.js';
 
 function btn(action: PanelAction, guildId: string, label: string, style: ButtonStyle, disabled = false): ButtonBuilder {
@@ -15,8 +16,9 @@ function btn(action: PanelAction, guildId: string, label: string, style: ButtonS
 }
 
 /** Builds and adds the control rows to `container`: row1 (prev/playpause/skip),
- * row2 (stop/shuffle/loop), row3 (the volume select menu), and row4
- * (add-to-queue plus the Aura HRIR / Aura 360° toggles, when AURA_ENABLED). */
+ * row2 (stop/shuffle/loop), row3 (the volume select menu), row4 (add-to-queue
+ * plus the Aura HRIR / Aura 360° toggles, when AURA_ENABLED), and an optional
+ * row5 (the Aura Preset select menu, only when >1 HRIR profile is loaded). */
 export function addControlRows(container: ContainerBuilder, player: GuildPlayer): void {
   const track = player.currentTrack;
 
@@ -81,10 +83,36 @@ export function addControlRows(container: ContainerBuilder, player: GuildPlayer)
   }
 
   // Called separately per row (rather than one variadic call) since the button
-  // rows and row3 hold different component generics (Button vs StringSelectMenu),
-  // which a single mixed rest-args call can't type-check against.
+  // rows and the select-menu rows hold different component generics (Button vs
+  // StringSelectMenu), which a single mixed rest-args call can't type-check against.
   container.addActionRowComponents(row1);
   container.addActionRowComponents(row2);
   container.addActionRowComponents(row3);
   container.addActionRowComponents(row4);
+
+  // Optional row5: the Aura Preset selector — picks which BRIR/HRIR impulse
+  // response Aura HRIR convolves with. Only rendered when the feature is enabled
+  // and more than one profile is loaded (a single profile is applied
+  // automatically — nothing to choose), keeping the panel at Discord's 5-row cap.
+  // Disabled unless Aura HRIR is on with a track, so it visibly ties to the
+  // active effect (the choice still persists per guild via setAuraPreset).
+  const hrirProfiles = getHrirProfiles();
+  if (AURA_ENABLED && hrirProfiles.length > 1) {
+    // Labels prettify the profile id (filename) for display only — underscores →
+    // spaces; the option value stays the exact id so it round-trips to setAuraPreset.
+    const prettyId = (id: string): string => id.replace(/_/g, ' ');
+    const presetSelect = new StringSelectMenuBuilder()
+      .setCustomId(buildCustomId('preset', player.guildId))
+      .setPlaceholder(`Aura プリセット: ${player.hrirProfile ? prettyId(player.hrirProfile) : 'なし'}`)
+      .setDisabled(!track || player.hrirMode === 'off')
+      .addOptions(
+        hrirProfiles.slice(0, 25).map((p) => ({
+          label: prettyId(p.id).slice(0, 100),
+          value: p.id,
+          default: p.id === player.hrirProfile,
+        })),
+      );
+    const row5 = new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(presetSelect);
+    container.addActionRowComponents(row5);
+  }
 }

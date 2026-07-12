@@ -10,10 +10,11 @@ export interface GuildSettings {
   /** The Aura 360° effect (widening + bass), independent of Aura HRIR (defaultHrirMode). */
   defaultAura360Mode: AuraToggleSetting;
   /**
-   * HRIR profile id (filename without extension) from config/hrirProfiles.ts.
-   * Persisted/round-tripped for schema compatibility, but GuildPlayer no
-   * longer reads this — the profile is now fixed at construction to
-   * getHrirProfiles()[0], not user-selectable per guild.
+   * The guild's selected Aura Preset — an HRIR profile id (filename without
+   * extension) from config/hrirProfiles.ts. GuildPlayer restores this at
+   * construction (falling back to the first loaded profile if it no longer
+   * resolves) and updates it via setAuraPreset when the panel's Aura Preset
+   * select menu is used. null when no BRIR file is configured.
    */
   defaultHrirProfile: string | null;
   djRoleId: string | null;

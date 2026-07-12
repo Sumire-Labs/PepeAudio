@@ -18,6 +18,8 @@ export interface PlaybackLifecycleCallbacks {
   getVolume: () => number;
   getHrirMode: () => AuraToggle;
   getAura360Mode: () => AuraToggle;
+  /** The guild's currently-selected Aura Preset (HRIR profile id), read fresh per track so a live preset switch takes effect on the next respawn. Null when no BRIR file is configured. */
+  getHrirProfileId: () => string | null;
   setLastError: (message: string | null) => void;
   clearEmptyQueueTimer: () => void;
   /** Reads whatever's likely to play next (queue[0]) - see startTrack's prefetch call. */
@@ -39,7 +41,7 @@ export class PlaybackLifecycle {
   private activeSourceStream: Readable | null = null;
 
   currentTrack: QueueItem | null = null;
-  /** Whether HRIR processing is actually applied to the CURRENTLY playing resource (may be false even with hrirProfile set, e.g. if the file was deleted after startup). */
+  /** Whether HRIR processing is actually applied to the CURRENTLY playing resource (may be false even with an Aura Preset selected, e.g. if the file was deleted after startup). */
   usingHrir = false;
   /** Whether the CURRENT resource has an inline VolumeTransformer at all — false on the Opus-passthrough fast path (100% volume, nothing else needing it). See resourceFactory.ts. */
   private hasInlineVolume = false;
@@ -59,7 +61,6 @@ export class PlaybackLifecycle {
   constructor(
     private readonly audioPlayer: AudioPlayer,
     private readonly ffmpeg: FfmpegCapabilities,
-    private readonly hrirProfile: string | null,
     private readonly log: ReturnType<typeof childLogger>,
     private readonly cb: PlaybackLifecycleCallbacks,
   ) {}
@@ -191,11 +192,13 @@ export class PlaybackLifecycle {
     }
 
     // getHrirProfileById reads a list cached once at startup, so this always
-    // resolves whenever this.hrirProfile is non-null - it can't detect the
+    // resolves whenever the selected id is non-null - it can't detect the
     // file being deleted mid-session. resourceFactory's existsSync check (and
     // its own warning log) is the real "does the file still exist" check;
     // created.usingHrir below reflects what ACTUALLY happened for this track.
-    const hrirProfile = this.hrirProfile ? getHrirProfileById(this.hrirProfile) : undefined;
+    // Read fresh each track so a live Aura Preset switch applies on respawn.
+    const profileId = this.cb.getHrirProfileId();
+    const hrirProfile = profileId ? getHrirProfileById(profileId) : undefined;
 
     let created: ReturnType<typeof createTrackResource>;
     try {

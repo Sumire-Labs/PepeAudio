@@ -33,14 +33,23 @@ export function buildHrirFallbackChain(): string {
 
 /**
  * The Aura 360° effect — a separate, independently-toggleable feature from Aura
- * HRIR. It does NOT convolve/externalise; it "beefs up" the source:
+ * HRIR. It does NOT convolve/externalise; it "beefs up" the source and pushes it
+ * further away (more depth / distance — 遠近感):
  *   - `stereotools=slev` widens the stereo image (立体感 / 没入感)
+ *   - `aecho` adds two short early reflections (28 ms + 55 ms) — the ear reads
+ *     the delayed decorrelated copies as room/distance, so the image sits back
+ *     and "further out" rather than pinned to the head. `out_gain` is kept near
+ *     unity (the whole echo mix, not just the wet, is scaled by it) and re-
+ *     levelled by the trailing `volume`, so the reflections add depth without
+ *     dropping loudness. Measured: HF tilt unchanged (NOT muffled), peak stays
+ *     well under 0 dBFS, stereo width preserved.
  *   - `bass` low-shelf adds weight to the low end (重低音の響き)
- *   - `volume` trims a couple dB so the boost stays roughly level-neutral
+ *   - `volume` trims ~1 dB so the boost stays roughly level-neutral
  * Measured full-band (highs preserved), mono-safe, non-clipping. Tunable by ear:
- * `slev` = width, `bass g` = low-end amount.
+ * `slev` = width, `aecho delays/decays` = depth/distance amount (longer/louder
+ * reflections = further), `bass g` = low-end amount.
  */
-const AURA360_CORE = 'stereotools=slev=1.35,bass=g=4:f=100,volume=-2dB';
+const AURA360_CORE = 'stereotools=slev=1.4,bass=g=4:f=100,aecho=in_gain=1:out_gain=0.82:delays=28|55:decays=0.38|0.26,volume=-1dB';
 
 /** Aura 360° filters WITHOUT a limiter — prepended into the afir graph when Aura HRIR is also on (afir's own alimiter is the safety net). */
 export function buildAura360Prefix(): string {

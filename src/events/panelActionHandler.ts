@@ -39,7 +39,7 @@ export async function handleButtonOrSelect(interaction: ButtonInteraction | Stri
     return;
   }
 
-  const cooldownMs = parsed.action === 'volume' ? VOLUME_COOLDOWN_MS : BUTTON_COOLDOWN_MS;
+  const cooldownMs = parsed.action === 'volume' || parsed.action === 'preset' ? VOLUME_COOLDOWN_MS : BUTTON_COOLDOWN_MS;
   if (!checkCooldown(`panel:${parsed.action}`, interaction.user.id, cooldownMs)) {
     await safeReply(interaction, { content: '少し間隔を空けてください。', flags: MessageFlags.Ephemeral });
     return;
@@ -92,6 +92,14 @@ export async function handleButtonOrSelect(interaction: ButtonInteraction | Stri
         if (!AURA_ENABLED) break;
         await player.setAura360Mode(player.aura360Mode === 'off' ? 'on' : 'off');
         break;
+      case 'preset': {
+        if (!AURA_ENABLED) break;
+        if (interaction.isStringSelectMenu()) {
+          const id = interaction.values[0];
+          if (id) await player.setAuraPreset(id);
+        }
+        break;
+      }
       case 'volume': {
         if (interaction.isStringSelectMenu()) {
           const value = Number(interaction.values[0]);

@@ -70,11 +70,10 @@ export function addNowPlayingSection(container: ContainerBuilder, player: GuildP
   }
 }
 
-// Fixed HRIR processing (see config/hrirProfiles.ts) - no user-facing choice;
-// this just credits whichever profile is ACTUALLY applied to the current
-// resource (player.usingHrir), not merely configured (player.hrirProfile) -
-// if the file went missing mid-session, resourceFactory falls back silently
-// and this footer should not keep claiming it's active.
+// Credits the Aura Sound System whenever HRIR is ACTUALLY applied to the current
+// resource (player.usingHrir), not merely selected (player.hrirProfile / the
+// chosen Aura Preset) - if the file went missing mid-session, resourceFactory
+// falls back silently and this footer should not keep claiming it's active.
 export function addHrirFooter(container: ContainerBuilder, player: GuildPlayer): void {
   if (player.currentTrack && player.usingHrir) {
     container.addTextDisplayComponents(new TextDisplayBuilder().setContent('-# Aura Sound System By Sumire Labs'));

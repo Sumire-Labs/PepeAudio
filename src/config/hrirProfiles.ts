@@ -169,13 +169,15 @@ function classifyFormat(channelCount: number | null): HrirFormat | null {
 }
 
 /**
- * Scans a local directory for a user-supplied HRIR/BRIR WAV file (bring-your-own —
+ * Scans a local directory for user-supplied HRIR/BRIR WAV files (bring-your-own —
  * see assets/hrir_profiles/README.md for why none are bundled). Missing directory
  * is not an error: the feature is simply unavailable until someone populates it.
- * Only ONE profile is ever used (GuildPlayer applies whichever this returns as
- * its single element — there is no per-guild selection), so this stops probing
- * as soon as it finds the first (alphabetically) file with a supported channel
- * count, rather than spawning ffmpeg against every file in the folder.
+ * EVERY file with a supported channel count is loaded as a selectable "Aura
+ * Preset" (see the panel's preset select menu) — the guild picks which one is
+ * applied and the choice persists (guildSettingsRepo.defaultHrirProfile). Each
+ * file is probed and level-measured once at startup; the (alphabetical) first is
+ * the default until a guild selects otherwise. Files with an unsupported channel
+ * count are skipped with a warning rather than aborting the whole scan.
  */
 export function loadHrirProfiles(ffmpegPath: string, dir: string = DEFAULT_HRIR_PROFILES_DIR): HrirProfile[] {
   let entries: string[];
@@ -186,6 +188,7 @@ export function loadHrirProfiles(ffmpegPath: string, dir: string = DEFAULT_HRIR_
   }
   const wavFiles = entries.filter((f) => f.toLowerCase().endsWith('.wav')).sort();
 
+  const loaded: HrirProfile[] = [];
   for (const filename of wavFiles) {
     const filePath = path.join(dir, filename);
     const channelCount = probeChannelCount(ffmpegPath, filePath);
@@ -200,7 +203,7 @@ export function loadHrirProfiles(ffmpegPath: string, dir: string = DEFAULT_HRIR_
     const id = filename.slice(0, -'.wav'.length);
     const makeupDb = measureHrirMakeupDb(ffmpegPath, filePath, format);
     logger.info({ id, format, makeupDb }, 'Measured HRIR makeup gain (level-matches the spatialised output to normal playback)');
-    return [{ id, filePath, format, makeupDb }];
+    loaded.push({ id, filePath, format, makeupDb });
   }
-  return [];
+  return loaded;
 }
