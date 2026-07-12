@@ -1,15 +1,13 @@
 name: Docker image
 
-# Validates that the production image actually builds — including the from-source
-# ffmpeg+libmysofa stage the binaural 3D-audio path depends on. It does NOT push
-# anywhere (no registry credentials required); it's a build-only smoke test of the
-# deploy path.
+# Validates that the production image actually builds. It does NOT push anywhere
+# (no registry credentials required); it's a build-only smoke test of the deploy
+# path.
 #
-# NOTE: the first run compiles ffmpeg from source (~15-25 min). Buildx's GitHub
-# Actions cache makes subsequent runs fast as long as the ffmpeg-builder layers
-# don't change (bump FFMPEG_VERSION in the Dockerfile to force a rebuild). Runs
-# on-demand and on release tags by default (see the `on:` block to also enable
-# per-merge validation).
+# NOTE: the image installs ffmpeg from Debian's package repo (no from-source
+# build), so it builds quickly; Buildx's GitHub Actions cache keeps subsequent
+# runs fast. Runs on-demand and on release tags by default (see the `on:` block
+# to also enable per-merge validation).
 on:
   # On-demand, and automatically on release tags (a natural point to confirm the
   # deploy image is buildable). To also validate on every merge to main, uncomment
