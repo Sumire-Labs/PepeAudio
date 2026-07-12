@@ -77,6 +77,6 @@ export function addNowPlayingSection(container: ContainerBuilder, player: GuildP
 // and this footer should not keep claiming it's active.
 export function addHrirFooter(container: ContainerBuilder, player: GuildPlayer): void {
   if (player.currentTrack && player.usingHrir) {
-    container.addTextDisplayComponents(new TextDisplayBuilder().setContent('-# Dolby Home Theater® v4 使用中'));
+    container.addTextDisplayComponents(new TextDisplayBuilder().setContent('-# Aura Sound System By Sumire Labs'));
   }
 }

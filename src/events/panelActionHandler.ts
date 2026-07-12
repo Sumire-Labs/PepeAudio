@@ -8,7 +8,7 @@ import { buildAddQueueModal } from '../ui/addQueueModal.js';
 import * as GuildPlayerManager from '../player/GuildPlayerManager.js';
 import { checkControlPermission } from '../ui/permissions.js';
 import { checkCooldown } from '../util/rateLimiter.js';
-import { BUTTON_COOLDOWN_MS, VOLUME_COOLDOWN_MS, type LoopMode } from '../player/constants.js';
+import { BUTTON_COOLDOWN_MS, AURA_ENABLED, VOLUME_COOLDOWN_MS, type LoopMode } from '../player/constants.js';
 import { safeReply, safeDeferUpdate } from '../util/interactionSafety.js';
 import { logger } from '../logger.js';
 
@@ -84,8 +84,14 @@ export async function handleButtonOrSelect(interaction: ButtonInteraction | Stri
         player.setLoopMode(next);
         break;
       }
-      // 'spatial' toggle removed — 360° Sound is always on. A click from a stale
-      // panel that still shows the old button falls through to a harmless no-op.
+      case 'hrir':
+        if (!AURA_ENABLED) break; // dormant no-op if the feature is flag-disabled
+        await player.setHrirMode(player.hrirMode === 'off' ? 'on' : 'off');
+        break;
+      case 'aura360':
+        if (!AURA_ENABLED) break;
+        await player.setAura360Mode(player.aura360Mode === 'off' ? 'on' : 'off');
+        break;
       case 'volume': {
         if (interaction.isStringSelectMenu()) {
           const value = Number(interaction.values[0]);

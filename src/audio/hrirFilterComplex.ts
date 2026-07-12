@@ -35,7 +35,10 @@ function makeupTail(makeupDb: number): string {
  * wrong effective pitch/speed. Caller is responsible for adding the IR file as
  * ffmpeg input index 1 (`-i <path>`, after the main `pipe:0` input).
  */
-function simpleFilterComplex(makeupDb: number): string {
+function simpleFilterComplex(makeupDb: number, aura360Prefix: string): string {
+  if (aura360Prefix) {
+    return `[1:a]aresample=48000[ir];[0:a]${aura360Prefix}[pre];[pre][ir]afir${makeupTail(makeupDb)}[out]`;
+  }
   return `[1:a]aresample=48000[ir];[0:a][ir]afir${makeupTail(makeupDb)}[out]`;
 }
 
@@ -43,11 +46,13 @@ function simpleFilterComplex(makeupDb: number): string {
  * `-filter_complex` for a genuine HeSuVi-style 14-channel HRIR file (format:
  * 'hesuvi14'). HeSuVi's own files encode one impulse response per
  * (virtual speaker, ear) pair across up to 7 speakers (14 = 7 × 2 ears) for
- * a full 7.1 virtualizer — but this bot only ever has 2-channel (stereo
- * music) input, so there is no real content for the center/side/back
- * speakers; convolving them would just be processing silence. This instead
- * does "true stereo" processing using only the front-left/front-right pair,
- * matching ffmpeg's own documented afir true-stereo recipe.
+ * a full 7.1 virtualizer. This bot has 2-channel (stereo music) input, so
+ * rather than a naive upmix (a stereo→7.1 `surround` upmix was measured to
+ * re-correlate the two ears and NARROW the image toward mono), it drives the
+ * FRONT speakers with the direct L/R and the SIDE speakers with the
+ * decorrelated L−R "difference" (ambience) signal — a Pro-Logic-II-"Music"-
+ * style routing that genuinely widens/externalises the image. See the function
+ * body for the exact 8-lane feed; front + side pairs are used (not just fronts).
  *
  * Channel indices (0-based) were reverse-engineered against a real HeSuVi
  * install (verified 2026-07-11 against actual atmos.wav and dht.wav files by
@@ -69,15 +74,27 @@ function simpleFilterComplex(makeupDb: number): string {
  * omitting asplit here produced correct front-left output but near-total
  * silence from the front-right side).
  */
-function hesuvi14FilterComplex(makeupDb: number): string {
+function hesuvi14FilterComplex(makeupDb: number, aura360Prefix: string): string {
+  const pre = aura360Prefix ? `${aura360Prefix},` : '';
+  // Virtual surround using the FRONT and SIDE speaker pairs of the HeSuVi BRIR
+  // (channel indices: FL 0/1, FR 8/7, SL 2/3, SR 10/9 — note the right-side
+  // ear-order flip). The 8-lane afir feed drives:
+  //   - fronts with the direct L / R  (keeps vocals/centre intimate), and
+  //   - the side speakers with the L−R "difference" (ambience) signal, which is
+  //     decorrelated from the fronts — THAT is what pushes the image out of the
+  //     head and gives 立体感 (measured: interaural correlation drops below the
+  //     source, mono-downmix widens, HF preserved, mono-safe: the side lanes
+  //     null to silence when L==R so nothing cancels on phone speakers).
+  // irlink=true is load-bearing — it keeps each speaker's L/R-ear IR pair
+  // independent; without it afir averages the ears and the spatial image
+  // collapses. A naive stereo→7.1 `surround` upmix was tried and REJECTED: it
+  // re-correlates the two ears and narrows toward mono, the opposite of wrap.
   return (
-    '[1:a]aresample=48000,asplit=2[ir14a][ir14b];' +
-    '[ir14a]pan=stereo|c0=c0|c1=c1[LIR];' +
-    '[ir14b]pan=stereo|c0=c8|c1=c7[RIR];' +
-    '[0:a]pan=4c|c0=FL|c1=FL|c2=FR|c3=FR[a];' +
-    '[LIR][RIR]amerge=inputs=2[ir4];' +
-    '[a][ir4]afir=irfmt=input[or];' +
-    `[or]pan=stereo|FL<c0+c2|FR<c1+c3${makeupTail(makeupDb)}[out]`
+    '[1:a]aresample=48000[ir];' +
+    '[ir]pan=8c|c0=c0|c1=c1|c2=c8|c3=c7|c4=c2|c5=c3|c6=c10|c7=c9[ir8];' +
+    `[0:a]${pre}pan=8c|c0=c0|c1=c0|c2=c1|c3=c1|c4=0.5*c0-0.5*c1|c5=0.5*c0-0.5*c1|c6=0.5*c1-0.5*c0|c7=0.5*c1-0.5*c0[feed];` +
+    '[feed][ir8]afir=irfmt=input:irlink=true[conv];' +
+    `[conv]pan=stereo|c0=c0+c2+c4+c6|c1=c1+c3+c5+c7${makeupTail(makeupDb)}[out]`
   );
 }
 
@@ -86,8 +103,10 @@ function hesuvi14FilterComplex(makeupDb: number): string {
  * afir BRIR path, with the per-IR `makeupDb` baked into the level-match tail.
  * Both formats output a level-matched stereo signal at 48 kHz.
  */
-export function buildHrirFilterComplex(format: HrirFormat, makeupDb: number): string {
-  return format === 'hesuvi14' ? hesuvi14FilterComplex(makeupDb) : simpleFilterComplex(makeupDb);
+export function buildHrirFilterComplex(format: HrirFormat, makeupDb: number, aura360Prefix = ''): string {
+  return format === 'hesuvi14'
+    ? hesuvi14FilterComplex(makeupDb, aura360Prefix)
+    : simpleFilterComplex(makeupDb, aura360Prefix);
 }
 
 /**

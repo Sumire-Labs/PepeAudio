@@ -7,7 +7,7 @@ import {
 } from 'discord.js';
 import type { GuildPlayer } from '../player/GuildPlayer.js';
 import { buildCustomId, type PanelAction } from './customIds.js';
-import { VOLUME_PRESETS } from '../player/constants.js';
+import { AURA_ENABLED, VOLUME_PRESETS } from '../player/constants.js';
 import { loopLabel } from './panelLabels.js';
 
 function btn(action: PanelAction, guildId: string, label: string, style: ButtonStyle, disabled = false): ButtonBuilder {
@@ -15,8 +15,8 @@ function btn(action: PanelAction, guildId: string, label: string, style: ButtonS
 }
 
 /** Builds and adds the control rows to `container`: row1 (prev/playpause/skip),
- * row2 (stop/shuffle/loop), row3 (the volume select menu), and row4 (add-to-queue).
- * There is no spatial toggle row — 360° Sound is always on. */
+ * row2 (stop/shuffle/loop), row3 (the volume select menu), and row4
+ * (add-to-queue plus the Aura HRIR / Aura 360° toggles, when AURA_ENABLED). */
 export function addControlRows(container: ContainerBuilder, player: GuildPlayer): void {
   const track = player.currentTrack;
 
@@ -38,8 +38,6 @@ export function addControlRows(container: ContainerBuilder, player: GuildPlayer)
     ),
   );
 
-  // 360° Sound is always on with no user toggle, so there is no spatial button row.
-
   const volumeSelect = new StringSelectMenuBuilder()
     .setCustomId(buildCustomId('volume', player.guildId))
     .setPlaceholder(`音量: ${player.volume}%`)
@@ -53,13 +51,34 @@ export function addControlRows(container: ContainerBuilder, player: GuildPlayer)
     );
   const row3 = new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(volumeSelect);
 
-  // Deliberately its own row placed last, and styled/colored apart from the
-  // playback-control cluster above (ButtonStyle.Success + ➕), per explicit
-  // request for visual separation. Never disabled - unlike the transport
-  // buttons, adding to the queue doesn't require a track to already be current.
+  // Row placed last: add-to-queue plus the audio-effect toggles. Add-to-queue is
+  // styled/colored apart from the playback-control cluster above
+  // (ButtonStyle.Success + ➕), per explicit request for visual separation, and is
+  // never disabled - unlike the transport buttons, adding to the queue doesn't
+  // require a track to already be current. Aura HRIR (HRIR out-of-head) and
+  // Aura 360° (widening + bass) sit alongside it here; they are independent
+  // toggles, green when on and grey when off.
   const row4 = new ActionRowBuilder<ButtonBuilder>().addComponents(
     btn('addQueue', player.guildId, '➕ 曲を追加', ButtonStyle.Success),
   );
+  if (AURA_ENABLED) {
+    row4.addComponents(
+      btn(
+        'hrir',
+        player.guildId,
+        'Aura HRIR',
+        player.hrirMode === 'off' ? ButtonStyle.Secondary : ButtonStyle.Success,
+        !track,
+      ),
+      btn(
+        'aura360',
+        player.guildId,
+        'Aura 360°',
+        player.aura360Mode === 'off' ? ButtonStyle.Secondary : ButtonStyle.Success,
+        !track,
+      ),
+    );
+  }
 
   // Called separately per row (rather than one variadic call) since the button
   // rows and row3 hold different component generics (Button vs StringSelectMenu),

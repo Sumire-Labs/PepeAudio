@@ -1,7 +1,7 @@
 import { existsSync } from 'node:fs';
 import { logger } from '../logger.js';
 import { getHrirCount, hasHrirCapacity } from './ffmpegConcurrencySlots.js';
-import { buildSpatialFallbackChain } from './spatialFilterChain.js';
+import { buildHrirFallbackChain, buildAura360Chain, buildAura360Prefix } from './spatialFilterChain.js';
 import { buildHrirFilterComplex } from './hrirFilterComplex.js';
 import type { CreateTrackResourceParams } from './resourceTypes.js';
 import type { HrirFormat } from '../config/hrirProfiles.js';
@@ -25,10 +25,10 @@ function formatSeekSeconds(ms: number): string {
 
 /**
  * Decides how to render a track:
- * - "360° Sound" is now a genuine TOGGLE. spatialMode 'off' means the untouched
+ * - "Aura HRIR" is now a genuine TOGGLE. hrirMode 'off' means the untouched
  *   Opus fast path (the pristine reference), even when a BRIR file is present —
  *   the BRIR no longer forces always-on processing.
- * - spatialMode 'on' prefers the real BRIR virtualization (afir convolution,
+ * - hrirMode 'on' prefers the real BRIR virtualization (afir convolution,
  *   level-matched via the per-IR makeup gain) and falls back to the asset-free
  *   `-af` wide chain when no BRIR file is available or the convolution
  *   concurrency cap is hit. Both work on the guaranteed ffmpeg-static binary
@@ -37,27 +37,28 @@ function formatSeekSeconds(ms: number): string {
  *   reposition (e.g. a timestamped link, or resuming after a mid-track crash).
  */
 export function planFfmpegInvocation(params: CreateTrackResourceParams): FfmpegPlan {
-  const { spatialMode, seekOffsetMs, hrirFilePath, hrirFormat, hrirMakeupDb } = params;
+  const { hrirMode, aura360Mode, seekOffsetMs, hrirFilePath, hrirFormat, hrirMakeupDb } = params;
 
   const needsSeek = seekOffsetMs > 0;
-  const spatialOn = spatialMode === 'on';
+  const hrirOn = hrirMode === 'on';
+  const aura360On = aura360Mode === 'on';
 
-  // Pristine fast path: 360° off and nothing else forcing an ffmpeg spawn.
-  if (!spatialOn && !needsSeek) {
+  // Pristine fast path: both effects off and nothing else forcing an ffmpeg spawn.
+  if (!hrirOn && !aura360On && !needsSeek) {
     return { kind: 'fastPath' };
   }
 
-  // 360° ON: prefer real BRIR virtualization when a file is available and we're
+  // Aura HRIR ON: prefer real BRIR virtualization when a file is available and we're
   // under the convolution concurrency cap; otherwise the asset-free wide chain.
   let useHrir = false;
-  if (spatialOn && hrirFilePath) {
+  if (hrirOn && hrirFilePath) {
     useHrir = existsSync(hrirFilePath);
     if (!useHrir) {
-      logger.warn({ hrirFilePath }, 'HRIR profile file no longer exists on disk - falling back to the asset-free spatial chain');
+      logger.warn({ hrirFilePath }, 'HRIR profile file no longer exists on disk - falling back to the asset-free Aura HRIR chain');
     } else if (!hasHrirCapacity()) {
       logger.warn(
         { activeHrirCount: getHrirCount(), cap: MAX_HRIR_CONCURRENCY },
-        'HRIR concurrency cap reached - falling back to the asset-free spatial chain for this stream',
+        'HRIR concurrency cap reached - falling back to the asset-free Aura HRIR chain for this stream',
       );
       useHrir = false;
     }
@@ -69,12 +70,15 @@ export function planFfmpegInvocation(params: CreateTrackResourceParams): FfmpegP
     // value — both -i's must precede -ss so it lands as an output-side seek
     // (input 0 is a non-seekable pipe, and placing -ss between the two -i's
     // would instead scope it as an *input* option to the IR file).
+    const sec = formatSeekSeconds(seekOffsetMs);
     args = [
       '-loglevel', 'error',
-      '-i', 'pipe:0',
+      // Buffered temp file → fast input-side seek (`-ss` before `-i`); live pipe →
+      // `-i pipe:0` with an output-side seek placed after BOTH inputs below.
+      ...(params.seekableInput ? ['-ss', sec, '-i', params.seekableInput] : ['-i', 'pipe:0']),
       '-i', hrirFilePath as string,
-      ...(needsSeek ? ['-ss', formatSeekSeconds(seekOffsetMs)] : []),
-      '-filter_complex', buildHrirFilterComplex(hrirFormat as HrirFormat, hrirMakeupDb),
+      ...(!params.seekableInput && needsSeek ? ['-ss', sec] : []),
+      '-filter_complex', buildHrirFilterComplex(hrirFormat as HrirFormat, hrirMakeupDb, aura360On ? buildAura360Prefix() : ''),
       '-map', '[out]',
       '-ac', '2',
       '-ar', '48000',
@@ -82,13 +86,21 @@ export function planFfmpegInvocation(params: CreateTrackResourceParams): FfmpegP
       'pipe:1',
     ];
   } else {
-    // 360° on with no BRIR (asset-free wide fallback), or 360° off but a seek is
-    // needed ('anull' no-op reposition).
-    const filterChain = spatialOn ? buildSpatialFallbackChain() : 'anull';
+    // Aura HRIR on with no BRIR (asset-free wide fallback), or Aura HRIR off but a
+    // seek is needed ('anull' no-op reposition).
+    // The Aura 360° effect (if on) and/or the asset-free Aura HRIR fallback (Aura
+    // HRIR on but no BRIR file); 'anull' when we're only here to seek in
+    // otherwise-normal mode.
+    const chains: string[] = [];
+    if (aura360On) chains.push(buildAura360Chain());
+    if (hrirOn) chains.push(buildHrirFallbackChain());
+    const filterChain = chains.length > 0 ? chains.join(',') : 'anull';
+    const sec = formatSeekSeconds(seekOffsetMs);
     args = [
       '-loglevel', 'error',
-      '-i', 'pipe:0',
-      ...(needsSeek ? ['-ss', formatSeekSeconds(seekOffsetMs)] : []),
+      ...(params.seekableInput
+        ? ['-ss', sec, '-i', params.seekableInput]
+        : ['-i', 'pipe:0', ...(needsSeek ? ['-ss', sec] : [])]),
       '-af', filterChain,
       '-ac', '2',
       '-ar', '48000',

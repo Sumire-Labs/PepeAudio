@@ -2,7 +2,7 @@ import os from 'node:os';
 
 export type PlaybackStatus = 'idle' | 'playing' | 'paused' | 'buffering';
 export type LoopMode = 'off' | 'track' | 'queue';
-export type SpatialMode = 'off' | 'on';
+export type AuraToggle = 'off' | 'on';
 export type PermissionMode = 'same-voice-channel' | 'dj-role' | 'requester-only';
 
 export const PROGRESS_BAR_WIDTH = 18;
@@ -85,5 +85,20 @@ export const MAX_VOLUME_PERCENT = 100;
 /** Volume every guild starts at, pinned at construction (not restored from the persisted per-guild default). Must be one of VOLUME_PRESETS. */
 export const DEFAULT_VOLUME_PERCENT = 50;
 
-// 360° Sound is now ALWAYS ON with no user toggle (GuildPlayer pins spatialMode
-// to 'on'), so the old SPATIAL_AUDIO_ENABLED UI-gate flag was removed.
+/**
+ * Gates the "Aura HRIR" panel toggle button + handler. Aura HRIR is a real user
+ * toggle again (hrirMode persists per guild, default 'on').
+ */
+export const AURA_ENABLED = true;
+
+/**
+ * Attenuation (dB) applied to NORMAL mode (hrirMode 'off') so it matches the
+ * Aura HRIR-ON loudness. Aura HRIR-ON is the quieter reference — its afir makeup leaves
+ * headroom, and BRIR virtualization sounds quieter out-of-head even at matched
+ * meters — so toggling would otherwise jump up in volume. Starts at the measured
+ * meter gap; raise it if OFF still sounds louder than ON by ear.
+ */
+export const NORMAL_MODE_TRIM_DB = 4;
+
+/** Linear gain for NORMAL_MODE_TRIM_DB — multiply a VolumeTransformer's linear volume by this to trim normal mode. */
+export const NORMAL_MODE_TRIM_FACTOR = Math.pow(10, -NORMAL_MODE_TRIM_DB / 20);

@@ -12,14 +12,25 @@ import type { TrackResource } from './resourceTypes.js';
  * volume, inline volume is required exactly as before (it operates on raw PCM
  * gain, not something a demux-only passthrough could apply).
  */
-export function createFastPathResource(stream: Readable, inputType: StreamType | undefined, volumePercent: number): TrackResource {
-  const useInlineVolume = volumePercent !== 100;
+export function createFastPathResource(
+  stream: Readable,
+  inputType: StreamType | undefined,
+  volumePercent: number,
+  trimFactor = 1,
+): TrackResource {
+  // A normal-mode trim (trimFactor < 1, see resourceFactory) needs the inline
+  // VolumeTransformer even at 100% volume, so it can't stay on the pure
+  // Opus-demux passthrough in that case.
+  const useInlineVolume = volumePercent !== 100 || trimFactor !== 1;
   const resource = createAudioResource(stream, {
     inputType: inputType ?? StreamType.Arbitrary,
     inlineVolume: useInlineVolume,
   });
   if (useInlineVolume) {
     resource.volume?.setVolumeLogarithmic(volumePercent / 100);
+    if (resource.volume && trimFactor !== 1) {
+      resource.volume.setVolume(resource.volume.volume * trimFactor);
+    }
   }
   return { resource, ffmpegProcess: null, usingSofalizer: false, usingHrir: false, hasInlineVolume: useInlineVolume };
 }

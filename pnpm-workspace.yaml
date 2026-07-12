@@ -4,5 +4,6 @@ allowBuilds:
   esbuild: true
   ffmpeg-static: true
   ytdlp-nodejs: true
+  zeromq: set this to true or false
 minimumReleaseAgeExclude:
   - discord.js@14.26.5

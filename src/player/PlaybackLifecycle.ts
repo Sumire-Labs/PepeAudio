@@ -1,9 +1,13 @@
 import type { ChildProcess } from 'node:child_process';
 import type { Readable } from 'node:stream';
-import { type AudioPlayer, type AudioResource } from '@discordjs/voice';
+import { createWriteStream, existsSync, rm } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { randomUUID } from 'node:crypto';
+import { type AudioPlayer, type AudioResource, type StreamType } from '@discordjs/voice';
 import { createTrackResource, destroyFfmpegProcess } from '../audio/resourceFactory.js';
 import type { QueueItem } from './QueueItem.js';
-import type { SpatialMode } from './constants.js';
+import type { AuraToggle } from './constants.js';
 import { getHrirProfileById } from '../config/hrirProfilesState.js';
 import type { childLogger } from '../logger.js';
 import type { FfmpegCapabilities } from '../config/ffmpegResolver.js';
@@ -12,7 +16,8 @@ export interface PlaybackLifecycleCallbacks {
   emitUpdate: () => void;
   isDestroyed: () => boolean;
   getVolume: () => number;
-  getSpatialMode: () => SpatialMode;
+  getHrirMode: () => AuraToggle;
+  getAura360Mode: () => AuraToggle;
   setLastError: (message: string | null) => void;
   clearEmptyQueueTimer: () => void;
   /** Reads whatever's likely to play next (queue[0]) - see startTrack's prefetch call. */
@@ -21,10 +26,10 @@ export interface PlaybackLifecycleCallbacks {
 
 /**
  * Owns the currently-playing track's resource/process lifecycle: starting,
- * tearing down, pausing/resuming, and reseeking (spatial-mode toggle, volume-
+ * tearing down, pausing/resuming, and reseeking (HRIR toggle, volume-
  * passthrough respawn, crash recovery). Never touches enqueueAction or holds
  * a GuildPlayer back-reference - everything it needs from GuildPlayer's own
- * state (volume, spatialMode, destroyed, lastError, emit('update')) comes
+ * state (volume, hrirMode, destroyed, lastError, emit('update')) comes
  * through the injected callbacks, so this class is structurally incapable of
  * re-entering the mutex.
  */
@@ -44,6 +49,12 @@ export class PlaybackLifecycle {
   pausedTotalMs = 0;
   currentTrackRetryCount = 0;
   isRespawning = false;
+
+  // Background full-speed buffer of the current track to a temp file — lets a
+  // reseek (toggle/volume/crash) do a fast input-side seek instead of re-fetching.
+  private currentTempFile: string | null = null;
+  private tempFileComplete = false;
+  private bufferSource: Readable | null = null;
 
   constructor(
     private readonly audioPlayer: AudioPlayer,
@@ -87,8 +98,50 @@ export class PlaybackLifecycle {
   /** Stops the AudioPlayer and tears down any active ffmpeg process/source stream, whichever path is in use. */
   teardownPlayback(): void {
     this.teardownActiveResource();
+    this.clearTrackBuffer();
     this.currentResource = null;
     this.audioPlayer.stop(true);
+  }
+
+  /**
+   * Starts a SECOND, full-speed download of `track` into a temp file, decoupled
+   * from playback pacing so it completes quickly. Once complete, reseeks (toggle/
+   * volume/crash) input-seek that file instead of re-fetching + decode-discarding,
+   * which is the whole point — snappy effect toggles. Purely best-effort: any
+   * failure just leaves reseeks on the original re-fetch path. NOT torn down on a
+   * reseek (only teardownActiveResource is), so the buffer keeps filling.
+   */
+  private startTrackBuffer(track: QueueItem): void {
+    this.clearTrackBuffer();
+    const tempFile = join(tmpdir(), `pepeaudio-buf-${randomUUID()}.webm`);
+    this.currentTempFile = tempFile;
+    track
+      .getStream()
+      .then(({ stream }) => {
+        if (this.currentTempFile !== tempFile || this.cb.isDestroyed()) {
+          stream.destroy();
+          return;
+        }
+        this.bufferSource = stream;
+        const ws = createWriteStream(tempFile);
+        stream.pipe(ws);
+        ws.once('finish', () => {
+          if (this.currentTempFile === tempFile) this.tempFileComplete = true;
+        });
+        stream.once('error', (err) => this.log.debug({ err }, 'Track buffer download error (reseek re-fetches instead)'));
+        ws.once('error', (err) => this.log.debug({ err }, 'Track buffer file write error'));
+      })
+      .catch((err) => this.log.debug({ err }, 'Track buffer getStream failed (reseek re-fetches instead)'));
+  }
+
+  /** Aborts any in-flight buffer download and deletes the temp file. */
+  private clearTrackBuffer(): void {
+    this.bufferSource?.destroy();
+    this.bufferSource = null;
+    this.tempFileComplete = false;
+    const file = this.currentTempFile;
+    this.currentTempFile = null;
+    if (file) rm(file, { force: true }, () => undefined);
   }
 
   /**
@@ -105,15 +158,36 @@ export class PlaybackLifecycle {
    * reseekCore() instead (it's the only thing that correctly sets/clears
    * isRespawning around the call).
    */
-  async startTrack(track: QueueItem, seekOffsetMs = 0, opts: { resetRetryCount?: boolean } = {}): Promise<void> {
+  async startTrack(track: QueueItem, seekOffsetMs = 0, opts: { resetRetryCount?: boolean; fromBuffer?: boolean } = {}): Promise<void> {
     const resetRetryCount = opts.resetRetryCount ?? true;
+    const fromBuffer = opts.fromBuffer ?? false;
     this.cb.clearEmptyQueueTimer();
-    const { stream, inputType } = await track.getStream();
-    if (this.cb.isDestroyed()) {
-      // The player was torn down while we were awaiting the stream — discard
-      // it rather than committing a resource to a dead voice connection.
-      stream.destroy();
-      throw new Error('GuildPlayer destroyed while resolving stream');
+
+    // Source selection: a COMPLETED background buffer of this same track lets a
+    // reseek read the temp file with a fast input-side seek — no yt-dlp re-fetch,
+    // no decode-and-discard. Otherwise fetch a fresh stream (and, on a genuinely
+    // new track, kick off the background buffer for next time).
+    const canUseBuffer =
+      fromBuffer && this.tempFileComplete && this.currentTempFile !== null && existsSync(this.currentTempFile);
+
+    let stream: Readable | undefined;
+    let inputType: StreamType | undefined;
+    let seekableInput: string | undefined;
+    if (canUseBuffer) {
+      seekableInput = this.currentTempFile ?? undefined;
+    } else {
+      const resolved = await track.getStream();
+      stream = resolved.stream;
+      inputType = resolved.inputType;
+      if (this.cb.isDestroyed()) {
+        // The player was torn down while we were awaiting the stream — discard
+        // it rather than committing a resource to a dead voice connection.
+        stream.destroy();
+        throw new Error('GuildPlayer destroyed while resolving stream');
+      }
+      if (!fromBuffer) {
+        this.startTrackBuffer(track);
+      }
     }
 
     // getHrirProfileById reads a list cached once at startup, so this always
@@ -128,7 +202,9 @@ export class PlaybackLifecycle {
       created = createTrackResource({
         stream,
         inputType,
-        spatialMode: this.cb.getSpatialMode(),
+        seekableInput,
+        hrirMode: this.cb.getHrirMode(),
+        aura360Mode: this.cb.getAura360Mode(),
         sofalizerAvailable: this.ffmpeg.sofalizerAvailable,
         ffmpegPath: this.ffmpeg.path,
         seekOffsetMs,
@@ -138,14 +214,14 @@ export class PlaybackLifecycle {
         hrirMakeupDb: hrirProfile?.makeupDb ?? 0,
       });
     } catch (err) {
-      stream.destroy();
+      stream?.destroy();
       throw err;
     }
     const { resource, ffmpegProcess, usingHrir, hasInlineVolume } = created;
 
     this.currentResource = resource;
     this.activeFfmpegProcess = ffmpegProcess;
-    this.activeSourceStream = stream;
+    this.activeSourceStream = stream ?? null;
     this.currentTrack = track;
     this.usingHrir = usingHrir;
     this.hasInlineVolume = hasInlineVolume;
@@ -186,7 +262,7 @@ export class PlaybackLifecycle {
   }
 
   /**
-   * Shared by the spatial-mode toggle, the volume-passthrough respawn, and
+   * Shared by the HRIR toggle, the volume-passthrough respawn, and
    * ffmpeg crash recovery (and a future /seek command): kill the current
    * ffmpeg process/stream and restart the current track from `offsetMs`,
    * without misfiring the natural-track-end path. Callers must already be
@@ -200,14 +276,15 @@ export class PlaybackLifecycle {
     this.isRespawning = true;
     try {
       this.teardownActiveResource();
-      await this.startTrack(track, offsetMs, opts);
+      // fromBuffer: use the buffered temp file (fast input-seek) if it's ready.
+      await this.startTrack(track, offsetMs, { ...opts, fromBuffer: true });
     } finally {
       this.isRespawning = false;
     }
   }
 
   /**
-   * Mirrors setSpatialModeCore's respawn/pause-preservation shape. Re-checks
+   * Mirrors setHrirModeCore's respawn/pause-preservation shape. Re-checks
    * its own preconditions (rather than trusting the caller's snapshot) since
    * this runs asynchronously behind the enqueueAction mutex - volume or track
    * may have changed again by the time it actually executes.

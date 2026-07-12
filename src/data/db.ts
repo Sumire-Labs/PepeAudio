@@ -44,6 +44,7 @@ const guildSettingsMigrations: Array<{ column: string; ddl: string }> = [
   { column: 'default_hrir_profile', ddl: 'ALTER TABLE guild_settings ADD COLUMN default_hrir_profile TEXT' },
   { column: 'stay_247', ddl: 'ALTER TABLE guild_settings ADD COLUMN stay_247 INTEGER NOT NULL DEFAULT 0' },
   { column: 'autoplay', ddl: 'ALTER TABLE guild_settings ADD COLUMN autoplay INTEGER NOT NULL DEFAULT 0' },
+  { column: 'default_enhancer_mode', ddl: "ALTER TABLE guild_settings ADD COLUMN default_enhancer_mode TEXT NOT NULL DEFAULT 'off'" },
 ];
 for (const { column, ddl } of guildSettingsMigrations) {
   if (!existingColumnNames.has(column)) {

@@ -15,9 +15,11 @@ import {
   DEFAULT_VOLUME_PERCENT,
   MAX_FFMPEG_CRASH_RETRIES,
   MAX_VOLUME_PERCENT,
+  NORMAL_MODE_TRIM_FACTOR,
+  AURA_ENABLED,
   type LoopMode,
   type PermissionMode,
-  type SpatialMode,
+  type AuraToggle,
 } from './constants.js';
 import { getGuildSettings, type GuildSettings } from '../data/guildSettingsRepo.js';
 import { getHrirProfiles } from '../config/hrirProfilesState.js';
@@ -44,7 +46,7 @@ export interface GuildPlayerOptions {
  * Emits 'update' after any state change a panel render should reflect, and
  * 'destroyed' exactly once, from stop().
  *
- * Every method that mutates playback state (skip/previous/stop/setSpatialMode,
+ * Every method that mutates playback state (skip/previous/stop/setHrirMode,
  * plus the natural track-end and crash-recovery paths) runs through
  * `enqueueAction`, a per-instance promise chain that serializes them. Without
  * this, two overlapping calls (e.g. two different users pressing skip/previous
@@ -68,7 +70,7 @@ export interface GuildPlayerOptions {
  * (emitUpdate, isDestroyed, getVolume, etc.) and NEVER a reference back to
  * this class or to enqueueAction itself — that's a structural guarantee
  * against mutex re-entry, not just a naming convention. Cross-cutting logic
- * that spans more than one collaborator (stopCore, setSpatialModeCore,
+ * that spans more than one collaborator (stopCore, setHrirModeCore,
  * handlePlaybackFailureCore) stays here.
  */
 export class GuildPlayer extends EventEmitter {
@@ -84,7 +86,9 @@ export class GuildPlayer extends EventEmitter {
   private readonly queueHistory: QueueHistoryManager;
   private readonly timers: TimerManager;
 
-  spatialMode: SpatialMode;
+  hrirMode: AuraToggle;
+  /** The Aura 360° effect (widening + bass), independent of hrirMode/Aura HRIR. */
+  aura360Mode: AuraToggle;
   /**
    * HRIR profile id (see config/hrirProfiles.ts), or null if none is configured.
    * Fixed at construction to whatever's found in the HRIR folder - not user-selectable
@@ -113,12 +117,13 @@ export class GuildPlayer extends EventEmitter {
     this.log = childLogger({ guildId: this.guildId });
 
     const settings: GuildSettings = getGuildSettings(this.guildId);
-    // Default volume is pinned to DEFAULT_VOLUME_PERCENT and 360° Sound is
-    // always on (no user toggle) — the 360° engine convolves every track through
-    // the Dolby BRIR profile in assets/hrir_profiles/. Both intentionally ignore
-    // the persisted per-guild defaults.
+    // Default volume is pinned to DEFAULT_VOLUME_PERCENT (ignores the persisted
+    // per-guild volume). Aura 360° is a real user toggle again: it starts from
+    // the persisted setting (which defaults to 'on') and is flipped by the panel
+    // button; normal mode is level-trimmed to match Aura 360°-on (see constants.NORMAL_MODE_TRIM_DB).
     this.volume = DEFAULT_VOLUME_PERCENT;
-    this.spatialMode = 'on';
+    this.hrirMode = AURA_ENABLED ? settings.defaultHrirMode : 'off';
+    this.aura360Mode = AURA_ENABLED ? settings.defaultAura360Mode : 'off';
     this.hrirProfile = getHrirProfiles()[0]?.id ?? null;
     this.permissionMode = settings.permissionMode;
     this.djRoleId = settings.djRoleId;
@@ -140,7 +145,8 @@ export class GuildPlayer extends EventEmitter {
       emitUpdate: () => this.emit('update'),
       isDestroyed: () => this.destroyed,
       getVolume: () => this.volume,
-      getSpatialMode: () => this.spatialMode,
+      getHrirMode: () => this.hrirMode,
+      getAura360Mode: () => this.aura360Mode,
       setLastError: (message) => {
         this.lastError = message;
       },
@@ -342,6 +348,12 @@ export class GuildPlayer extends EventEmitter {
       // resource, or a previous non-100% respawn already added one) - apply
       // directly, glitch-free, exactly as before.
       this.playback.currentResource.volume.setVolumeLogarithmic(this.volume / 100);
+      // Normal mode is level-trimmed to match Aura 360°-on; setVolumeLogarithmic just
+      // overwrote the transformer's linear gain, so re-apply the trim here.
+      if (this.hrirMode === 'off') {
+        const vol = this.playback.currentResource.volume;
+        vol.setVolume(vol.volume * NORMAL_MODE_TRIM_FACTOR);
+      }
     } else if (this.playback.currentTrack && this.volume !== 100) {
       // Currently on the Opus-passthrough fast path (resourceFactory.ts) and
       // volume just moved away from 100% for the first time on this track -
@@ -367,16 +379,38 @@ export class GuildPlayer extends EventEmitter {
     this.emit('update');
   }
 
-  async setSpatialMode(mode: SpatialMode): Promise<void> {
-    await this.enqueueAction(() => this.setSpatialModeCore(mode));
+  async setHrirMode(mode: AuraToggle): Promise<void> {
+    await this.enqueueAction(() => this.setHrirModeCore(mode));
   }
 
   /** Preserves pause state across the toggle — previously, toggling while paused silently resumed playback. */
-  private async setSpatialModeCore(mode: SpatialMode): Promise<void> {
-    if (this.destroyed || mode === this.spatialMode) return;
-    this.spatialMode = mode;
+  private async setHrirModeCore(mode: AuraToggle): Promise<void> {
+    if (this.destroyed || mode === this.hrirMode) return;
+    this.hrirMode = mode;
     this.emit('update'); // reflect the toggle before playback audio actually catches up
-    this.timers.scheduleSettingsSave({ defaultSpatialMode: mode });
+    this.timers.scheduleSettingsSave({ defaultHrirMode: mode });
+    if (!this.currentTrack) return;
+
+    const wasPaused = this.isPaused();
+    const elapsed = this.getElapsedMs();
+    await this.playback.reseekCore(elapsed);
+    if (wasPaused && !this.destroyed && this.currentTrack) {
+      this.audioPlayer.pause();
+      this.playback.pausedAt = Date.now();
+      this.emit('update');
+    }
+  }
+
+  async setAura360Mode(mode: AuraToggle): Promise<void> {
+    await this.enqueueAction(() => this.setAura360ModeCore(mode));
+  }
+
+  /** Mirrors setHrirModeCore — respawns the current track so the Aura 360° toggle takes effect, preserving pause state. */
+  private async setAura360ModeCore(mode: AuraToggle): Promise<void> {
+    if (this.destroyed || mode === this.aura360Mode) return;
+    this.aura360Mode = mode;
+    this.emit('update');
+    this.timers.scheduleSettingsSave({ defaultAura360Mode: mode });
     if (!this.currentTrack) return;
 
     const wasPaused = this.isPaused();

@@ -12,7 +12,7 @@ import type { CreateTrackResourceParams, TrackResource } from './resourceTypes.j
  * final AudioResource with inline volume always on (invariant #4's non-fast-path branch —
  * volume is never an ffmpeg filter, only ever the inline VolumeTransformer).
  */
-export function spawnFfmpegResource(plan: FfmpegSpawnPlan, params: CreateTrackResourceParams): TrackResource {
+export function spawnFfmpegResource(plan: FfmpegSpawnPlan, params: CreateTrackResourceParams, trimFactor = 1): TrackResource {
   const { stream, ffmpegPath, volumePercent } = params;
   const { useHrir, useSofalizer, args } = plan;
 
@@ -54,21 +54,31 @@ export function spawnFfmpegResource(plan: FfmpegSpawnPlan, params: CreateTrackRe
   // A killed process can make the still-piping source stream see EPIPE/ECONNRESET;
   // swallow it here since destroyFfmpegProcess() always unpipes first, and the
   // crash-worthy error already gets logged there.
-  stream.on('error', (err) => {
+  // No `stream` on the buffered input-seek reseek path — ffmpeg reads the temp
+  // file itself (see params.seekableInput / ffmpegPlan), so there's nothing to pipe.
+  stream?.on('error', (err) => {
     logger.debug({ err }, 'Source stream error (expected if ffmpeg was just torn down)');
   });
-  if (ffmpegProcess.stdin) {
+  if (stream && ffmpegProcess.stdin) {
     stream.pipe(ffmpegProcess.stdin);
     ffmpegProcess.stdin.on('error', (err) => {
       logger.debug({ err }, 'ffmpeg stdin error (expected if the process was just torn down)');
     });
   }
 
-  const resource = createAudioResource(ffmpegProcess.stdout ?? stream, {
+  const resourceInput = ffmpegProcess.stdout ?? stream;
+  if (!resourceInput) {
+    throw new Error('ffmpeg produced no stdout to read from');
+  }
+  const resource = createAudioResource(resourceInput, {
     inputType: StreamType.Raw,
     inlineVolume: true,
   });
   resource.volume?.setVolumeLogarithmic(volumePercent / 100);
+  // Normal-mode (Aura 360° off + seek) trim to match the quieter Aura 360°-on level; unity on Aura 360°-on paths.
+  if (resource.volume && trimFactor !== 1) {
+    resource.volume.setVolume(resource.volume.volume * trimFactor);
+  }
   // This path re-encodes raw PCM back to Opus (StreamType.Raw). @discordjs/voice
   // otherwise leaves the encoder at libopus OPUS_AUTO (~96 kbps); bump to prism-
   // media's 128 kbps ceiling for a little more headroom against re-encode grit on
