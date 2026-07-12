@@ -1,6 +1,7 @@
 import { createQueueItem, type QueueItem, type SourceType } from '../player/QueueItem.js';
 import { searchYouTube, createYouTubeStreamGetter, fetchYouTubeMetadata } from './youtube.js';
 import { LruCache } from '../util/lruCache.js';
+import { escapeMd } from '../ui/panelMarkdown.js';
 import { logger } from '../logger.js';
 
 export class NoMatchFoundError extends Error {}
@@ -41,7 +42,7 @@ async function findBestYouTubeMatch(title: string, artist: string): Promise<Cach
 
   const candidates = await searchYouTube(cacheKey, 5);
   if (candidates.length === 0) {
-    throw new NoMatchFoundError(`「${title}」に一致するYouTube動画が見つかりませんでした。`);
+    throw new NoMatchFoundError(`「${escapeMd(title)}」に一致するYouTube動画が見つかりませんでした。`);
   }
 
   // Prefer official "- Topic" auto-generated audio channels; penalize covers/live/reactions.

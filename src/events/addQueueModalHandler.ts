@@ -5,6 +5,8 @@ import { parseAddQueueModalId } from '../ui/customIds.js';
 import { ADD_QUEUE_QUERY_FIELD_ID } from '../ui/addQueueModal.js';
 import { resolvePlayQuery } from '../commands/play/resolveQuery.js';
 import { enqueueAndConfirm } from '../commands/play/enqueueAndConfirm.js';
+import { checkCooldown } from '../util/rateLimiter.js';
+import { PLAY_COOLDOWN_MS } from '../player/constants.js';
 
 /**
  * Handles the modal shown by the panel's "➕ 曲を追加" button (see
@@ -39,6 +41,14 @@ export async function handleAddQueueModalSubmit(interaction: ModalSubmitInteract
   const perm = checkControlPermission(interaction, player);
   if (!perm.ok) {
     await interaction.reply({ content: perm.reason ?? '権限がありません。', flags: MessageFlags.Ephemeral });
+    return;
+  }
+
+  // Share /play's cooldown bucket (same scope + window): this modal reuses the
+  // exact same expensive resolve/search path, so without this a user could
+  // alternate /play and the panel's add-queue modal to defeat either limit.
+  if (!checkCooldown('play', interaction.user.id, PLAY_COOLDOWN_MS)) {
+    await interaction.reply({ content: '少し間隔を空けてから再度お試しください。', flags: MessageFlags.Ephemeral });
     return;
   }
 

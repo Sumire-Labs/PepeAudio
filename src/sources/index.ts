@@ -3,6 +3,7 @@ import { resolveYouTubeUrl, resolveYouTubeVideoId, searchYouTube } from './youtu
 import { resolveSpotifyUrl } from './spotify.js';
 import { resolveSoundCloudUrl } from './soundcloud.js';
 import { resolveAppleMusicUrl } from './appleMusic.js';
+import { escapeMd } from '../ui/panelMarkdown.js';
 import type { QueueItem } from '../player/QueueItem.js';
 
 export class SourceResolutionError extends Error {}
@@ -33,7 +34,7 @@ export async function resolveInput(query: string, requestedBy: string): Promise<
       const results = await searchYouTube(query, 1);
       const top = results[0];
       if (!top) {
-        throw new SourceResolutionError(`「${query}」に一致する動画が見つかりませんでした。`);
+        throw new SourceResolutionError(`「${escapeMd(query)}」に一致する動画が見つかりませんでした。`);
       }
       return [await resolveYouTubeVideoId(top.videoId, top.url, requestedBy)];
     }

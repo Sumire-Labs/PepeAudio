@@ -3,6 +3,7 @@ import type { GuildPlayer } from '../../player/GuildPlayer.js';
 import type { QueueItem } from '../../player/QueueItem.js';
 import { sendOrReplacePanel, type SendableChannel } from '../../ui/panelManager.js';
 import { buildQueuedConfirmation } from '../../ui/panelBuilder.js';
+import { escapeMd } from '../../ui/panelMarkdown.js';
 import { logger } from '../../logger.js';
 
 /**
@@ -68,7 +69,9 @@ export async function enqueueAndConfirm(
   if (!confirmationSent) {
     const firstTitle = queuedItems[0]?.title ?? '';
     const fallbackText =
-      queuedItems.length === 1 ? `キューに追加しました: **${firstTitle}**` : `${queuedItems.length}曲をキューに追加しました。`;
+      queuedItems.length === 1
+        ? `キューに追加しました: **${escapeMd(firstTitle)}**`
+        : `${queuedItems.length}曲をキューに追加しました。`;
     try {
       await interaction.followUp({ content: fallbackText, flags: MessageFlags.Ephemeral });
     } catch (err) {

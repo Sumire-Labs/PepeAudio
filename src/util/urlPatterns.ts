@@ -19,7 +19,7 @@ const KNOWN_HOST_NO_SCHEME_RE =
 function isYouTubeHost(host: string): boolean {
   return host === 'youtu.be' || host === 'youtube.com' || host.endsWith('.youtube.com');
 }
-function isSpotifyHost(host: string): boolean {
+export function isSpotifyHost(host: string): boolean {
   return host === 'spotify.com' || host.endsWith('.spotify.com');
 }
 export function isSoundCloudHost(host: string): boolean {

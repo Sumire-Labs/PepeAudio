@@ -41,7 +41,7 @@ interface GuildSettingsRow {
 }
 
 const DEFAULTS: Omit<GuildSettings, 'guildId' | 'updatedAt'> = {
-  defaultVolume: 50, // see DEFAULT_VOLUME_PERCENT — GuildPlayer pins the starting volume regardless, this keeps the persisted default consistent
+  defaultVolume: 70, // see DEFAULT_VOLUME_PERCENT — GuildPlayer pins the starting volume regardless, this keeps the persisted default consistent
   defaultHrirMode: 'on', // Aura HRIR is on by default; users toggle it off via the panel button
   defaultAura360Mode: 'off', // Aura 360° is off by default; opt-in via its own panel button
   defaultHrirProfile: 'Aura_Headphone_V2', // default Aura Preset; GuildPlayer falls back to the first loaded profile (or null) if this bring-your-own file isn't present

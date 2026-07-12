@@ -11,6 +11,7 @@ import { registerVoiceStateUpdateEvent } from './events/voiceStateUpdate.js';
 import { registerErrorEvents } from './events/errorEvents.js';
 import { startMetricsReporter } from './util/metricsReporter.js';
 import * as GuildPlayerManager from './player/GuildPlayerManager.js';
+import { sweepStaleTrackBuffers } from './player/trackBufferSweep.js';
 import { logger } from './logger.js';
 import './data/db.js'; // ensures the SQLite schema migration runs before anything else touches it
 
@@ -18,6 +19,10 @@ const ffmpegCapabilities = initFfmpeg();
 setFfmpegCapabilities(ffmpegCapabilities);
 initPanelManager(ffmpegCapabilities);
 initHrirProfiles(ffmpegCapabilities.path, env.hrirProfilesDirOverride);
+
+// Best-effort: reclaim any reseek buffer temp files orphaned by a previous hard
+// crash. Fire-and-forget (it never rejects) so it can't delay login.
+void sweepStaleTrackBuffers();
 
 // `@discordjs/opus` and `sodium-native` are optionalDependencies (see
 // package.json) - if their native build fails to install, @discordjs/voice

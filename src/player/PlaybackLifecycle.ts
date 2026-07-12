@@ -9,6 +9,7 @@ import { createTrackResource, destroyFfmpegProcess } from '../audio/resourceFact
 import type { QueueItem } from './QueueItem.js';
 import type { AuraToggle } from './constants.js';
 import { getHrirProfileById } from '../config/hrirProfilesState.js';
+import { TRACK_BUFFER_PREFIX } from './trackBufferSweep.js';
 import type { childLogger } from '../logger.js';
 import type { FfmpegCapabilities } from '../config/ffmpegResolver.js';
 
@@ -114,7 +115,7 @@ export class PlaybackLifecycle {
    */
   private startTrackBuffer(track: QueueItem): void {
     this.clearTrackBuffer();
-    const tempFile = join(tmpdir(), `pepeaudio-buf-${randomUUID()}.webm`);
+    const tempFile = join(tmpdir(), `${TRACK_BUFFER_PREFIX}${randomUUID()}.webm`);
     this.currentTempFile = tempFile;
     track
       .getStream()

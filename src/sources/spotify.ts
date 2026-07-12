@@ -2,6 +2,7 @@ import spotifyUrlInfoFactory from 'spotify-url-info';
 import type { QueueItem } from '../player/QueueItem.js';
 import { matchOnYouTube, createLazyMatchedQueueItem } from './youtubeMatch.js';
 import { MAX_PLAYLIST_TRACKS } from '../player/constants.js';
+import { isSpotifyHost } from '../util/urlPatterns.js';
 import { logger } from '../logger.js';
 import { safeExtractTitleArtist } from './spotifyTrackParser.js';
 
@@ -10,7 +11,29 @@ export class SpotifyResolutionError extends Error {}
 
 const spotify = spotifyUrlInfoFactory(fetch);
 
-export async function resolveSpotifyUrl(url: string, requestedBy: string): Promise<QueueItem[]> {
+/**
+ * Defense-in-depth before handing a URL to spotify-url-info (which fetches
+ * whatever URL it derives from the input). classifyInput() already routes only
+ * Spotify hosts here, but — mirroring sanitizeSoundCloudUrl — this resolver
+ * re-validates the parsed host rather than trusting the caller, then rebuilds a
+ * clean https URL dropping any embedded credentials, port, and fragment. Ensures
+ * no resolver relies solely on its caller for the SSRF host check.
+ */
+function sanitizeSpotifyUrl(rawUrl: string): string {
+  let parsed: URL;
+  try {
+    parsed = new URL(rawUrl);
+  } catch {
+    throw new SpotifyResolutionError('SpotifyのURLを認識できませんでした。');
+  }
+  if (!isSpotifyHost(parsed.hostname.toLowerCase())) {
+    throw new SpotifyResolutionError('SpotifyのURLではありません。');
+  }
+  return `https://${parsed.hostname}${parsed.pathname}${parsed.search}`;
+}
+
+export async function resolveSpotifyUrl(rawUrl: string, requestedBy: string): Promise<QueueItem[]> {
+  const url = sanitizeSpotifyUrl(rawUrl);
   const isPlaylistOrAlbum = /\/(playlist|album)\//.test(url);
 
   if (isPlaylistOrAlbum) {
