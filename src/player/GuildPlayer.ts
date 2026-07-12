@@ -114,8 +114,9 @@ export class GuildPlayer extends EventEmitter {
 
     const settings: GuildSettings = getGuildSettings(this.guildId);
     // Default volume is pinned to DEFAULT_VOLUME_PERCENT and 360° Sound is
-    // always on (no user toggle) — both intentionally ignore the persisted
-    // per-guild defaults.
+    // always on (no user toggle) — the 360° engine convolves every track through
+    // the Dolby BRIR profile in assets/hrir_profiles/. Both intentionally ignore
+    // the persisted per-guild defaults.
     this.volume = DEFAULT_VOLUME_PERCENT;
     this.spatialMode = 'on';
     this.hrirProfile = getHrirProfiles()[0]?.id ?? null;
