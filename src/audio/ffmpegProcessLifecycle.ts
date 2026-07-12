@@ -69,6 +69,11 @@ export function spawnFfmpegResource(plan: FfmpegSpawnPlan, params: CreateTrackRe
     inlineVolume: true,
   });
   resource.volume?.setVolumeLogarithmic(volumePercent / 100);
+  // This path re-encodes raw PCM back to Opus (StreamType.Raw). @discordjs/voice
+  // otherwise leaves the encoder at libopus OPUS_AUTO (~96 kbps); bump to prism-
+  // media's 128 kbps ceiling for a little more headroom against re-encode grit on
+  // music (capped in practice by the voice channel's own bitrate).
+  resource.encoder?.setBitrate(128_000);
 
   return { resource, ffmpegProcess, usingSofalizer: useSofalizer, usingHrir: useHrir, hasInlineVolume: true };
 }

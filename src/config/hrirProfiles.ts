@@ -18,13 +18,25 @@ const PROBE_TIMEOUT_MS = 10_000;
 const MAKEUP_MEASURE_TIMEOUT_MS = 20_000;
 
 /**
+ * Headroom (dB) left BELOW a perfect RMS level-match, so hot / loudness-war
+ * masters don't ride continuously into the safety limiter. Measured: without it,
+ * a ~-9 dBFS-RMS master convolves + makes up to peaks around +3.7 dBFS and
+ * alimiter=0.95 clamps ~3-4 dB nonstop — audible over-limiting ("harsh"/pumping).
+ * With this margin, hot masters land near the limiter threshold instead of
+ * slamming into it, so the limiter is a true safety net. Trades a few dB of
+ * loudness (recover it with the volume control) for a clean, un-pumped signal.
+ * Tunable by ear.
+ */
+const MAKEUP_HEADROOM_DB = 4;
+
+/**
  * Fallback makeup used only if the measurement below fails to produce a number
  * (ffmpeg error/timeout/unparseable output). Room BRIRs cluster around ~20 dB
- * of insertion loss; 18 is a deliberately conservative under-estimate so the
- * fallback never over-boosts into the safety limiter. Real deployments measure
- * their own value and never hit this.
+ * of insertion loss; this is a deliberately conservative under-estimate (already
+ * minus the headroom above) so the fallback never over-boosts into the limiter.
+ * Real deployments measure their own value and never hit this.
  */
-const DEFAULT_HRIR_MAKEUP_DB = 18;
+const DEFAULT_HRIR_MAKEUP_DB = 14;
 
 /**
  * Decorrelated pink-noise reference signal, generated entirely in-process by
@@ -56,14 +68,14 @@ function measureRmsDb(ffmpegPath: string, args: string[]): number | null {
 }
 
 /**
- * Measures the makeup gain (dB) that level-matches this IR's convolved output
- * back to the pristine input, by convolving the reference signal through the
- * REAL production graph (at unity makeup) and comparing output RMS to input
- * RMS. Running the actual graph — not a re-derived approximation — guarantees
- * the number matches what plays. Clamped to [0, 30] dB and rounded to 0.1 dB;
- * falls back to DEFAULT_HRIR_MAKEUP_DB if either measurement can't be read.
- * The safety limiter in the production chain makes an over-estimate harmless,
- * so this errs toward matching rather than under-shooting.
+ * Measures the makeup gain (dB) for this IR by convolving the reference signal
+ * through the REAL production graph (at unity makeup) and comparing output RMS
+ * to input RMS — running the actual graph, not a re-derived approximation,
+ * guarantees the number matches what plays. Then subtracts MAKEUP_HEADROOM_DB so
+ * the result sits a few dB BELOW a perfect level-match: hot masters land near the
+ * limiter threshold instead of slamming ~3-4 dB into it. Clamped to [0, 30] dB,
+ * rounded to 0.1 dB; falls back to DEFAULT_HRIR_MAKEUP_DB if either measurement
+ * can't be read.
  */
 export function measureHrirMakeupDb(ffmpegPath: string, filePath: string, format: HrirFormat): number {
   const inRms = measureRmsDb(ffmpegPath, [
@@ -85,7 +97,7 @@ export function measureHrirMakeupDb(ffmpegPath: string, filePath: string, format
     );
     return DEFAULT_HRIR_MAKEUP_DB;
   }
-  const makeup = Math.max(0, Math.min(30, Math.round((inRms - outRms) * 10) / 10));
+  const makeup = Math.max(0, Math.min(30, Math.round((inRms - outRms - MAKEUP_HEADROOM_DB) * 10) / 10));
   return makeup;
 }
 
