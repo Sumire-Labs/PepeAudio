@@ -1,4 +1,4 @@
-export const PANEL_ACTIONS = ['prev', 'playpause', 'skip', 'stop', 'shuffle', 'loop', 'hrir', 'aura360', 'preset', 'volume', 'addQueue'] as const;
+export const PANEL_ACTIONS = ['prev', 'playpause', 'skip', 'stop', 'shuffle', 'loop', 'autoplay', 'hrir', 'aura360', 'preset', 'volume', 'addQueue'] as const;
 export type PanelAction = (typeof PANEL_ACTIONS)[number];
 
 export function buildCustomId(action: PanelAction, guildId: string): string {

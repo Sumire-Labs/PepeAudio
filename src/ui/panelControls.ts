@@ -38,6 +38,9 @@ export function addControlRows(container: ContainerBuilder, player: GuildPlayer)
       player.loopMode === 'off' ? ButtonStyle.Secondary : ButtonStyle.Success,
       !track,
     ),
+    // Autoplay ("radio") is a persistent per-guild mode, not tied to the current
+    // track, so it stays enabled even with nothing playing (unlike its row-mates).
+    btn('autoplay', player.guildId, '📻 オート', player.autoplay ? ButtonStyle.Success : ButtonStyle.Secondary),
   );
 
   const volumeSelect = new StringSelectMenuBuilder()

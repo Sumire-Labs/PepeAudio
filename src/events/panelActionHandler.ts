@@ -78,6 +78,9 @@ export async function handleButtonOrSelect(interaction: ButtonInteraction | Stri
       case 'shuffle':
         player.toggleShuffle();
         break;
+      case 'autoplay':
+        player.setAutoplay(!player.autoplay);
+        break;
       case 'loop': {
         const order: LoopMode[] = ['off', 'track', 'queue'];
         const next = order[(order.indexOf(player.loopMode) + 1) % order.length]!;

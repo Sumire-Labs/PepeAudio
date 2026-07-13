@@ -46,6 +46,16 @@ export const MAX_PLAYLIST_TRACKS = 50;
  */
 export const MAX_QUEUE_LENGTH = 500;
 
+/**
+ * Autoplay ("radio"): when the queue empties with autoplay on, this many related
+ * candidates are fetched from the finished track's YouTube "up next" feed, then
+ * de-duped against session history down to AUTOPLAY_ENQUEUE_COUNT fresh tracks.
+ * Fetching a few more than we keep leaves room to drop already-played repeats.
+ */
+export const AUTOPLAY_FETCH_LIMIT = 15;
+/** Autoplay: how many fresh (non-repeat) related tracks to enqueue each time the queue runs dry. */
+export const AUTOPLAY_ENQUEUE_COUNT = 5;
+
 export const PLAY_COOLDOWN_MS = 3_000;
 export const BUTTON_COOLDOWN_MS = 1_500;
 export const VOLUME_COOLDOWN_MS = 500;

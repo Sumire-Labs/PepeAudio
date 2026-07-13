@@ -1,5 +1,5 @@
 import type { QueueItem } from './QueueItem.js';
-import { MAX_HISTORY, MAX_QUEUE_LENGTH, type LoopMode } from './constants.js';
+import { AUTOPLAY_ENQUEUE_COUNT, MAX_HISTORY, MAX_QUEUE_LENGTH, type LoopMode } from './constants.js';
 import type { childLogger } from '../logger.js';
 
 function shuffleArray<T>(input: T[]): T[] {
@@ -26,6 +26,10 @@ export interface QueueHistoryCallbacks {
   clearCurrentTrack: () => void;
   clearPlaybackStartedAt: () => void;
   setLastError: (message: string | null) => void;
+  /** Whether autoplay ("radio") is enabled for this guild - checked when the queue runs dry. */
+  isAutoplayEnabled: () => boolean;
+  /** Fetches related "radio" tracks seeded from the just-finished track (see sources/resolveAutoplayTracks). */
+  fetchAutoplayTracks: (seed: QueueItem) => Promise<QueueItem[]>;
 }
 
 /**
@@ -135,14 +139,27 @@ export class QueueHistoryManager {
         candidateQueue = this.shuffleEnabled ? shuffleArray(candidateLapHistory) : [...candidateLapHistory];
         nextLapHistory = [];
       } else {
-        this.history = candidateHistory;
-        this.lapHistory = candidateLapHistory;
-        this.cb.clearCurrentTrack();
-        this.cb.clearPlaybackStartedAt();
-        this.cb.teardownPlayback();
-        this.cb.startEmptyQueueTimer();
-        this.cb.emitUpdate();
-        return;
+        // Autoplay ("radio"): before giving up, try to keep the session going
+        // with tracks related to what just finished. Only when it's enabled and
+        // there's a finished track to seed from; a failure or an all-duplicates
+        // result falls through to the normal stop below.
+        const autoplayed =
+          this.cb.isAutoplayEnabled() && finishedTrack
+            ? await this.fetchFreshAutoplay(finishedTrack, candidateHistory, candidateLapHistory)
+            : [];
+        if (autoplayed.length > 0) {
+          candidateQueue = autoplayed;
+          nextLapHistory = candidateLapHistory;
+        } else {
+          this.history = candidateHistory;
+          this.lapHistory = candidateLapHistory;
+          this.cb.clearCurrentTrack();
+          this.cb.clearPlaybackStartedAt();
+          this.cb.teardownPlayback();
+          this.cb.startEmptyQueueTimer();
+          this.cb.emitUpdate();
+          return;
+        }
       }
     }
 
@@ -182,6 +199,35 @@ export class QueueHistoryManager {
     this.history = candidateHistory;
     this.lapHistory = nextLapHistory;
     this.queue = remainingQueue;
+  }
+
+  /**
+   * Fetches related "radio" tracks for autoplay and filters out anything already
+   * played this session (the seed, history, and the current lap) so the radio
+   * doesn't loop the same songs back-to-back. Returns at most
+   * AUTOPLAY_ENQUEUE_COUNT items; an empty result (no relations found, fetch
+   * failed, or all duplicates) tells playNextCore to stop as usual.
+   */
+  private async fetchFreshAutoplay(seed: QueueItem, history: QueueItem[], lapHistory: QueueItem[]): Promise<QueueItem[]> {
+    let related: QueueItem[];
+    try {
+      related = await this.cb.fetchAutoplayTracks(seed);
+    } catch (err) {
+      this.log.warn({ err, seed: seed.title }, 'Autoplay: related-track fetch failed - stopping');
+      return [];
+    }
+    const seen = new Set<string>([seed.sourceUrl, ...history.map((t) => t.sourceUrl), ...lapHistory.map((t) => t.sourceUrl)]);
+    const fresh: QueueItem[] = [];
+    for (const item of related) {
+      if (seen.has(item.sourceUrl)) continue;
+      seen.add(item.sourceUrl);
+      fresh.push(item);
+      if (fresh.length >= AUTOPLAY_ENQUEUE_COUNT) break;
+    }
+    if (fresh.length > 0) {
+      this.log.info({ seed: seed.title, added: fresh.length }, 'Autoplay: continuing with related tracks');
+    }
+    return fresh;
   }
 
   /** Peeks (doesn't pop) history so a failed startTrack() leaves history/queue untouched. */

@@ -29,6 +29,7 @@ import { attachConnectionRecovery } from './voiceConnectionRecovery.js';
 import { PlaybackLifecycle } from './PlaybackLifecycle.js';
 import { QueueHistoryManager } from './QueueHistoryManager.js';
 import { TimerManager } from './TimerManager.js';
+import { resolveAutoplayTracks } from '../sources/index.js';
 
 export interface GuildPlayerOptions {
   guildId: string;
@@ -100,6 +101,8 @@ export class GuildPlayer extends EventEmitter {
   volume: number;
   permissionMode: PermissionMode;
   djRoleId: string | null;
+  /** Autoplay ("radio"): when on, the queue running dry pulls related tracks instead of leaving. Persisted per guild, toggled from the panel. */
+  autoplay: boolean;
   lastError: string | null = null;
   destroyed = false;
 
@@ -136,6 +139,7 @@ export class GuildPlayer extends EventEmitter {
         : (loadedProfiles[0]?.id ?? null);
     this.permissionMode = settings.permissionMode;
     this.djRoleId = settings.djRoleId;
+    this.autoplay = settings.autoplay;
 
     this.connection = joinVoiceChannel({
       guildId: opts.guildId,
@@ -181,6 +185,8 @@ export class GuildPlayer extends EventEmitter {
       setLastError: (message) => {
         this.lastError = message;
       },
+      isAutoplayEnabled: () => this.autoplay,
+      fetchAutoplayTracks: (seed) => resolveAutoplayTracks(seed),
     });
 
     this.timers = new TimerManager(this.guildId, settings.stay247, this.log, {
@@ -386,6 +392,14 @@ export class GuildPlayer extends EventEmitter {
   toggleShuffle(): void {
     if (this.destroyed) return;
     this.queueHistory.shuffleEnabled = !this.queueHistory.shuffleEnabled;
+    this.emit('update');
+  }
+
+  /** Toggles autoplay ("radio") and persists it. Only takes effect the next time the queue runs dry, so no respawn is needed. */
+  setAutoplay(enabled: boolean): void {
+    if (this.destroyed || enabled === this.autoplay) return;
+    this.autoplay = enabled;
+    this.timers.scheduleSettingsSave({ autoplay: enabled });
     this.emit('update');
   }
 

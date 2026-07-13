@@ -8,7 +8,7 @@ import type { QueueItem } from '../player/QueueItem.js';
 
 export class SourceResolutionError extends Error {}
 
-export { YouTubeUnavailableError } from './youtube.js';
+export { YouTubeUnavailableError, resolveAutoplayTracks } from './youtube.js';
 export { NoMatchFoundError, SpotifyResolutionError } from './spotify.js';
 export { SoundCloudUnavailableError } from './soundcloud.js';
 export { AppleMusicResolutionError } from './appleMusic.js';
