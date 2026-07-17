@@ -3,6 +3,8 @@ import { fileURLToPath } from 'node:url';
 import { ShardingManager, type Shard } from 'discord.js';
 import { env } from './config/env.js';
 import { logger } from './logger.js';
+import { loadWebEnv, resolveClientDir } from './web/config.js';
+import type { WebServerHandle } from './web/index.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 // shard.js and index.js are built side by side into dist/ by `pnpm build`.
@@ -25,6 +27,8 @@ manager.on('shardCreate', (shard: Shard) => {
 
 const SHUTDOWN_TIMEOUT_MS = 8_000;
 
+let webServerHandle: WebServerHandle | undefined;
+
 let shuttingDown = false;
 async function shutdown(signal: string): Promise<void> {
   if (shuttingDown) return;
@@ -42,6 +46,9 @@ async function shutdown(signal: string): Promise<void> {
   // (attached in Shard#spawn) in place, so disabling manager.respawn first is
   // what prevents that listener from respawning the shard once it exits.
   manager.respawn = false;
+
+  // Stop accepting web requests before tearing the shards down.
+  await webServerHandle?.close();
 
   const exits = [...manager.shards.values()].map(
     (shard) =>
@@ -85,3 +92,12 @@ process.on('SIGTERM', () => void shutdown('SIGTERM'));
 
 await manager.spawn();
 logger.info({ totalShards: manager.totalShards }, 'ShardingManager: all shards spawned');
+
+// Web dashboard (opt-in). Started AFTER spawn so manager.totalShards is known and
+// shards are alive. Runs in this manager process; reaches shards via broadcastEval.
+const webEnv = loadWebEnv(env.clientId, resolveClientDir(path.dirname(fileURLToPath(import.meta.url))));
+if (webEnv) {
+  const { ShardedBridge } = await import('./web/bridge/sharded.js');
+  const { startWebServer } = await import('./web/index.js');
+  webServerHandle = startWebServer({ bridge: new ShardedBridge(manager), env: webEnv });
+}

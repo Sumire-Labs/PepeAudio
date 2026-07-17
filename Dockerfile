@@ -16,6 +16,19 @@ COPY tsconfig.json ./
 COPY src ./src
 RUN pnpm build
 
+# ---- build the optional web dashboard frontend ----
+# web-client/ is a STANDALONE package (its own lockfile + .npmrc), independent of
+# the bot's pnpm workspace, so `--ignore-workspace` keeps its install isolated
+# from the root supply-chain policy. Vite emits into /app/dist/web-client, which
+# the `COPY --from=builder /app/dist` below carries into the runtime image. The
+# dashboard is inert unless WEB_DASHBOARD_ENABLED=true at runtime, so building it
+# here just makes it available; it costs a small static bundle, nothing at idle.
+COPY web-client ./web-client
+RUN cd web-client \
+    && pnpm install --ignore-workspace --frozen-lockfile \
+    && pnpm rebuild esbuild \
+    && pnpm build
+
 # ---- runtime image ----
 # The binaural 3D-audio path uses ffmpeg's stock `afir` convolution (bring-your-
 # own BRIR) plus a spatial filter chain built entirely from standard filters, so

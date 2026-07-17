@@ -88,6 +88,43 @@ export class QueueHistoryManager {
     return accepted.length;
   }
 
+  /**
+   * Removes a single PENDING queue item by its QueueItem.id (never the
+   * currently-playing track, which lives in PlaybackLifecycle, not here).
+   * Returns the removed item, or null if no queued item had that id. Used by
+   * the web dashboard's queue-management UI. Callers route this through
+   * GuildPlayer.enqueueAction so it can't interleave with playNextCore's
+   * queue reassignment.
+   */
+  removeById(id: string): QueueItem | null {
+    const index = this.queue.findIndex((item) => item.id === id);
+    if (index === -1) return null;
+    const [removed] = this.queue.splice(index, 1);
+    return removed ?? null;
+  }
+
+  /**
+   * Reorders a pending queue item to `toIndex` (clamped into range). Returns
+   * false if no queued item had that id. Same serialization contract as
+   * removeById.
+   */
+  moveById(id: string, toIndex: number): boolean {
+    const from = this.queue.findIndex((item) => item.id === id);
+    if (from === -1) return false;
+    const clamped = Math.max(0, Math.min(this.queue.length - 1, Math.floor(toIndex)));
+    if (from === clamped) return true;
+    const [item] = this.queue.splice(from, 1);
+    this.queue.splice(clamped, 0, item!);
+    return true;
+  }
+
+  /** Clears only the PENDING queue (leaves history/lapHistory and the current track). Returns how many were removed. */
+  clearQueue(): number {
+    const count = this.queue.length;
+    this.queue = [];
+    return count;
+  }
+
   /** Called from stopCore — clears queue/history/lapHistory together. */
   resetAll(): void {
     this.queue = [];

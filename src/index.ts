@@ -1,6 +1,11 @@
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { Client, GatewayIntentBits, Options, Partials } from 'discord.js';
 import { generateDependencyReport } from '@discordjs/voice';
 import { env } from './config/env.js';
+import { loadWebEnv, resolveClientDir } from './web/config.js';
+import type { WebServerHandle } from './web/index.js';
+import type { ShardBridgeHandle } from './web/shardBridgeGlobal.js';
 import { initFfmpeg } from './config/ffmpegResolver.js';
 import { setFfmpegCapabilities } from './config/ffmpegState.js';
 import { initHrirProfiles } from './config/hrirProfilesState.js';
@@ -83,6 +88,9 @@ registerErrorEvents(client, (reason, err) => {
   void shutdown(reason, 1);
 });
 
+let webServerHandle: WebServerHandle | undefined;
+let shardBridgeHandle: ShardBridgeHandle | undefined;
+
 let shuttingDown = false;
 async function shutdown(reason: string, exitCode = 0): Promise<void> {
   if (shuttingDown) return;
@@ -97,6 +105,8 @@ async function shutdown(reason: string, exitCode = 0): Promise<void> {
   }, 5_000);
   watchdog.unref();
   try {
+    await webServerHandle?.close();
+    shardBridgeHandle?.close();
     await Promise.all(GuildPlayerManager.all().map((player) => player.stop()));
     await client.destroy();
   } catch (err) {
@@ -110,3 +120,24 @@ process.on('SIGINT', () => void shutdown('SIGINT'));
 process.on('SIGTERM', () => void shutdown('SIGTERM'));
 
 await client.login(env.discordToken);
+
+// Web dashboard (opt-in via WEB_DASHBOARD_ENABLED). loadWebEnv returns null when
+// disabled, so none of src/web (including its DB) is ever imported otherwise.
+const webEnv = loadWebEnv(env.clientId, resolveClientDir(path.dirname(fileURLToPath(import.meta.url))));
+if (webEnv) {
+  // `process.env.SHARDS` is set by the ShardingManager (see logger.ts) to this
+  // child's shard id — undefined/'single' means we're a standalone process.
+  const isShardChild = process.env.SHARDS !== undefined && process.env.SHARDS !== 'single';
+  if (isShardChild) {
+    // Under sharding, the HTTP server lives in the MANAGER (shard.ts). Each shard
+    // child only exposes its players to the manager via the globalThis bridge.
+    const { installShardBridge } = await import('./web/shardBridgeGlobal.js');
+    shardBridgeHandle = installShardBridge(client);
+  } else {
+    // Single process: run the whole web server here, talking directly to the
+    // in-process GuildPlayerManager via LocalBridge.
+    const { LocalBridge } = await import('./web/bridge/local.js');
+    const { startWebServer } = await import('./web/index.js');
+    webServerHandle = startWebServer({ bridge: new LocalBridge(client), env: webEnv });
+  }
+}

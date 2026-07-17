@@ -1,7 +1,7 @@
 import 'dotenv/config';
 import { readFileSync } from 'node:fs';
 
-function required(name: string): string {
+export function required(name: string): string {
   const value = process.env[name];
   if (!value) {
     throw new Error(`Missing required environment variable: ${name}`);
@@ -17,7 +17,7 @@ function required(name: string): string {
  * via `docker inspect`, /proc/<pid>/environ, and are inherited by every child
  * process (yt-dlp, ffmpeg). A file-mounted secret avoids all of that.
  */
-function requiredSecret(name: string): string {
+export function requiredSecret(name: string): string {
   const filePath = process.env[`${name}_FILE`];
   if (filePath) {
     let contents: string;

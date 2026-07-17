@@ -16,7 +16,9 @@
     "setup-ffmpeg": "node scripts/setup-ffmpeg.mjs",
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
-    "lint:fix": "eslint . --fix"
+    "lint:fix": "eslint . --fix",
+    "build:web": "pnpm --dir web-client install --ignore-workspace --frozen-lockfile && pnpm --dir web-client build",
+    "dev:web": "pnpm --dir web-client dev"
   },
   "dependencies": {
     "@discordjs/voice": "^0.19.2",

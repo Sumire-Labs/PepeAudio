@@ -1,8 +1,20 @@
+import { EventEmitter } from 'node:events';
 import type { DiscordGatewayAdapterCreator } from '@discordjs/voice';
 import { GuildPlayer } from './GuildPlayer.js';
 import type { FfmpegCapabilities } from '../config/ffmpegResolver.js';
 
 const players = new Map<string, GuildPlayer>();
+
+/**
+ * Fires `'created'` with the freshly-constructed GuildPlayer whenever
+ * getOrCreate() builds a new one. The only consumer is the web dashboard's
+ * LocalBridge (src/web/bridge/local.ts): a browser can open a guild's panel
+ * before any `/play` has created that guild's player, so the bridge listens
+ * here to attach its realtime `'update'` listener the moment the player comes
+ * into existence. Nothing in the core bot depends on this — it's a no-op when
+ * the dashboard is disabled (no listeners attached).
+ */
+export const events = new EventEmitter();
 
 export interface GetOrCreateParams {
   guildId: string;
@@ -33,6 +45,7 @@ export function getOrCreate(params: GetOrCreateParams): GuildPlayer {
     }
   });
   players.set(params.guildId, player);
+  events.emit('created', player);
   return player;
 }
 

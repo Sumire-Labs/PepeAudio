@@ -15,7 +15,8 @@ import globals from 'globals';
 export default tseslint.config(
   // Never lint build output, dependencies, the vendored ffmpeg binary, or assets.
   {
-    ignores: ['dist/**', 'node_modules/**', 'bin/**', 'assets/**', 'coverage/**'],
+    // web-client/ is a standalone frontend package with its own tooling/tsconfig.
+    ignores: ['dist/**', 'node_modules/**', 'bin/**', 'assets/**', 'coverage/**', 'web-client/**'],
   },
 
   // Baseline recommended rules for every linted file.

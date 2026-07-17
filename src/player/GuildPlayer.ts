@@ -389,6 +389,41 @@ export class GuildPlayer extends EventEmitter {
     this.emit('update');
   }
 
+  /**
+   * Removes a pending queue item by id. Routed through enqueueAction (like
+   * skip/previous) so a removal can't interleave with playNextCore's in-flight
+   * queue reassignment. Added for the web dashboard's queue-management UI;
+   * returns whether an item was actually removed.
+   */
+  async removeQueueItem(id: string): Promise<boolean> {
+    return this.enqueueAction(async () => {
+      if (this.destroyed) return false;
+      const removed = this.queueHistory.removeById(id);
+      if (removed) this.emit('update');
+      return Boolean(removed);
+    });
+  }
+
+  /** Reorders a pending queue item to `toIndex`. Same serialization contract as removeQueueItem. */
+  async moveQueueItem(id: string, toIndex: number): Promise<boolean> {
+    return this.enqueueAction(async () => {
+      if (this.destroyed) return false;
+      const ok = this.queueHistory.moveById(id, toIndex);
+      if (ok) this.emit('update');
+      return ok;
+    });
+  }
+
+  /** Clears the pending queue (not the current track). Returns how many items were removed. */
+  async clearQueue(): Promise<number> {
+    return this.enqueueAction(async () => {
+      if (this.destroyed) return 0;
+      const count = this.queueHistory.clearQueue();
+      if (count > 0) this.emit('update');
+      return count;
+    });
+  }
+
   toggleShuffle(): void {
     if (this.destroyed) return;
     this.queueHistory.shuffleEnabled = !this.queueHistory.shuffleEnabled;

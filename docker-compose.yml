@@ -26,8 +26,21 @@ services:
       DATA_DIR: /data
       # Read the token from the mounted secret file rather than an env var.
       DISCORD_TOKEN_FILE: /run/secrets/discord_token
+      # ---- Web dashboard (optional) ----
+      # To enable: set these, add the ports + extra secrets below, create the
+      # two secret files, and register OAUTH_REDIRECT_URI in the Developer Portal.
+      # WEB_DASHBOARD_ENABLED: "true"
+      # WEB_PORT: "8080"
+      # WEB_BIND_HOST: "0.0.0.0"                       # reachable via the published port below
+      # WEB_PUBLIC_URL: "${WEB_PUBLIC_URL:-}"          # e.g. https://panel.example.com
+      # DISCORD_CLIENT_SECRET_FILE: /run/secrets/discord_client_secret
+      # SESSION_SECRET_FILE: /run/secrets/session_secret
     secrets:
       - discord_token
+      # - discord_client_secret
+      # - session_secret
+    # ports:
+    #   - "8080:8080"        # only when the dashboard is enabled; front it with a TLS reverse proxy
     volumes:
       - pepeaudio-data:/data
 
@@ -35,6 +48,10 @@ secrets:
   discord_token:
     # Contains ONLY the token, no KEY= prefix and no trailing newline needed.
     file: ./secrets/discord_token.txt
+  # discord_client_secret:
+  #   file: ./secrets/discord_client_secret.txt   # OAuth2 client secret
+  # session_secret:
+  #   file: ./secrets/session_secret.txt          # 32+ random chars (crypto.randomBytes)
 
 volumes:
   pepeaudio-data:

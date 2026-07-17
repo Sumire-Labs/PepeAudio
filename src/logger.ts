@@ -24,6 +24,14 @@ export const logger = pino({
       'authorization', '*.authorization',
       'headers.authorization', '*.headers.authorization',
       'config.headers.authorization', '*.config.headers.authorization',
+      // Web dashboard OAuth: never log the client secret, session secret, or any
+      // OAuth token/code even if one ends up inside a logged object.
+      'client_secret', '*.client_secret',
+      'clientSecret', '*.clientSecret',
+      'sessionSecret', '*.sessionSecret',
+      'access_token', '*.access_token',
+      'refresh_token', '*.refresh_token',
+      'code', '*.code',
     ],
     censor: '[REDACTED]',
   },
