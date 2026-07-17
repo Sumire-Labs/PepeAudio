@@ -25,6 +25,8 @@
 - **操作パネル** — Components V2 のボタン＋セレクトメニュー。誰が操作できるかはサーバーごとに設定可能
   （同じVCの全員／DJロール保持者のみ／曲をリクエストした人のみ）
 - 無人時60秒・キュー枯渇5分で自動退出
+- **Web操作パネル（任意）** — Discordログインでブラウザからも操作・キュー管理・保存プレイリスト。
+  Apple Music風のアクリルUI（[詳細](#web操作パネルダッシュボード)）
 
 ### Aura Sound System（3Dオーディオ）
 パネルから独立してトグルできる2つのエフェクト＋プリセット選択を備えます。
@@ -95,6 +97,19 @@ docker compose up -d --build
 
 ---
 
+## Web操作パネル（ダッシュボード）
+
+Discordログインで、ブラウザから再生をコントロールできる任意のWebパネルを同梱しています
+（Apple Music風のアクリルデザイン、React + Vite + Tailwind）。既定では**無効**
+（`WEB_DASHBOARD_ENABLED=false`）で、有効時のみ `src/web` とフロントエンドが読み込まれます。
+バックエンドは新規ランタイム依存ゼロ（Node標準の `http` / `crypto` / `fetch`、リアルタイムはSSE）。
+
+**できること** — サーバー選択 → 再生/一時停止/スキップ/前へ/停止・音量・ループ・シャッフル・
+オートプレイ・24/7・Aura 360°/HRIR＋プリセット、キューの表示/削除/並べ替え/URL・検索追加、
+ユーザー単位の保存プレイリスト（作成・編集・キューへ読込）。SSEでリアルタイム同期。
+
+---
+
 ## 環境変数
 
 | 変数 | 必須 | 説明 |
@@ -106,6 +121,15 @@ docker compose up -d --build
 | `DATA_DIR` | | SQLite DBの保存先（Dockerではマウントボリュームを指定） |
 | `FFMPEG_PATH` | | ffmpegバイナリのパス（未設定なら `bin/` → `ffmpeg-static` の順に解決） |
 | `HRIR_PROFILES_DIR` | | 自前のBRIR/HRIR `.wav` を置くフォルダ（既定 `assets/hrir_profiles/`） |
+| `WEB_DASHBOARD_ENABLED` | | Web操作パネルを有効化（既定 `false`） |
+| `WEB_PORT` | | ダッシュボードの待受ポート（既定 `8080`） |
+| `WEB_BIND_HOST` | | バインドアドレス（既定 `127.0.0.1`。公開はリバースプロキシ前提で `0.0.0.0`） |
+| `WEB_PUBLIC_URL` | ◐ | 公開URL（有効時は必須）。OAuth・CSRFのオリジン判定に使用 |
+| `OAUTH_REDIRECT_URI` | | OAuth2リダイレクトURI（既定 `<WEB_PUBLIC_URL>/auth/callback`） |
+| `DISCORD_CLIENT_SECRET` | ◐ | OAuth2クライアントシークレット（有効時は必須。`_FILE`可） |
+| `SESSION_SECRET` | ◐ | セッションCookie署名用の32文字以上のランダム値（有効時は必須。`_FILE`可） |
+
+（◐ = Web操作パネルを有効化した場合のみ必須）
 
 ---
 
