@@ -10,6 +10,7 @@ import { registerInteractionCreateEvent } from './events/interactionCreate.js';
 import { registerVoiceStateUpdateEvent } from './events/voiceStateUpdate.js';
 import { registerErrorEvents } from './events/errorEvents.js';
 import { startMetricsReporter } from './util/metricsReporter.js';
+import { startPresenceReporter } from './util/presenceReporter.js';
 import * as GuildPlayerManager from './player/GuildPlayerManager.js';
 import { sweepStaleTrackBuffers } from './player/trackBufferSweep.js';
 import { logger } from './logger.js';
@@ -74,6 +75,7 @@ registerReadyEvent(client);
 registerInteractionCreateEvent(client);
 registerVoiceStateUpdateEvent(client);
 startMetricsReporter(client);
+startPresenceReporter(client);
 // `shutdown` is a hoisted function declaration, so it's safe to reference here
 // even though it's defined below; the callback only fires at runtime anyway.
 registerErrorEvents(client, (reason, err) => {
