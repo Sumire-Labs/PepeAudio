@@ -118,6 +118,42 @@ export class QueueHistoryManager {
     return true;
   }
 
+  /**
+   * Jumps straight to a queued item by id: starts it now, discards the queued
+   * items BEFORE it (skipped over), and keeps the ones after. Deterministic
+   * regardless of shuffle (unlike playNextCore, which random-picks under
+   * shuffle). Mirrors previousCore's "start first, commit state only on success"
+   * shape so a failed start leaves queue/history untouched. Returns false if no
+   * queued item has that id.
+   */
+  async jumpToCore(id: string): Promise<boolean> {
+    if (this.cb.isDestroyed()) return false;
+    const index = this.queue.findIndex((item) => item.id === id);
+    if (index === -1) return false;
+    const target = this.queue[index]!;
+    const outgoing = this.cb.getCurrentTrack();
+    const remaining = this.queue.slice(index + 1);
+
+    const startOffsetMs = target.initialOffsetMs ?? 0;
+    target.initialOffsetMs = null;
+    try {
+      this.cb.teardownActiveResource();
+      await this.cb.startTrack(target, startOffsetMs);
+    } catch (err) {
+      this.log.error({ err, track: target.title }, 'Failed to start the jumped-to track');
+      return false;
+    }
+
+    if (outgoing) {
+      const nextHistory = [...this.history, outgoing];
+      this.history = nextHistory.length > MAX_HISTORY ? nextHistory.slice(nextHistory.length - MAX_HISTORY) : nextHistory;
+      this.lapHistory = [...this.lapHistory, outgoing];
+    }
+    this.queue = remaining;
+    this.cb.emitUpdate();
+    return true;
+  }
+
   /** Clears only the PENDING queue (leaves history/lapHistory and the current track). Returns how many were removed. */
   clearQueue(): number {
     const count = this.queue.length;

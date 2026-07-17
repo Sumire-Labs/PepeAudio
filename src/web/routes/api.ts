@@ -16,7 +16,8 @@ import type { WebCommand } from '../bridge/types.js';
 const VALID_COMMAND_TYPES = new Set<WebCommand['type']>([
   'skip', 'previous', 'pause', 'resume', 'togglePlayPause', 'stop', 'toggleShuffle',
   'setVolume', 'setLoopMode', 'setAutoplay', 'setStay247', 'setHrir', 'setAura360',
-  'setAuraPreset', 'removeQueueItem', 'moveQueueItem', 'clearQueue', 'addTrack', 'loadPlaylist',
+  'setAuraPreset', 'removeQueueItem', 'moveQueueItem', 'jumpTo', 'seek', 'clearQueue',
+  'addTrack', 'loadPlaylist',
 ]);
 
 function avatarUrl(userId: string, avatar: string | null): string | null {

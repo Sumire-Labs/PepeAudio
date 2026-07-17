@@ -62,9 +62,9 @@ function fail(error: string): CommandResult {
 }
 
 /** Snapshot of the (possibly just-mutated) player, or null if the session ended. */
-function snapshotOrNull(guildId: string, viewer: ViewerCapabilities): CommandResult {
+function snapshotOrNull(guildId: string, viewer: ViewerCapabilities, guild: Guild | undefined): CommandResult {
   const player = GuildPlayerManager.get(guildId);
-  return { ok: true, snapshot: player && !player.destroyed ? buildSnapshot(player, viewer) : null };
+  return { ok: true, snapshot: player && !player.destroyed ? buildSnapshot(player, viewer, guild) : null };
 }
 
 export async function runWebCommand(
@@ -88,7 +88,7 @@ export async function runWebCommand(
   if (!viewer.canControl) return fail(viewer.denyReason ?? '権限がありません。');
 
   // Per-action cooldown, independent per command type (mirrors the Discord panel).
-  const isVolumeLike = command.type === 'setVolume' || command.type === 'setAuraPreset';
+  const isVolumeLike = command.type === 'setVolume' || command.type === 'setAuraPreset' || command.type === 'seek';
   const cooldownMs = isVolumeLike ? VOLUME_COOLDOWN_MS : BUTTON_COOLDOWN_MS;
   if (!checkCooldown(`web:${command.type}`, userId, cooldownMs)) {
     return fail('少し間隔を空けてください。');
@@ -162,6 +162,16 @@ export async function runWebCommand(
       case 'clearQueue':
         await player.clearQueue();
         break;
+      case 'jumpTo':
+        if (typeof command.id !== 'string') return fail('不正なリクエストです。');
+        await player.jumpToQueueItem(command.id);
+        break;
+      case 'seek': {
+        const positionMs = Number(command.positionMs);
+        if (!Number.isFinite(positionMs)) return fail('不正なシーク位置です。');
+        await player.seek(positionMs);
+        break;
+      }
       default: {
         // Exhaustiveness guard: addTrack/loadPlaylist handled above.
         const _never: never = command;
@@ -173,7 +183,7 @@ export async function runWebCommand(
     return fail('操作に失敗しました。もう一度お試しください。');
   }
 
-  return snapshotOrNull(guildId, viewer);
+  return snapshotOrNull(guildId, viewer, guild);
 }
 
 /**
@@ -243,7 +253,7 @@ async function runAddTrack(guildId: string, userId: string, query: unknown, guil
 
   const added = await enqueueAndMaybeStart(player, items);
   if (added === 0) return fail('キューが上限に達しているため追加できませんでした。');
-  return snapshotOrNull(guildId, viewer);
+  return snapshotOrNull(guildId, viewer, guild);
 }
 
 /**
@@ -285,7 +295,7 @@ async function runLoadPlaylist(guildId: string, userId: string, sourceUrls: unkn
       logger.error({ err, guildId }, 'Web loadPlaylist: background resolve failed'),
     );
   }
-  return snapshotOrNull(guildId, viewer);
+  return snapshotOrNull(guildId, viewer, guild);
 }
 
 /** Resolves + enqueues the remaining playlist URLs one at a time, after the response is sent. */

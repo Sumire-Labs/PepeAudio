@@ -8,7 +8,10 @@ import { ServerPicker } from './ServerPicker.tsx';
 import { Player } from './Player.tsx';
 import { Queue } from './Queue.tsx';
 import { Playlists } from './Playlists.tsx';
-import { cx, Icons, Spinner } from './ui.tsx';
+import { useAccent } from './useAccent.ts';
+import { useKeyboardShortcuts } from './useKeyboard.ts';
+import { cx, EqualizerBars, IconButton, Icons, Spinner } from './ui.tsx';
+import type { GuildSession } from './useGuildSession.ts';
 
 type Theme = 'auto' | 'light' | 'dark';
 type View = 'player' | 'playlists' | 'servers';
@@ -74,12 +77,16 @@ function Shell({ me }: { me: Me }) {
   const [savingTrack, setSavingTrack] = useState<QueueItemDTO | null>(null);
   const [playlistsVersion, setPlaylistsVersion] = useState(0);
 
+  const [sessionExpired, setSessionExpired] = useState(false);
   const onUnauthorized = useCallback(() => {
-    // Session expired — bounce back to the login screen.
-    window.location.reload();
+    // Session expired — show a gentle re-login prompt instead of a hard reload.
+    setSessionExpired(true);
   }, []);
 
   const session = useGuildSession(selectedGuildId, onUnauthorized);
+  const ambientUrl = session.snapshot?.current?.thumbnailUrl ?? null;
+  useAccent(ambientUrl);
+  useKeyboardShortcuts(session, Boolean(selectedGuildId));
 
   useEffect(() => {
     const root = document.documentElement;
@@ -120,8 +127,6 @@ function Shell({ me }: { me: Me }) {
     window.location.reload();
   };
 
-  const ambientUrl = session.snapshot?.current?.thumbnailUrl ?? null;
-
   return (
     <>
       <Ambient url={ambientUrl} />
@@ -137,16 +142,30 @@ function Shell({ me }: { me: Me }) {
           onLogout={logout}
         />
 
-        <main className="min-w-0 flex-1 overflow-hidden">
-          {view === 'servers' ? (
-            <ServerPicker selectedGuildId={selectedGuildId} onSelect={selectGuild} onUnauthorized={onUnauthorized} />
-          ) : view === 'playlists' ? (
-            <Playlists onLoadToQueue={loadToQueue} onUnauthorized={onUnauthorized} reloadKey={playlistsVersion} />
-          ) : selectedGuildId ? (
-            <PlayerLayout session={session} onSaveTrack={setSavingTrack} />
-          ) : (
-            <ServerPicker selectedGuildId={selectedGuildId} onSelect={selectGuild} onUnauthorized={onUnauthorized} />
-          )}
+        <main className="flex min-w-0 flex-1 flex-col overflow-hidden">
+          <div className="relative min-h-0 flex-1">
+            {view === 'servers' ? (
+              <ServerPicker selectedGuildId={selectedGuildId} onSelect={selectGuild} onUnauthorized={onUnauthorized} />
+            ) : view === 'playlists' ? (
+              <Playlists onLoadToQueue={loadToQueue} onUnauthorized={onUnauthorized} reloadKey={playlistsVersion} />
+            ) : selectedGuildId ? (
+              <PlayerLayout session={session} onSaveTrack={setSavingTrack} />
+            ) : (
+              <ServerPicker selectedGuildId={selectedGuildId} onSelect={selectGuild} onUnauthorized={onUnauthorized} />
+            )}
+
+            {selectedGuildId && !session.loading && !session.connected ? (
+              <div className="pointer-events-none absolute left-1/2 top-3 z-20 -translate-x-1/2">
+                <div className="glass-strong flex items-center gap-2 rounded-full px-3 py-1.5 text-xs text-[var(--text-dim)]">
+                  <span className="h-2 w-2 animate-pulse rounded-full bg-amber-400" /> 再接続中…
+                </div>
+              </div>
+            ) : null}
+          </div>
+
+          {view !== 'player' && session.snapshot?.current ? (
+            <MiniPlayer session={session} onExpand={() => setView('player')} />
+          ) : null}
         </main>
       </div>
 
@@ -158,7 +177,59 @@ function Shell({ me }: { me: Me }) {
           onAdded={() => setPlaylistsVersion((v) => v + 1)}
         />
       ) : null}
+      {sessionExpired ? <SessionExpiredOverlay /> : null}
     </>
+  );
+}
+
+function MiniPlayer({ session, onExpand }: { session: GuildSession; onExpand: () => void }) {
+  const { snapshot, sendCommand } = session;
+  const current = snapshot?.current;
+  if (!current) return null;
+  const playing = snapshot?.status === 'playing';
+  const canControl = snapshot?.viewer.canControl ?? false;
+
+  return (
+    <div className="glass-strong m-3 flex items-center gap-3 rounded-2xl p-2.5" style={{ boxShadow: '0 12px 40px var(--shadow)' }}>
+      <button onClick={onExpand} className="flex min-w-0 flex-1 items-center gap-3 text-left" title="プレイヤーを開く">
+        {current.thumbnailUrl ? (
+          <img src={current.thumbnailUrl} alt="" className="h-11 w-11 flex-none rounded-lg object-cover" />
+        ) : (
+          <div className="grid h-11 w-11 flex-none place-items-center rounded-lg bg-[var(--track-bg)]">
+            <Icons.Headphones className="h-5 w-5 text-[var(--text-faint)]" />
+          </div>
+        )}
+        <div className="min-w-0 flex-1">
+          <div className="truncate text-sm font-medium">{current.title}</div>
+          <div className="truncate text-xs text-[var(--text-dim)]">{current.artist}</div>
+        </div>
+        {playing ? <EqualizerBars className="mr-1 h-3.5 flex-none" /> : null}
+      </button>
+      <IconButton icon={Icons.Prev} label="前へ" size="sm" disabled={!canControl} onClick={() => void sendCommand({ type: 'previous' })} />
+      <button
+        onClick={() => void sendCommand({ type: 'togglePlayPause' })}
+        disabled={!canControl}
+        aria-label={playing ? '一時停止' : '再生'}
+        className="grid h-10 w-10 flex-none place-items-center rounded-full accent-bg text-white transition active:scale-90 disabled:opacity-40"
+      >
+        {playing ? <Icons.Pause className="h-5 w-5" /> : <Icons.Play className="ml-0.5 h-5 w-5" />}
+      </button>
+      <IconButton icon={Icons.Next} label="スキップ" size="sm" disabled={!canControl} onClick={() => void sendCommand({ type: 'skip' })} />
+    </div>
+  );
+}
+
+function SessionExpiredOverlay() {
+  return (
+    <div className="fixed inset-0 z-50 grid place-items-center bg-black/50 p-6 fade-in">
+      <div className="glass-strong w-full max-w-sm rounded-3xl p-8 text-center" style={{ boxShadow: '0 30px 80px var(--shadow)' }}>
+        <h2 className="text-lg font-semibold">セッションが切れました</h2>
+        <p className="mt-2 text-sm text-[var(--text-dim)]">もう一度 Discord でログインしてください。</p>
+        <a href="/auth/login" className="mt-5 inline-block rounded-2xl accent-bg px-5 py-2.5 font-medium text-white transition hover:brightness-110">
+          再ログイン
+        </a>
+      </div>
+    </div>
   );
 }
 

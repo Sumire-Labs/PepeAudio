@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react';
 import type { GuildSnapshot, QueueItemDTO, WebCommand } from './api.ts';
 import type { GuildSession } from './useGuildSession.ts';
 import { useTicker } from './useGuildSession.ts';
@@ -28,7 +28,6 @@ export function Player({
     ? Math.min(current.durationMs ?? Number.MAX_SAFE_INTEGER, (snapshot?.elapsedMs ?? 0) + (playing ? now - receivedAt : 0))
     : 0;
   const duration = current?.durationMs ?? null;
-  const fraction = duration && duration > 0 ? Math.min(1, elapsed / duration) : 0;
 
   return (
     <div className="flex h-full flex-col items-center justify-center px-6 py-8 fade-in">
@@ -43,18 +42,20 @@ export function Player({
       <div className="mt-7 w-full max-w-md text-center">
         <h2 className="truncate text-2xl font-semibold tracking-tight">{current?.title ?? '再生していません'}</h2>
         <p className="mt-1 truncate text-[var(--text-dim)]">{current?.artist ?? 'キューに曲を追加して再生を始めましょう'}</p>
+        {current?.requesterName ? (
+          <div className="mt-2 inline-flex items-center gap-1.5 text-xs text-[var(--text-faint)]">
+            {current.requesterAvatarUrl ? <img src={current.requesterAvatarUrl} alt="" className="h-4 w-4 rounded-full" /> : null}
+            <span>{current.requesterName} がリクエスト</span>
+          </div>
+        ) : null}
       </div>
 
-      {/* progress (display only — the bot has no seek) */}
-      <div className="mt-6 w-full max-w-md">
-        <div className="h-1.5 w-full overflow-hidden rounded-full" style={{ background: 'var(--track-bg)' }}>
-          <div className="h-full rounded-full accent-bg transition-[width] duration-200 ease-linear" style={{ width: `${fraction * 100}%` }} />
-        </div>
-        <div className="mt-1.5 flex justify-between text-xs tabular-nums text-[var(--text-dim)]">
-          <span>{formatMs(current ? elapsed : 0)}</span>
-          <span>{duration ? formatMs(duration) : current ? 'LIVE' : '--:--'}</span>
-        </div>
-      </div>
+      <SeekBar
+        elapsed={current ? elapsed : 0}
+        duration={duration}
+        canSeek={canControl && !!current}
+        onSeek={(ms) => run({ type: 'seek', positionMs: ms })}
+      />
 
       {/* transport */}
       <div className="mt-6 flex items-center gap-4">
@@ -87,6 +88,60 @@ export function Player({
       </div>
 
       {snapshot?.auraEnabled ? <AuraControls snapshot={snapshot} disabled={!canControl} run={run} /> : null}
+    </div>
+  );
+}
+
+function SeekBar({ elapsed, duration, canSeek, onSeek }: { elapsed: number; duration: number | null; canSeek: boolean; onSeek: (ms: number) => void }) {
+  const ref = useRef<HTMLDivElement>(null);
+  const [scrub, setScrub] = useState<number | null>(null);
+  const seekable = canSeek && !!duration && duration > 0;
+  const value = scrub ?? elapsed;
+  const fraction = duration && duration > 0 ? Math.max(0, Math.min(1, value / duration)) : 0;
+
+  const posFromClientX = (clientX: number): number => {
+    const rect = ref.current?.getBoundingClientRect();
+    if (!rect || !duration) return 0;
+    const f = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
+    return f * duration;
+  };
+
+  const onDown = (e: ReactPointerEvent<HTMLDivElement>) => {
+    if (!seekable) return;
+    e.currentTarget.setPointerCapture(e.pointerId);
+    setScrub(posFromClientX(e.clientX));
+  };
+  const onMove = (e: ReactPointerEvent<HTMLDivElement>) => {
+    if (scrub === null) return;
+    setScrub(posFromClientX(e.clientX));
+  };
+  const onUp = (e: ReactPointerEvent<HTMLDivElement>) => {
+    if (scrub === null) return;
+    const pos = posFromClientX(e.clientX);
+    setScrub(null);
+    onSeek(Math.floor(pos));
+  };
+
+  return (
+    <div className="mt-6 w-full max-w-md">
+      <div
+        ref={ref}
+        onPointerDown={onDown}
+        onPointerMove={onMove}
+        onPointerUp={onUp}
+        className={cx('group relative flex h-4 items-center touch-none', seekable ? 'cursor-pointer' : '')}
+      >
+        <div className="h-1.5 w-full overflow-hidden rounded-full" style={{ background: 'var(--track-bg)' }}>
+          <div className={cx('h-full rounded-full accent-bg', scrub === null ? 'transition-[width] duration-200 ease-linear' : '')} style={{ width: `${fraction * 100}%` }} />
+        </div>
+        {seekable ? (
+          <div className="pointer-events-none absolute h-3 w-3 -translate-x-1/2 rounded-full bg-white opacity-0 shadow transition group-hover:opacity-100" style={{ left: `${fraction * 100}%` }} />
+        ) : null}
+      </div>
+      <div className="mt-1.5 flex justify-between text-xs tabular-nums text-[var(--text-dim)]">
+        <span>{formatMs(value)}</span>
+        <span>{duration ? formatMs(duration) : elapsed ? 'LIVE' : '--:--'}</span>
+      </div>
     </div>
   );
 }

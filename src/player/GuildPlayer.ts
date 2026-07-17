@@ -414,6 +414,36 @@ export class GuildPlayer extends EventEmitter {
     });
   }
 
+  /**
+   * Seeks the current track to `positionMs` (clamped into range), preserving
+   * pause state — reuses the same reseek machinery as the HRIR/volume respawns
+   * (PlaybackLifecycle.reseekCore). Best-effort: seeking within the buffered/
+   * downloaded range is instant; a far-forward seek re-fetches from the source.
+   */
+  async seek(positionMs: number): Promise<void> {
+    await this.enqueueAction(() => this.seekCore(positionMs));
+  }
+
+  private async seekCore(positionMs: number): Promise<void> {
+    if (this.destroyed || !this.currentTrack) return;
+    const durationMs = this.currentTrack.durationMs;
+    // Keep a small tail so seeking to the very end doesn't instantly advance.
+    const upper = durationMs && durationMs > 1000 ? durationMs - 1000 : Number.MAX_SAFE_INTEGER;
+    const clamped = Math.max(0, Math.min(upper, Math.floor(positionMs)));
+    const wasPaused = this.isPaused();
+    await this.playback.reseekCore(clamped);
+    if (wasPaused && !this.destroyed && this.currentTrack) {
+      this.audioPlayer.pause();
+      this.playback.pausedAt = Date.now();
+      this.emit('update');
+    }
+  }
+
+  /** Jumps straight to a queued item (skips the ones before it). Returns whether it happened. */
+  async jumpToQueueItem(id: string): Promise<boolean> {
+    return this.enqueueAction(() => this.queueHistory.jumpToCore(id));
+  }
+
   /** Clears the pending queue (not the current track). Returns how many items were removed. */
   async clearQueue(): Promise<number> {
     return this.enqueueAction(async () => {

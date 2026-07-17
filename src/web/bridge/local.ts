@@ -61,8 +61,9 @@ export class LocalBridge implements BotBridge {
   async getSnapshot(guildId: string, userId: string): Promise<GuildSnapshot | null> {
     const player = GuildPlayerManager.get(guildId);
     if (!player || player.destroyed) return null;
-    const caps = await resolveViewerCapabilities(this.client.guilds.cache.get(guildId), userId, player);
-    return buildSnapshot(player, caps);
+    const guild = this.client.guilds.cache.get(guildId);
+    const caps = await resolveViewerCapabilities(guild, userId, player);
+    return buildSnapshot(player, caps, guild);
   }
 
   async runCommand(guildId: string, userId: string, command: WebCommand): Promise<CommandResult> {
@@ -142,8 +143,9 @@ export class LocalBridge implements BotBridge {
 
   private async pushOne(player: GuildPlayer, sub: Subscriber): Promise<void> {
     try {
-      const caps = await resolveViewerCapabilities(this.client.guilds.cache.get(player.guildId), sub.userId, player);
-      sub.cb(buildSnapshot(player, caps));
+      const guild = this.client.guilds.cache.get(player.guildId);
+      const caps = await resolveViewerCapabilities(guild, sub.userId, player);
+      sub.cb(buildSnapshot(player, caps, guild));
     } catch (err) {
       logger.debug({ err, guildId: player.guildId }, 'LocalBridge: failed to push a snapshot');
     }

@@ -144,6 +144,7 @@ export function Queue({ session, onSaveTrack }: { session: GuildSession; onSaveT
                   onDragStart={() => setDraggedId(track.id)}
                   onDragEnd={() => setDraggedId(null)}
                   onDropHere={() => onDrop(i)}
+                  onJump={canControl ? () => run({ type: 'jumpTo', id: track.id }) : undefined}
                   onRemove={canControl ? () => run({ type: 'removeQueueItem', id: track.id }) : undefined}
                   onSave={() => onSaveTrack(track)}
                 />
@@ -181,6 +182,7 @@ function TrackRow({
   onDragStart,
   onDragEnd,
   onDropHere,
+  onJump,
   onRemove,
   onRequeue,
   onSave,
@@ -191,6 +193,7 @@ function TrackRow({
   onDragStart?: () => void;
   onDragEnd?: () => void;
   onDropHere?: () => void;
+  onJump?: () => void;
   onRemove?: () => void;
   onRequeue?: () => void;
   onSave?: () => void;
@@ -202,24 +205,36 @@ function TrackRow({
       onDragEnd={onDragEnd}
       onDragOver={onDropHere ? (e) => e.preventDefault() : undefined}
       onDrop={onDropHere}
+      onClick={onJump}
+      title={onJump ? 'クリックでこの曲へ' : undefined}
       className={cx(
         'group flex items-center gap-3 rounded-xl px-2 py-1.5 transition hover:bg-[var(--track-bg)]',
         dragging ? 'opacity-40' : '',
-        draggable ? 'cursor-grab active:cursor-grabbing' : '',
+        draggable ? 'cursor-grab active:cursor-grabbing' : onJump ? 'cursor-pointer' : '',
       )}
     >
       {draggable ? <Icons.Grip className="h-4 w-4 flex-none text-[var(--text-faint)] opacity-0 transition group-hover:opacity-100" /> : null}
-      {track.thumbnailUrl ? (
-        <img src={track.thumbnailUrl} alt="" className="h-10 w-10 flex-none rounded-md object-cover" />
-      ) : (
-        <div className="grid h-10 w-10 flex-none place-items-center rounded-md bg-[var(--track-bg)]">
-          <Icons.Headphones className="h-5 w-5 text-[var(--text-faint)]" />
-        </div>
-      )}
+      <div className="relative h-10 w-10 flex-none">
+        {track.thumbnailUrl ? (
+          <img src={track.thumbnailUrl} alt="" className="h-10 w-10 rounded-md object-cover" />
+        ) : (
+          <div className="grid h-10 w-10 place-items-center rounded-md bg-[var(--track-bg)]">
+            <Icons.Headphones className="h-5 w-5 text-[var(--text-faint)]" />
+          </div>
+        )}
+        {onJump ? (
+          <div className="absolute inset-0 grid place-items-center rounded-md bg-black/45 opacity-0 transition group-hover:opacity-100">
+            <Icons.Play className="h-4 w-4 text-white" />
+          </div>
+        ) : null}
+      </div>
       <div className="min-w-0 flex-1">
         <div className="truncate text-sm font-medium">{track.title}</div>
         <div className="truncate text-xs text-[var(--text-dim)]">{track.artist}</div>
       </div>
+      {track.requesterAvatarUrl ? (
+        <img src={track.requesterAvatarUrl} alt="" title={track.requesterName ?? undefined} className="h-4 w-4 flex-none rounded-full opacity-70" />
+      ) : null}
       <span className="flex-none text-xs tabular-nums text-[var(--text-faint)]">{formatMs(track.durationMs)}</span>
       <div className="flex flex-none items-center gap-0.5 opacity-0 transition group-hover:opacity-100">
         {onSave ? <RowBtn icon={Icons.Playlist} label="プレイリストに保存" onClick={onSave} /> : null}
@@ -232,7 +247,16 @@ function TrackRow({
 
 function RowBtn({ icon: Icon, label, onClick }: { icon: (p: { className?: string }) => ReactNode; label: string; onClick: () => void }) {
   return (
-    <button type="button" aria-label={label} title={label} onClick={onClick} className="grid h-7 w-7 place-items-center rounded-full text-[var(--text-dim)] transition hover:bg-[var(--hairline-strong)] hover:text-[var(--text)]">
+    <button
+      type="button"
+      aria-label={label}
+      title={label}
+      onClick={(e) => {
+        e.stopPropagation(); // don't trigger the row's jump-to-track click
+        onClick();
+      }}
+      className="grid h-7 w-7 place-items-center rounded-full text-[var(--text-dim)] transition hover:bg-[var(--hairline-strong)] hover:text-[var(--text)]"
+    >
       <Icon className="h-4 w-4" />
     </button>
   );

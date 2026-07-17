@@ -26,7 +26,7 @@ const art = (seed: string) => {
 };
 
 function track(id: string, title: string, artist: string, seed: string, ms: number): QueueItemDTO {
-  return { id, title, artist, durationMs: ms, thumbnailUrl: art(seed), sourceType: 'youtube', sourceUrl: `https://youtu.be/${id}`, requestedBy: '1' };
+  return { id, title, artist, durationMs: ms, thumbnailUrl: art(seed), sourceType: 'youtube', sourceUrl: `https://youtu.be/${id}`, requestedBy: '1', requesterName: 'DemoUser', requesterAvatarUrl: null };
 }
 
 const snapshot: GuildSnapshot = {
@@ -61,6 +61,7 @@ export function Demo() {
     snapshot: snap,
     receivedAt: Date.now(),
     loading: false,
+    connected: true,
     async sendCommand(command) {
       // Reflect a few toggles locally so the demo feels alive.
       if (command.type === 'togglePlayPause') setSnap((s) => ({ ...s, status: s.status === 'playing' ? 'paused' : 'playing' }));

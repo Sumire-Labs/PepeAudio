@@ -35,7 +35,8 @@ export function installShardBridge(client: Client): ShardBridgeHandle {
   const pushSnapshot = (guildId: string): void => {
     const player = GuildPlayerManager.get(guildId);
     if (!player || player.destroyed) return;
-    send({ type: PEPE_UPDATE, guildId, snapshot: buildSnapshot(player, DISPLAY_ONLY_VIEWER) });
+    const guild = client.guilds.cache.get(guildId);
+    send({ type: PEPE_UPDATE, guildId, snapshot: buildSnapshot(player, DISPLAY_ONLY_VIEWER, guild) });
   };
 
   const attachPush = (player: GuildPlayer): void => {
@@ -59,8 +60,9 @@ export function installShardBridge(client: Client): ShardBridgeHandle {
     async getSnapshot(guildId, userId) {
       const player = GuildPlayerManager.get(guildId);
       if (!player || player.destroyed) return null;
-      const caps = await resolveViewerCapabilities(client.guilds.cache.get(guildId), userId, player);
-      return buildSnapshot(player, caps);
+      const guild = client.guilds.cache.get(guildId);
+      const caps = await resolveViewerCapabilities(guild, userId, player);
+      return buildSnapshot(player, caps, guild);
     },
     async runCommand(guildId, userId, command) {
       return runWebCommand(guildId, userId, command, client);

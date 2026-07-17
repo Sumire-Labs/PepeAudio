@@ -20,6 +20,8 @@ export interface QueueItemDTO {
   sourceType: SourceType;
   sourceUrl: string;
   requestedBy: string;
+  requesterName: string | null;
+  requesterAvatarUrl: string | null;
 }
 
 export interface ViewerCapabilities {
@@ -90,6 +92,8 @@ export type WebCommand =
   | { type: 'setAuraPreset'; id: string }
   | { type: 'removeQueueItem'; id: string }
   | { type: 'moveQueueItem'; id: string; toIndex: number }
+  | { type: 'jumpTo'; id: string }
+  | { type: 'seek'; positionMs: number }
   | { type: 'clearQueue' }
   | { type: 'addTrack'; query: string }
   | { type: 'loadPlaylist'; sourceUrls: string[] };
@@ -208,22 +212,25 @@ export const api = {
 
 /**
  * Subscribes to a guild's live state via SSE. `onSnapshot` fires with each
- * snapshot (or null when the session ends). Returns a close function.
- * EventSource auto-reconnects; `onError` is advisory.
+ * snapshot (or null when the session ends). `onStatus` reports connectivity
+ * (EventSource auto-reconnects; it flips to false on drop, true on (re)open).
+ * Returns a close function.
  */
 export function subscribeToGuild(
   guildId: string,
   onSnapshot: (snapshot: GuildSnapshot | null) => void,
-  onError?: () => void,
+  onStatus?: (connected: boolean) => void,
 ): () => void {
   const source = new EventSource(`/api/guilds/${guildId}/events`, { withCredentials: true });
+  source.onopen = () => onStatus?.(true);
   source.onmessage = (event) => {
+    onStatus?.(true);
     try {
       onSnapshot(JSON.parse(event.data) as GuildSnapshot | null);
     } catch {
       /* ignore malformed frame */
     }
   };
-  source.onerror = () => onError?.();
+  source.onerror = () => onStatus?.(false);
   return () => source.close();
 }

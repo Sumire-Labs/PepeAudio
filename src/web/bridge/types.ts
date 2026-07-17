@@ -23,8 +23,12 @@ export interface QueueItemDTO {
   thumbnailUrl: string | null;
   sourceType: SourceType;
   sourceUrl: string;
-  /** Discord user id of who requested it; the frontend resolves this to a name/avatar separately. */
+  /** Discord user id of who requested it. */
   requestedBy: string;
+  /** Resolved requester display name (from the guild member cache), or null if uncached. */
+  requesterName: string | null;
+  /** Resolved requester avatar URL, or null if uncached. */
+  requesterAvatarUrl: string | null;
 }
 
 /** What the current viewer (the authenticated Discord user) is allowed to do with this session. */
@@ -106,6 +110,8 @@ export type WebCommand =
   | { type: 'setAuraPreset'; id: string }
   | { type: 'removeQueueItem'; id: string }
   | { type: 'moveQueueItem'; id: string; toIndex: number }
+  | { type: 'jumpTo'; id: string }
+  | { type: 'seek'; positionMs: number }
   | { type: 'clearQueue' }
   | { type: 'addTrack'; query: string }
   | { type: 'loadPlaylist'; sourceUrls: string[] };

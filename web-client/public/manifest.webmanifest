@@ -1,0 +1,15 @@
+{
+  "name": "PepeAudio",
+  "short_name": "PepeAudio",
+  "description": "PepeAudio のブラウザ操作パネル",
+  "lang": "ja",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#08080b",
+  "theme_color": "#08080b",
+  "icons": [
+    { "src": "/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+  ]
+}

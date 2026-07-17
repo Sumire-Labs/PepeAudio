@@ -12,6 +12,8 @@ export interface GuildSession {
   /** Client Date.now() when the current snapshot arrived, for progress extrapolation. */
   receivedAt: number;
   loading: boolean;
+  /** Whether the realtime SSE stream is currently connected. */
+  connected: boolean;
   sendCommand: (command: WebCommand) => Promise<CommandResult>;
   refresh: () => void;
 }
@@ -25,6 +27,7 @@ export function useGuildSession(guildId: string | null, onUnauthorized: () => vo
   const [snapshot, setSnapshot] = useState<GuildSnapshot | null>(null);
   const [receivedAt, setReceivedAt] = useState(0);
   const [loading, setLoading] = useState(true);
+  const [connected, setConnected] = useState(true);
   const viewerRef = useRef<ViewerCapabilities | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
 
@@ -63,9 +66,15 @@ export function useGuildSession(guildId: string | null, onUnauthorized: () => vo
         if (active) setLoading(false);
       });
 
-    const close = subscribeToGuild(guildId, (snap) => {
-      if (active) apply(snap);
-    });
+    const close = subscribeToGuild(
+      guildId,
+      (snap) => {
+        if (active) apply(snap);
+      },
+      (isConnected) => {
+        if (active) setConnected(isConnected);
+      },
+    );
 
     // Refresh accurate per-viewer caps when the tab regains focus (the user may
     // have joined/left the voice channel while away).
@@ -106,7 +115,7 @@ export function useGuildSession(guildId: string | null, onUnauthorized: () => vo
 
   const refresh = useCallback(() => setRefreshKey((k) => k + 1), []);
 
-  return { snapshot, receivedAt, loading, sendCommand, refresh };
+  return { snapshot, receivedAt, loading, connected, sendCommand, refresh };
 }
 
 /** Returns a value that changes ~4×/sec, to drive smooth local progress-bar updates. */
