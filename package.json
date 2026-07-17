@@ -1,6 +1,6 @@
 {
   "name": "pepeaudio",
-  "version": "1.0-dev",
+  "version": "1.5",
   "description": "Discord music bot with Components V2 UI and binaural 3D-audio playback",
   "type": "module",
   "private": true,
