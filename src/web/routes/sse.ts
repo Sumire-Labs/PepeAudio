@@ -11,9 +11,13 @@ import { getSession } from '../auth/guard.js';
 import type { GuildSnapshot } from '../bridge/types.js';
 
 const HEARTBEAT_MS = 15_000;
+/** Cap concurrent SSE streams per user (multiple tabs, plus a little slack) so one account can't pin open unbounded streams. */
+const MAX_SSE_PER_USER = 5;
 
 export function registerSseRoutes(router: Router, services: WebServices): void {
   const { env, sessions, bridge } = services;
+  // Live SSE connection count per userId, for the concurrency cap below.
+  const openByUser = new Map<string, number>();
 
   router.add('GET', '/api/guilds/:id/events', async (ctx) => {
     const session = getSession(ctx, sessions, env.sessionSecret);
@@ -26,6 +30,13 @@ export function registerSseRoutes(router: Router, services: WebServices): void {
       json(ctx.res, 403, { error: 'forbidden' });
       return;
     }
+
+    const openCount = openByUser.get(session.userId) ?? 0;
+    if (openCount >= MAX_SSE_PER_USER) {
+      json(ctx.res, 429, { error: 'too_many_connections' });
+      return;
+    }
+    openByUser.set(session.userId, openCount + 1);
 
     const res = ctx.res;
     res.writeHead(200, {
@@ -68,6 +79,9 @@ export function registerSseRoutes(router: Router, services: WebServices): void {
       closed = true;
       clearInterval(heartbeat);
       unsubscribe();
+      const remaining = (openByUser.get(session!.userId) ?? 1) - 1;
+      if (remaining <= 0) openByUser.delete(session!.userId);
+      else openByUser.set(session!.userId, remaining);
     }
 
     ctx.req.on('close', cleanup);

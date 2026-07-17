@@ -49,7 +49,13 @@ export interface GuildSnapshot {
   lastError: string | null;
   auraEnabled: boolean;
   viewer: ViewerCapabilities;
-  serverTimeMs: number;
+}
+
+export interface SearchCandidate {
+  title: string;
+  author: string;
+  url: string;
+  thumbnailUrl: string;
 }
 
 export interface GuildSummary {
@@ -167,6 +173,10 @@ export const api = {
 
   sendCommand(guildId: string, command: WebCommand): Promise<CommandResult> {
     return request('POST', `/api/guilds/${guildId}/command`, { command });
+  },
+
+  search(query: string): Promise<{ candidates: SearchCandidate[] }> {
+    return request('POST', '/api/search', { query });
   },
 
   logout(): Promise<void> {

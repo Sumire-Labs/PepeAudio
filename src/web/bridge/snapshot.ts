@@ -65,6 +65,5 @@ export function buildSnapshot(player: GuildPlayer, viewer: ViewerCapabilities): 
     lastError: player.lastError,
     auraEnabled: AURA_ENABLED,
     viewer,
-    serverTimeMs: Date.now(),
   };
 }

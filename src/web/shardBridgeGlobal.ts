@@ -13,7 +13,7 @@ import { logger } from '../logger.js';
 import { throttle } from './util/throttle.js';
 import { resolveViewerCapabilities } from './bridge/permission.js';
 import { buildSnapshot, DISPLAY_ONLY_VIEWER } from './bridge/snapshot.js';
-import { runWebCommand } from './bridge/command.js';
+import { runWebCommand, runWebSearch } from './bridge/command.js';
 import { PEPE_DESTROYED, PEPE_UPDATE, type PepeShardBridge, type ShardToManagerMessage } from './ipc.js';
 import type { GuildSummary } from './bridge/types.js';
 
@@ -64,6 +64,9 @@ export function installShardBridge(client: Client): ShardBridgeHandle {
     },
     async runCommand(guildId, userId, command) {
       return runWebCommand(guildId, userId, command, client);
+    },
+    async search(query) {
+      return runWebSearch(query);
     },
     listActive(userGuildIds) {
       const memberOf = new Set(userGuildIds);

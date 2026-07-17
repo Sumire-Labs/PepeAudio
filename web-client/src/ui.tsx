@@ -164,6 +164,12 @@ export const Icons = {
   ),
   Check: svg(<path d="M5 12.5l4.5 4.5L19 7" />),
   Close: svg(<path d="M6 6l12 12M18 6L6 18" />),
+  Edit: svg(
+    <>
+      <path d="M4 20h4l10-10-4-4L4 16v4z" />
+      <path d="M13.5 6.5l4 4" />
+    </>,
+  ),
   Pin: svg(
     <>
       <path d="M9 4h6l-1 6 3 3H7l3-3-1-6z" />

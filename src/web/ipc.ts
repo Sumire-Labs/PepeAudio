@@ -8,12 +8,13 @@
  * - The shard side pushes ShardToManagerMessage over client.shard.send(); the
  *   manager (ShardedBridge) receives them via shard.on('message').
  */
-import type { CommandResult, GuildSnapshot, GuildSummary, WebCommand } from './bridge/types.js';
+import type { CommandResult, GuildSnapshot, GuildSummary, SearchCandidate, WebCommand } from './bridge/types.js';
 
 /** The surface the manager invokes on each shard via broadcastEval. */
 export interface PepeShardBridge {
   getSnapshot(guildId: string, userId: string): Promise<GuildSnapshot | null>;
   runCommand(guildId: string, userId: string, command: WebCommand): Promise<CommandResult>;
+  search(query: string): Promise<SearchCandidate[]>;
   listActive(userGuildIds: string[]): GuildSummary[];
   setWebSubscribed(guildId: string, on: boolean): void;
 }

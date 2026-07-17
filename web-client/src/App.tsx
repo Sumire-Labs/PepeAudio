@@ -72,6 +72,7 @@ function Shell({ me }: { me: Me }) {
   const [view, setView] = useState<View>(() => (localStorage.getItem('pepe-guild') ? 'player' : 'servers'));
   const [guilds, setGuilds] = useState<GuildSummary[]>([]);
   const [savingTrack, setSavingTrack] = useState<QueueItemDTO | null>(null);
+  const [playlistsVersion, setPlaylistsVersion] = useState(0);
 
   const onUnauthorized = useCallback(() => {
     // Session expired — bounce back to the login screen.
@@ -140,7 +141,7 @@ function Shell({ me }: { me: Me }) {
           {view === 'servers' ? (
             <ServerPicker selectedGuildId={selectedGuildId} onSelect={selectGuild} onUnauthorized={onUnauthorized} />
           ) : view === 'playlists' ? (
-            <Playlists onLoadToQueue={loadToQueue} onUnauthorized={onUnauthorized} />
+            <Playlists onLoadToQueue={loadToQueue} onUnauthorized={onUnauthorized} reloadKey={playlistsVersion} />
           ) : selectedGuildId ? (
             <PlayerLayout session={session} onSaveTrack={setSavingTrack} />
           ) : (
@@ -149,7 +150,14 @@ function Shell({ me }: { me: Me }) {
         </main>
       </div>
 
-      {savingTrack ? <AddToPlaylistModal track={savingTrack} onClose={() => setSavingTrack(null)} onUnauthorized={onUnauthorized} /> : null}
+      {savingTrack ? (
+        <AddToPlaylistModal
+          track={savingTrack}
+          onClose={() => setSavingTrack(null)}
+          onUnauthorized={onUnauthorized}
+          onAdded={() => setPlaylistsVersion((v) => v + 1)}
+        />
+      ) : null}
     </>
   );
 }
@@ -263,7 +271,7 @@ function NavItem({ icon: Icon, label, active, disabled, onClick }: { icon: (p: {
   );
 }
 
-function AddToPlaylistModal({ track, onClose, onUnauthorized }: { track: QueueItemDTO; onClose: () => void; onUnauthorized: () => void }) {
+function AddToPlaylistModal({ track, onClose, onUnauthorized, onAdded }: { track: QueueItemDTO; onClose: () => void; onUnauthorized: () => void; onAdded: () => void }) {
   const toast = useToast();
   const [list, setList] = useState<PlaylistSummary[] | null>(null);
   const [newName, setNewName] = useState('');
@@ -285,6 +293,7 @@ function AddToPlaylistModal({ track, onClose, onUnauthorized }: { track: QueueIt
     try {
       await api.addPlaylistTrack(id, toPlaylistTrack(track));
       toast('プレイリストに追加しました。');
+      onAdded();
       onClose();
     } catch (err) {
       toast(err instanceof Error ? err.message : '失敗しました。', 'error');
@@ -300,6 +309,7 @@ function AddToPlaylistModal({ track, onClose, onUnauthorized }: { track: QueueIt
       const { playlist } = await api.createPlaylist(name);
       await api.addPlaylistTrack(playlist.id, toPlaylistTrack(track));
       toast(`「${name}」に追加しました。`);
+      onAdded();
       onClose();
     } catch (err) {
       toast(err instanceof Error ? err.message : '失敗しました。', 'error');

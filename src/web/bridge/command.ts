@@ -7,6 +7,7 @@
  */
 import type { Client, Guild } from 'discord.js';
 import * as GuildPlayerManager from '../../player/GuildPlayerManager.js';
+import type { GuildPlayer } from '../../player/GuildPlayer.js';
 import { getFfmpegCapabilities } from '../../config/ffmpegState.js';
 import { checkCooldown } from '../../util/rateLimiter.js';
 import {
@@ -25,13 +26,16 @@ import {
   SoundCloudUnavailableError,
   AppleMusicResolutionError,
 } from '../../sources/index.js';
+import { searchYouTube } from '../../sources/youtube.js';
 import type { QueueItem } from '../../player/QueueItem.js';
 import { logger } from '../../logger.js';
 import { resolveViewerCapabilities } from './permission.js';
 import { buildSnapshot } from './snapshot.js';
-import type { CommandResult, WebCommand } from './types.js';
+import type { CommandResult, SearchCandidate, ViewerCapabilities, WebCommand } from './types.js';
 
 const MAX_QUERY_LENGTH = 2000;
+/** How many URLs loadPlaylist resolves synchronously (to get playback started) before backgrounding the rest. */
+const PLAYLIST_SYNC_CAP = 3;
 const LOOP_MODES = new Set(['off', 'track', 'queue']);
 const TOGGLE_VALUES = new Set(['on', 'off']);
 
@@ -58,7 +62,7 @@ function fail(error: string): CommandResult {
 }
 
 /** Snapshot of the (possibly just-mutated) player, or null if the session ended. */
-function snapshotOrNull(guildId: string, viewer: Awaited<ReturnType<typeof resolveViewerCapabilities>>): CommandResult {
+function snapshotOrNull(guildId: string, viewer: ViewerCapabilities): CommandResult {
   const player = GuildPlayerManager.get(guildId);
   return { ok: true, snapshot: player && !player.destroyed ? buildSnapshot(player, viewer) : null };
 }
@@ -74,9 +78,8 @@ export async function runWebCommand(
 
   // addTrack / loadPlaylist may need to CREATE a session; every other command
   // requires an existing player.
-  if (command.type === 'addTrack' || command.type === 'loadPlaylist') {
-    return runAddCommand(guildId, userId, command, guild, client);
-  }
+  if (command.type === 'addTrack') return runAddTrack(guildId, userId, command.query, guild);
+  if (command.type === 'loadPlaylist') return runLoadPlaylist(guildId, userId, command.sourceUrls, guild);
 
   const player = GuildPlayerManager.get(guildId);
   if (!player || player.destroyed) return fail('このサーバーで再生中のセッションがありません。');
@@ -174,47 +177,25 @@ export async function runWebCommand(
 }
 
 /**
- * Handles addTrack (single query) and loadPlaylist (many source URLs), including
- * creating the session when the bot isn't connected yet. Requires the requester
- * to be in a voice channel to start a NEW session (so we can read the VC +
+ * Gets (creating if needed) the guild's player and authorizes the caller. New
+ * sessions require the caller to be in a voice channel (so we can read the VC +
  * adapterCreator), matching acquireGuildPlayer.
  */
-async function runAddCommand(
+async function ensurePlayerForAdd(
   guildId: string,
   userId: string,
-  command: Extract<WebCommand, { type: 'addTrack' | 'loadPlaylist' }>,
   guild: Guild,
-  _client: Client,
-): Promise<CommandResult> {
-  // Share the /play anti-abuse bucket so a user can't bypass it via the web.
-  if (!checkCooldown('play', userId, PLAY_COOLDOWN_MS)) {
-    return fail('少し間隔を空けてください。');
-  }
-
-  const queries: string[] =
-    command.type === 'addTrack'
-      ? [command.query]
-      : command.sourceUrls.slice(0, MAX_PLAYLIST_TRACKS);
-
-  if (command.type === 'addTrack') {
-    if (typeof command.query !== 'string' || !command.query.trim()) return fail('URL または検索語を入力してください。');
-    if (command.query.length > MAX_QUERY_LENGTH) return fail('入力が長すぎます。');
-  } else if (queries.length === 0) {
-    return fail('プレイリストに曲がありません。');
-  }
-
+): Promise<{ player: GuildPlayer; viewer: ViewerCapabilities } | { error: string }> {
   let player = GuildPlayerManager.get(guildId);
-
   if (!player || player.destroyed) {
     const member = guild.members.cache.get(userId) ?? (await guild.members.fetch(userId).catch(() => null));
     const voiceChannel = member?.voice.channel;
-    if (!voiceChannel) return fail('新しく再生を始めるにはボイスチャンネルに参加してください。');
+    if (!voiceChannel) return { error: '新しく再生を始めるにはボイスチャンネルに参加してください。' };
 
     player = GuildPlayerManager.getOrCreate({
       guildId,
       // The web UI is the panel, so there's no natural text channel — use the
-      // voice channel's own chat (voice channels accept messages). No panel is
-      // auto-sent for web-initiated sessions.
+      // voice channel's own chat. No panel is auto-sent for web-initiated sessions.
       textChannelId: voiceChannel.id,
       voiceChannelId: voiceChannel.id,
       adapterCreator: guild.voiceAdapterCreator,
@@ -223,36 +204,117 @@ async function runAddCommand(
     try {
       await player.waitUntilReady();
     } catch (err) {
-      logger.error({ err, guildId }, 'Web addTrack: voice connection failed to become ready');
+      logger.error({ err, guildId }, 'Web add: voice connection failed to become ready');
       await GuildPlayerManager.destroy(guildId);
-      return fail('ボイスチャンネルへの接続に失敗しました。もう一度お試しください。');
+      return { error: 'ボイスチャンネルへの接続に失敗しました。もう一度お試しください。' };
     }
   }
 
-  // Authorize only after we know the player/VC (the same-VC rule needs player.voiceChannelId).
   const viewer = await resolveViewerCapabilities(guild, userId, player);
-  if (!viewer.canControl) return fail(viewer.denyReason ?? '権限がありません。');
+  if (!viewer.canControl) return { error: viewer.denyReason ?? '権限がありません。' };
+  return { player, viewer };
+}
 
-  // Resolve every query (SSRF-guarded via resolveInput's classifyInput). A single
-  // failed query in a playlist is skipped; a failed single addTrack is reported.
-  const items: QueueItem[] = [];
-  for (const query of queries) {
-    if (typeof query !== 'string' || !query.trim() || query.length > MAX_QUERY_LENGTH) continue;
-    try {
-      const resolved = await resolveInput(query.trim(), userId);
-      items.push(...resolved);
-    } catch (err) {
-      if (command.type === 'addTrack') return fail(mapResolveError(err, query));
-      logger.warn({ err, query }, 'Web loadPlaylist: skipping a track that failed to resolve');
-    }
-    if (items.length >= MAX_PLAYLIST_TRACKS) break;
+/** Enqueues resolved items and starts playback if the player was idle. */
+async function enqueueAndMaybeStart(player: GuildPlayer, items: QueueItem[]): Promise<number> {
+  if (items.length === 0) return 0;
+  const wasIdle = !player.currentTrack;
+  const added = player.enqueue(items);
+  if (added > 0 && wasIdle && !player.destroyed) await player.playNext();
+  return added;
+}
+
+async function runAddTrack(guildId: string, userId: string, query: unknown, guild: Guild): Promise<CommandResult> {
+  if (!checkCooldown('play', userId, PLAY_COOLDOWN_MS)) return fail('少し間隔を空けてください。');
+  if (typeof query !== 'string' || !query.trim()) return fail('URL または検索語を入力してください。');
+  if (query.length > MAX_QUERY_LENGTH) return fail('入力が長すぎます。');
+
+  const ensured = await ensurePlayerForAdd(guildId, userId, guild);
+  if ('error' in ensured) return fail(ensured.error);
+  const { player, viewer } = ensured;
+
+  let items: QueueItem[];
+  try {
+    items = await resolveInput(query.trim(), userId); // SSRF-guarded via classifyInput
+  } catch (err) {
+    return fail(mapResolveError(err, query));
   }
   if (items.length === 0) return fail('再生できる曲が見つかりませんでした。');
 
-  const wasIdle = !player.currentTrack;
-  const addedCount = player.enqueue(items);
-  if (addedCount === 0) return fail('キューが上限に達しているため追加できませんでした。');
-  if (wasIdle) await player.playNext(); // enqueue() alone never starts playback (see enqueueAndConfirm.ts)
-
+  const added = await enqueueAndMaybeStart(player, items);
+  if (added === 0) return fail('キューが上限に達しているため追加できませんでした。');
   return snapshotOrNull(guildId, viewer);
+}
+
+/**
+ * Loads a saved playlist into the queue WITHOUT blocking the request on every
+ * track's network resolve. It resolves just enough (up to PLAYLIST_SYNC_CAP) to
+ * get playback going, returns immediately, then resolves + enqueues the rest in
+ * the background — each enqueue emits an update that streams to the browser over
+ * SSE. This keeps a big playlist from hanging the HTTP request (and hitting
+ * reverse-proxy timeouts).
+ */
+async function runLoadPlaylist(guildId: string, userId: string, sourceUrls: unknown, guild: Guild): Promise<CommandResult> {
+  if (!checkCooldown('play', userId, PLAY_COOLDOWN_MS)) return fail('少し間隔を空けてください。');
+  const urls = (Array.isArray(sourceUrls) ? sourceUrls : [])
+    .filter((u): u is string => typeof u === 'string' && u.trim().length > 0 && u.length <= MAX_QUERY_LENGTH)
+    .slice(0, MAX_PLAYLIST_TRACKS);
+  if (urls.length === 0) return fail('プレイリストに曲がありません。');
+
+  const ensured = await ensurePlayerForAdd(guildId, userId, guild);
+  if ('error' in ensured) return fail(ensured.error);
+  const { player, viewer } = ensured;
+
+  // Resolve synchronously until we have at least one playable track (bounded).
+  const initial: QueueItem[] = [];
+  let cursor = 0;
+  for (; cursor < urls.length && cursor < PLAYLIST_SYNC_CAP && initial.length === 0; cursor++) {
+    try {
+      initial.push(...(await resolveInput(urls[cursor]!.trim(), userId)));
+    } catch (err) {
+      logger.warn({ err, url: urls[cursor] }, 'Web loadPlaylist: skipping an unresolvable track');
+    }
+  }
+  if (initial.length === 0 && cursor >= urls.length) return fail('再生できる曲が見つかりませんでした。');
+
+  await enqueueAndMaybeStart(player, initial);
+
+  const remaining = urls.slice(cursor);
+  if (remaining.length > 0) {
+    void resolveRestInBackground(guildId, userId, remaining).catch((err) =>
+      logger.error({ err, guildId }, 'Web loadPlaylist: background resolve failed'),
+    );
+  }
+  return snapshotOrNull(guildId, viewer);
+}
+
+/** Resolves + enqueues the remaining playlist URLs one at a time, after the response is sent. */
+async function resolveRestInBackground(guildId: string, userId: string, urls: string[]): Promise<void> {
+  for (const url of urls) {
+    const player = GuildPlayerManager.get(guildId);
+    if (!player || player.destroyed) return; // session ended — stop working
+    let items: QueueItem[];
+    try {
+      items = await resolveInput(url.trim(), userId);
+    } catch (err) {
+      logger.warn({ err, url }, 'Web loadPlaylist(bg): skipping an unresolvable track');
+      continue;
+    }
+    await enqueueAndMaybeStart(player, items);
+  }
+}
+
+/**
+ * Runs a YouTube search and returns lightweight candidates (no enqueue). Used by
+ * the dashboard's "pick from search results" flow. Guild-independent, so the
+ * sharded bridge can run it on any shard.
+ */
+export async function runWebSearch(query: string): Promise<SearchCandidate[]> {
+  const results = await searchYouTube(query, 6);
+  return results.map((r) => ({
+    title: r.title,
+    author: r.author,
+    url: r.url,
+    thumbnailUrl: `https://i.ytimg.com/vi/${r.videoId}/mqdefault.jpg`,
+  }));
 }

@@ -8,7 +8,7 @@
 import type { Shard, ShardingManager } from 'discord.js';
 import { logger } from '../../logger.js';
 import { isShardToManagerMessage, PEPE_UPDATE } from '../ipc.js';
-import type { BotBridge, CommandResult, GuildSnapshot, GuildSummary, WebCommand } from './types.js';
+import type { BotBridge, CommandResult, GuildSnapshot, GuildSummary, SearchCandidate, WebCommand } from './types.js';
 
 type Subscriber = (snapshot: GuildSnapshot | null) => void;
 
@@ -84,6 +84,21 @@ export class ShardedBridge implements BotBridge {
       })) as unknown;
     const value = Array.isArray(raw) ? raw[0] : raw;
     return (value ?? { ok: false, error: '応答がありませんでした。' }) as CommandResult;
+  }
+
+  async search(query: string): Promise<SearchCandidate[]> {
+    // Guild-independent — run on a single shard (0). The result is itself an
+    // array, so unwrap only when broadcastEval wrapped it in a per-shard array
+    // (raw[0] would then also be an array).
+    const raw = (await this.manager
+      .broadcastEval(
+        (_client, ctx: { query: string }) => (globalThis.__pepeBridge ? globalThis.__pepeBridge.search(ctx.query) : []),
+        { shard: 0, context: { query } },
+      )
+      .catch(() => [])) as unknown;
+    let value: unknown = raw;
+    if (Array.isArray(raw) && (raw.length === 0 || Array.isArray(raw[0]))) value = raw[0] ?? [];
+    return Array.isArray(value) ? (value as SearchCandidate[]) : [];
   }
 
   subscribe(guildId: string, _userId: string, cb: Subscriber): () => void {

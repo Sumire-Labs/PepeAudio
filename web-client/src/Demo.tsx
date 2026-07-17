@@ -53,7 +53,6 @@ const snapshot: GuildSnapshot = {
   lastError: null,
   auraEnabled: true,
   viewer: { canControl: true, denyReason: null, inBotVoiceChannel: true },
-  serverTimeMs: 0,
 };
 
 export function Demo() {

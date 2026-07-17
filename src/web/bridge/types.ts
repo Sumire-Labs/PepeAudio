@@ -61,8 +61,14 @@ export interface GuildSnapshot {
   /** Whether the Aura (3D audio) feature is enabled at all in this build. */
   auraEnabled: boolean;
   viewer: ViewerCapabilities;
-  /** Server wall-clock (Date.now()) when this snapshot was built, for client-side progress extrapolation. */
-  serverTimeMs: number;
+}
+
+/** A YouTube search result for the "pick from search" add-track flow. */
+export interface SearchCandidate {
+  title: string;
+  author: string;
+  url: string;
+  thumbnailUrl: string;
 }
 
 /**
@@ -125,6 +131,8 @@ export interface BotBridge {
   getSnapshot(guildId: string, userId: string): Promise<GuildSnapshot | null>;
   /** Executes a command after re-authorizing on the owning shard. Never trusts the caller beyond userId. */
   runCommand(guildId: string, userId: string, command: WebCommand): Promise<CommandResult>;
+  /** Runs a YouTube search (guild-independent) and returns candidates without enqueuing. */
+  search(query: string): Promise<SearchCandidate[]>;
   /**
    * Realtime. `cb` fires with a fresh snapshot on every throttled player update,
    * and once with null when the session is destroyed. Returns an unsubscribe

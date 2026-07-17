@@ -99,4 +99,27 @@ export function registerApiRoutes(router: Router, services: WebServices): void {
     const result = await bridge.runCommand(guildId, session.userId, command);
     json(ctx.res, result.ok ? 200 : 400, result);
   });
+
+  // Search is guild-independent (it just queries YouTube), so it's not scoped to
+  // a guild id. Session + CSRF + a per-user rate limit (each call hits YouTube).
+  router.add('POST', '/api/search', async (ctx) => {
+    const session = requireSession(ctx);
+    if (!session) return;
+    if (!passesCsrf(ctx, env.publicOrigin)) {
+      json(ctx.res, 403, { error: 'csrf' });
+      return;
+    }
+    if (!checkCooldown('web:search', session.userId, 1200)) {
+      json(ctx.res, 429, { error: 'slow_down' });
+      return;
+    }
+    const body = await readJson<{ query?: unknown }>(ctx.req);
+    const query = typeof body?.query === 'string' ? body.query.trim() : '';
+    if (!query || query.length > 200) {
+      json(ctx.res, 400, { error: 'bad_query' });
+      return;
+    }
+    const candidates = await bridge.search(query);
+    json(ctx.res, 200, { candidates });
+  });
 }
