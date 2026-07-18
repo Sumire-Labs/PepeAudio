@@ -385,7 +385,7 @@ export class GuildPlayer extends EventEmitter {
 
   setLoopMode(mode: LoopMode): void {
     if (this.destroyed) return;
-    this.queueHistory.loopMode = mode;
+    this.queueHistory.setLoopMode(mode);
     this.emit('update');
   }
 
@@ -456,7 +456,7 @@ export class GuildPlayer extends EventEmitter {
 
   toggleShuffle(): void {
     if (this.destroyed) return;
-    this.queueHistory.shuffleEnabled = !this.queueHistory.shuffleEnabled;
+    this.queueHistory.setShuffle(!this.shuffleEnabled);
     this.emit('update');
   }
 

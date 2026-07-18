@@ -107,4 +107,51 @@ export function registerPlaylistRoutes(router: Router, services: WebServices): v
     const detail = playlists.get(session.userId, ctx.params.id!);
     json(ctx.res, 200, { playlist: detail });
   });
+
+  /**
+   * Imports a provider playlist/album URL (YouTube / Spotify / Apple Music /
+   * SoundCloud) into a saved playlist by resolving it through the bot bridge
+   * (SSRF-guarded, guild-independent) and appending the resulting tracks. Lazy
+   * collection tracks are stored as search strings (see PlaylistRepo) so loading
+   * later resolves each one individually rather than re-importing the whole set.
+   */
+  router.add('POST', '/api/playlists/:id/import', async (ctx) => {
+    const session = authWrite(ctx);
+    if (!session) return;
+    const detail = playlists.get(session.userId, ctx.params.id!);
+    if (!detail) {
+      json(ctx.res, 404, { error: 'not_found' });
+      return;
+    }
+    const body = await readJson<{ url?: unknown }>(ctx.req);
+    const url = typeof body?.url === 'string' ? body.url.trim() : '';
+    if (!url || url.length > 2000) {
+      json(ctx.res, 400, { error: 'URL を入力してください。' });
+      return;
+    }
+    const resolved = await services.bridge.resolveTracks(url);
+    if (resolved.error) {
+      json(ctx.res, 400, { error: resolved.error });
+      return;
+    }
+    if (resolved.tracks.length === 0) {
+      json(ctx.res, 400, { error: '曲が見つかりませんでした。' });
+      return;
+    }
+    const toAdd = resolved.tracks.map((t) => ({
+      sourceUrl: t.sourceUrl,
+      title: t.title,
+      artist: t.artist,
+      thumbnailUrl: t.thumbnailUrl,
+      sourceType: t.sourceType,
+      durationMs: t.durationMs,
+    }));
+    const result = playlists.addTracks(session.userId, ctx.params.id!, toAdd);
+    if ('error' in result) {
+      json(ctx.res, 400, result);
+      return;
+    }
+    const updated = playlists.get(session.userId, ctx.params.id!);
+    json(ctx.res, 200, { playlist: updated, added: result.added });
+  });
 }

@@ -22,6 +22,9 @@ export function Playlists({
   const [renameValue, setRenameValue] = useState('');
   const [loadingQueue, setLoadingQueue] = useState(false);
   const [dragIndex, setDragIndex] = useState<number | null>(null);
+  const [importing, setImporting] = useState(false);
+  const [importUrl, setImportUrl] = useState('');
+  const [importBusy, setImportBusy] = useState(false);
 
   const guard = useCallback(
     (err: unknown) => {
@@ -41,6 +44,8 @@ export function Playlists({
   useEffect(reload, [reload, reloadKey]);
 
   useEffect(() => {
+    setImporting(false);
+    setImportUrl('');
     if (!selectedId) {
       setDetail(null);
       return;
@@ -118,6 +123,25 @@ export function Playlists({
       reload();
     } catch (err) {
       guard(err);
+    }
+  };
+
+  const doImport = async () => {
+    if (!detail || importBusy) return;
+    const url = importUrl.trim();
+    if (!url) return;
+    setImportBusy(true);
+    try {
+      const { playlist, added } = await api.importPlaylist(detail.id, url);
+      setDetail(playlist);
+      reload();
+      setImportUrl('');
+      setImporting(false);
+      toast(`${added} 曲をインポートしました。`);
+    } catch (err) {
+      guard(err);
+    } finally {
+      setImportBusy(false);
     }
   };
 
@@ -201,6 +225,9 @@ export function Playlists({
               <button onClick={load} disabled={!onLoadToQueue || loadingQueue} className="flex items-center gap-1.5 rounded-full accent-bg px-4 py-2 text-sm font-medium text-white transition active:scale-95 disabled:opacity-40" title={onLoadToQueue ? '' : 'サーバーを選択してください'}>
                 {loadingQueue ? <Spinner className="h-4 w-4" /> : <Icons.Play className="h-4 w-4" />} キューへ
               </button>
+              <button onClick={() => setImporting((v) => !v)} className={cx('grid h-9 w-9 place-items-center rounded-full transition hover:bg-[var(--track-bg)]', importing ? 'accent' : 'text-[var(--text-dim)]')} aria-label="URLからインポート" title="URLからインポート">
+                <Icons.Download className="h-4 w-4" />
+              </button>
               <button onClick={() => { setRenameValue(detail.name); setRenaming(true); }} className="grid h-9 w-9 place-items-center rounded-full text-[var(--text-dim)] transition hover:bg-[var(--track-bg)]" aria-label="名前変更" title="名前変更">
                 <Icons.Edit className="h-4 w-4" />
               </button>
@@ -208,9 +235,27 @@ export function Playlists({
                 <Icons.Trash className="h-4 w-4" />
               </button>
             </div>
+            {importing ? (
+              <div className="mb-3 rounded-2xl bg-[var(--track-bg)] p-3">
+                <div className="flex gap-2">
+                  <input
+                    autoFocus
+                    value={importUrl}
+                    onChange={(e) => setImportUrl(e.target.value)}
+                    onKeyDown={(e) => { if (e.key === 'Enter') void doImport(); if (e.key === 'Escape') setImporting(false); }}
+                    placeholder="YouTube / Spotify / Apple Music / SoundCloud のプレイリストURL"
+                    className="glass w-full rounded-xl px-3 py-2 text-sm outline-none"
+                  />
+                  <button onClick={() => void doImport()} disabled={importBusy || !importUrl.trim()} className="flex flex-none items-center gap-1.5 rounded-xl accent-bg px-3 text-sm font-medium text-white transition active:scale-95 disabled:opacity-40">
+                    {importBusy ? <Spinner className="h-4 w-4" /> : <Icons.Download className="h-4 w-4" />} 取込
+                  </button>
+                </div>
+                <p className="mt-2 px-1 text-xs text-[var(--text-faint)]">プレイリスト/アルバムのURLを貼り付けると、曲をまとめて追加します（最大 50 曲）。</p>
+              </div>
+            ) : null}
             <div className="min-h-0 flex-1 space-y-1 overflow-y-auto soft-scroll">
               {detail.tracks.length === 0 ? (
-                <p className="px-1 py-4 text-sm text-[var(--text-faint)]">曲がありません。プレイヤーの「＋」から追加できます。</p>
+                <p className="px-1 py-4 text-sm text-[var(--text-faint)]">曲がありません。プレイヤーの「＋」やURLインポートから追加できます。</p>
               ) : (
                 detail.tracks.map((t, i) => (
                   <PlaylistRow

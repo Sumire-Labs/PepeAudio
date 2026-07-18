@@ -37,7 +37,7 @@ function formatSeekSeconds(ms: number): string {
  *   reposition (e.g. a timestamped link, or resuming after a mid-track crash).
  */
 export function planFfmpegInvocation(params: CreateTrackResourceParams): FfmpegPlan {
-  const { hrirMode, aura360Mode, seekOffsetMs, hrirFilePath, hrirFormat, hrirMakeupDb } = params;
+  const { hrirMode, aura360Mode, seekOffsetMs, hrirFilePath, hrirFormat, hrirMakeupDb, hrirCorrectiveEq } = params;
 
   const needsSeek = seekOffsetMs > 0;
   const hrirOn = hrirMode === 'on';
@@ -78,7 +78,7 @@ export function planFfmpegInvocation(params: CreateTrackResourceParams): FfmpegP
       ...(params.seekableInput ? ['-ss', sec, '-i', params.seekableInput] : ['-i', 'pipe:0']),
       '-i', hrirFilePath as string,
       ...(!params.seekableInput && needsSeek ? ['-ss', sec] : []),
-      '-filter_complex', buildHrirFilterComplex(hrirFormat as HrirFormat, hrirMakeupDb, aura360On ? buildAura360Prefix() : ''),
+      '-filter_complex', buildHrirFilterComplex(hrirFormat as HrirFormat, hrirMakeupDb, aura360On ? buildAura360Prefix() : '', hrirCorrectiveEq),
       '-map', '[out]',
       '-ac', '2',
       '-ar', '48000',

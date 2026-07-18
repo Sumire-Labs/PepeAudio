@@ -55,13 +55,56 @@ function sanitizeName(name: unknown): string | null {
 function isValidTrack(track: unknown): track is PlaylistTrackDTO {
   if (!track || typeof track !== 'object') return false;
   const t = track as Record<string, unknown>;
-  if (typeof t.sourceUrl !== 'string' || !/^https?:\/\//i.test(t.sourceUrl) || t.sourceUrl.length > MAX_FIELD_LENGTH) return false;
+  // sourceUrl may be a provider URL OR a plain "artist title" search string
+  // (see normalizeTrackForSave) — both are only ever handed to resolveInput,
+  // which is SSRF-guarded by classifyInput, so a non-URL string is safe.
+  if (typeof t.sourceUrl !== 'string' || t.sourceUrl.trim().length === 0 || t.sourceUrl.length > MAX_FIELD_LENGTH) return false;
   if (typeof t.title !== 'string' || t.title.length > MAX_FIELD_LENGTH) return false;
   if (typeof t.artist !== 'string' || t.artist.length > MAX_FIELD_LENGTH) return false;
   if (typeof t.sourceType !== 'string' || !SOURCE_TYPES.has(t.sourceType as SourceType)) return false;
   if (t.thumbnailUrl !== null && typeof t.thumbnailUrl !== 'string') return false;
   if (t.durationMs !== null && typeof t.durationMs !== 'number') return false;
   return true;
+}
+
+/**
+ * Detects a collection (playlist/album/set) URL — as opposed to a single track.
+ * Lazily-resolved collection items (Spotify/Apple/YouTube playlists) all carry
+ * the SAME collection URL as their sourceUrl, so persisting it verbatim would
+ * make every saved track re-import the WHOLE collection each time the playlist
+ * is loaded. normalizeTrackForSave rewrites those to a search string instead.
+ */
+function looksLikeCollection(url: string): boolean {
+  let parsed: URL;
+  try {
+    parsed = new URL(url);
+  } catch {
+    return false; // already a plain search string, not a URL — leave as-is
+  }
+  const host = parsed.hostname.toLowerCase();
+  const path = parsed.pathname.toLowerCase();
+  if (host === 'youtube.com' || host.endsWith('.youtube.com') || host === 'youtu.be') {
+    if (path.startsWith('/playlist')) return true;
+    return parsed.searchParams.has('list') && !parsed.searchParams.has('v');
+  }
+  if (host === 'spotify.com' || host.endsWith('.spotify.com')) return /\/(playlist|album)\//.test(path);
+  if (host === 'music.apple.com') return path.includes('/playlist/') || (path.includes('/album/') && !parsed.searchParams.has('i'));
+  if (host === 'soundcloud.com' || host.endsWith('.soundcloud.com')) return path.includes('/sets/');
+  return false;
+}
+
+/**
+ * If a track's sourceUrl points at a collection (shared across every track in
+ * that collection), replace it with an "artist title" search string so loading
+ * resolves to the single track rather than re-importing the whole collection.
+ * A no-op (idempotent) for per-track URLs and already-normalized search strings.
+ */
+function normalizeTrackForSave(track: PlaylistTrackDTO): PlaylistTrackDTO {
+  if (!looksLikeCollection(track.sourceUrl)) return track;
+  const query = (`${track.artist} ${track.title}`.trim() || track.title.trim()).slice(0, MAX_FIELD_LENGTH);
+  // If we somehow have no title/artist to search by, keep the original rather
+  // than storing an empty string (isValidTrack would reject that on reload).
+  return query.length > 0 ? { ...track, sourceUrl: query } : track;
 }
 
 interface PlaylistRow {
@@ -137,7 +180,7 @@ export class PlaylistRepo {
     const row = this.selectOne.get(id) as PlaylistRow | undefined;
     if (!row || row.userId !== userId) return { error: 'プレイリストが見つかりません。' };
     if (!Array.isArray(tracks)) return { error: '不正なリクエストです。' };
-    const clean = tracks.filter(isValidTrack).slice(0, MAX_TRACKS_PER_PLAYLIST);
+    const clean = tracks.filter(isValidTrack).map(normalizeTrackForSave).slice(0, MAX_TRACKS_PER_PLAYLIST);
     const tx = webDb.transaction((items: PlaylistTrackDTO[]) => {
       this.deleteTracksStmt.run(id);
       items.forEach((t, i) =>
@@ -155,17 +198,42 @@ export class PlaylistRepo {
     if (!detail) return { error: 'プレイリストが見つかりません。' };
     if (!isValidTrack(track)) return { error: '不正なトラックです。' };
     if (detail.trackCount >= MAX_TRACKS_PER_PLAYLIST) return { error: `プレイリストは最大 ${MAX_TRACKS_PER_PLAYLIST} 曲までです。` };
+    const t = normalizeTrackForSave(track);
     this.insertTrack.run(
       id,
       detail.trackCount, // positions are dense, so the count is the next index
-      track.sourceUrl,
-      track.title,
-      track.artist,
-      track.thumbnailUrl ?? null,
-      track.sourceType,
-      track.durationMs ?? null,
+      t.sourceUrl,
+      t.title,
+      t.artist,
+      t.thumbnailUrl ?? null,
+      t.sourceType,
+      t.durationMs ?? null,
     );
     this.touch.run(Date.now(), id);
     return { ok: true };
+  }
+
+  /**
+   * Appends many tracks at once (used by "import from URL"). Validates and
+   * collection-normalizes each, caps the batch to the remaining room, and writes
+   * transactionally. Returns how many were actually added.
+   */
+  addTracks(userId: string, id: string, tracks: unknown): { ok: true; added: number } | { error: string } {
+    const detail = this.get(userId, id);
+    if (!detail) return { error: 'プレイリストが見つかりません。' };
+    if (!Array.isArray(tracks)) return { error: '不正なリクエストです。' };
+    const remaining = MAX_TRACKS_PER_PLAYLIST - detail.trackCount;
+    if (remaining <= 0) return { error: `プレイリストは最大 ${MAX_TRACKS_PER_PLAYLIST} 曲までです。` };
+    const clean = tracks.filter(isValidTrack).map(normalizeTrackForSave).slice(0, remaining);
+    if (clean.length === 0) return { error: '追加できる曲がありませんでした。' };
+    const base = detail.trackCount;
+    const tx = webDb.transaction((items: PlaylistTrackDTO[]) => {
+      items.forEach((t, i) =>
+        this.insertTrack.run(id, base + i, t.sourceUrl, t.title, t.artist, t.thumbnailUrl ?? null, t.sourceType, t.durationMs ?? null),
+      );
+      this.touch.run(Date.now(), id);
+    });
+    tx(clean);
+    return { ok: true, added: clean.length };
   }
 }

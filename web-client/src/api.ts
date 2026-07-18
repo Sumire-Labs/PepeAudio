@@ -208,6 +208,10 @@ export const api = {
   addPlaylistTrack(id: string, track: PlaylistTrackDTO): Promise<{ playlist: PlaylistDetail }> {
     return request('POST', `/api/playlists/${id}/tracks`, { track });
   },
+  /** Imports a provider playlist/album URL into a saved playlist server-side. */
+  importPlaylist(id: string, url: string): Promise<{ playlist: PlaylistDetail; added: number }> {
+    return request('POST', `/api/playlists/${id}/import`, { url });
+  },
 };
 
 /**

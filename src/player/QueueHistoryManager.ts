@@ -14,6 +14,16 @@ function shuffleArray<T>(input: T[]): T[] {
   return copy;
 }
 
+/** In-place Fisher–Yates — shuffles the live queue so its displayed order IS the play order. */
+function shuffleInPlace<T>(arr: T[]): void {
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    const a = arr[i]!;
+    arr[i] = arr[j]!;
+    arr[j] = a;
+  }
+}
+
 export interface QueueHistoryCallbacks {
   emitUpdate: () => void;
   isDestroyed: () => boolean;
@@ -78,7 +88,15 @@ export class QueueHistoryManager {
       return 0;
     }
     const accepted = items.slice(0, capacity);
-    this.queue.push(...accepted);
+    if (this.shuffleEnabled) {
+      // Interleave new items at random positions so the queue's displayed order
+      // stays the actual play order (see setShuffle + playNextCore).
+      for (const item of accepted) {
+        this.queue.splice(Math.floor(Math.random() * (this.queue.length + 1)), 0, item);
+      }
+    } else {
+      this.queue.push(...accepted);
+    }
     if (accepted.length < items.length) {
       this.log.warn(
         { requested: items.length, accepted: accepted.length, cap: MAX_QUEUE_LENGTH },
@@ -147,7 +165,8 @@ export class QueueHistoryManager {
     if (outgoing) {
       const nextHistory = [...this.history, outgoing];
       this.history = nextHistory.length > MAX_HISTORY ? nextHistory.slice(nextHistory.length - MAX_HISTORY) : nextHistory;
-      this.lapHistory = [...this.lapHistory, outgoing];
+      // Keep the loop rotation only while queue-loop is active (see playNextCore).
+      if (this.loopMode === 'queue') this.lapHistory = [...this.lapHistory, outgoing];
     }
     this.queue = remaining;
     this.cb.emitUpdate();
@@ -166,6 +185,29 @@ export class QueueHistoryManager {
     this.queue = [];
     this.history = [];
     this.lapHistory = [];
+  }
+
+  /**
+   * Sets the loop mode. Switching TO 'queue' re-arms the loop rotation by
+   * clearing lapHistory, so the loop set becomes the current track + what's
+   * queued + anything added afterwards — NOT songs already played before the
+   * loop was enabled. (lapHistory is only accumulated while loop:'queue' is on;
+   * see playNextCore.)
+   */
+  setLoopMode(mode: LoopMode): void {
+    if (mode === 'queue' && this.loopMode !== 'queue') this.lapHistory = [];
+    this.loopMode = mode;
+  }
+
+  /**
+   * Toggles shuffle. Enabling shuffles the CURRENT pending queue in place so its
+   * displayed order equals the play order (playNextCore always plays from the
+   * front); disabling leaves the order as-is (the pre-shuffle order can't be
+   * restored, matching how mainstream players behave).
+   */
+  setShuffle(enabled: boolean): void {
+    if (enabled && !this.shuffleEnabled) shuffleInPlace(this.queue);
+    this.shuffleEnabled = enabled;
   }
 
   /**
@@ -202,7 +244,10 @@ export class QueueHistoryManager {
       if (candidateHistory.length > MAX_HISTORY) {
         candidateHistory = candidateHistory.slice(candidateHistory.length - MAX_HISTORY);
       }
-      candidateLapHistory = [...this.lapHistory, finishedTrack];
+      // Only build the loop rotation while queue-loop is active — otherwise
+      // lapHistory would accumulate across the whole session (mixing in songs
+      // played before the loop, and never being freed on a long radio run).
+      candidateLapHistory = this.loopMode === 'queue' ? [...this.lapHistory, finishedTrack] : this.lapHistory;
     }
 
     let candidateQueue = this.queue;
@@ -236,8 +281,10 @@ export class QueueHistoryManager {
       }
     }
 
-    const pickIndex = this.shuffleEnabled ? Math.floor(Math.random() * candidateQueue.length) : 0;
-    const next = candidateQueue[pickIndex];
+    // Always play from the front: shuffle now reorders the queue itself (see
+    // setShuffle + enqueue), so the head IS the correct next track and the
+    // displayed queue order matches playback.
+    const next = candidateQueue[0];
     if (!next) {
       this.history = candidateHistory;
       this.lapHistory = nextLapHistory;
@@ -247,7 +294,7 @@ export class QueueHistoryManager {
       this.cb.emitUpdate();
       return;
     }
-    const remainingQueue = [...candidateQueue.slice(0, pickIndex), ...candidateQueue.slice(pickIndex + 1)];
+    const remainingQueue = candidateQueue.slice(1);
 
     // A link-supplied timestamp (e.g. YouTube's ?t=) applies once, on this
     // item's first play attempt — cleared here regardless of outcome so a

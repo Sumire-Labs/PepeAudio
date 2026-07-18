@@ -8,7 +8,7 @@
 import type { Shard, ShardingManager } from 'discord.js';
 import { logger } from '../../logger.js';
 import { isShardToManagerMessage, PEPE_UPDATE } from '../ipc.js';
-import type { BotBridge, CommandResult, GuildSnapshot, GuildSummary, SearchCandidate, WebCommand } from './types.js';
+import type { BotBridge, CommandResult, GuildSnapshot, GuildSummary, ResolveResult, SearchCandidate, WebCommand } from './types.js';
 
 type Subscriber = (snapshot: GuildSnapshot | null) => void;
 
@@ -99,6 +99,23 @@ export class ShardedBridge implements BotBridge {
     let value: unknown = raw;
     if (Array.isArray(raw) && (raw.length === 0 || Array.isArray(raw[0]))) value = raw[0] ?? [];
     return Array.isArray(value) ? (value as SearchCandidate[]) : [];
+  }
+
+  async resolveTracks(query: string): Promise<ResolveResult> {
+    // Guild-independent — run on a single shard (0). The result is an object
+    // ({ tracks, error? }), so unwrap the per-shard array wrapper if present.
+    const raw = (await this.manager
+      .broadcastEval(
+        (_client, ctx: { query: string }) =>
+          globalThis.__pepeBridge ? globalThis.__pepeBridge.resolveTracks(ctx.query) : { tracks: [] },
+        { shard: 0, context: { query } },
+      )
+      .catch((err) => {
+        logger.error({ err }, 'ShardedBridge.resolveTracks broadcastEval failed');
+        return { tracks: [], error: 'インポートに失敗しました。' } satisfies ResolveResult;
+      })) as unknown;
+    const value = Array.isArray(raw) ? raw[0] : raw;
+    return (value ?? { tracks: [] }) as ResolveResult;
   }
 
   subscribe(guildId: string, _userId: string, cb: Subscriber): () => void {

@@ -11,8 +11,8 @@ import { logger } from '../../logger.js';
 import { throttle } from '../util/throttle.js';
 import { resolveViewerCapabilities } from './permission.js';
 import { buildSnapshot } from './snapshot.js';
-import { runWebCommand, runWebSearch } from './command.js';
-import type { BotBridge, CommandResult, GuildSnapshot, GuildSummary, SearchCandidate, WebCommand } from './types.js';
+import { runWebCommand, runWebResolve, runWebSearch } from './command.js';
+import type { BotBridge, CommandResult, GuildSnapshot, GuildSummary, ResolveResult, SearchCandidate, WebCommand } from './types.js';
 
 const PUSH_THROTTLE_MS = 500;
 
@@ -72,6 +72,10 @@ export class LocalBridge implements BotBridge {
 
   async search(query: string): Promise<SearchCandidate[]> {
     return runWebSearch(query);
+  }
+
+  async resolveTracks(query: string): Promise<ResolveResult> {
+    return runWebResolve(query);
   }
 
   subscribe(guildId: string, userId: string, cb: (snapshot: GuildSnapshot | null) => void): () => void {

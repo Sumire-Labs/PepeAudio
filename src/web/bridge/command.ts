@@ -30,8 +30,8 @@ import { searchYouTube } from '../../sources/youtube.js';
 import type { QueueItem } from '../../player/QueueItem.js';
 import { logger } from '../../logger.js';
 import { resolveViewerCapabilities } from './permission.js';
-import { buildSnapshot } from './snapshot.js';
-import type { CommandResult, SearchCandidate, ViewerCapabilities, WebCommand } from './types.js';
+import { buildSnapshot, toQueueItemDTO } from './snapshot.js';
+import type { CommandResult, ResolveResult, SearchCandidate, ViewerCapabilities, WebCommand } from './types.js';
 
 const MAX_QUERY_LENGTH = 2000;
 /** How many URLs loadPlaylist resolves synchronously (to get playback started) before backgrounding the rest. */
@@ -327,4 +327,22 @@ export async function runWebSearch(query: string): Promise<SearchCandidate[]> {
     url: r.url,
     thumbnailUrl: `https://i.ytimg.com/vi/${r.videoId}/mqdefault.jpg`,
   }));
+}
+
+/**
+ * Resolves a URL/search to track DTOs WITHOUT enqueuing — for importing a
+ * playlist into a SAVED playlist. Reuses resolveInput (so playlist URLs expand
+ * and SSRF guards apply). Guild-independent, so the sharded bridge can run it on
+ * any shard. Lazy items (Spotify/Apple playlists) come back with null
+ * duration/thumbnail; the saved playlist stores them by title+artist (see
+ * playlistRepo), which the loader resolves via search.
+ */
+export async function runWebResolve(query: string): Promise<ResolveResult> {
+  if (typeof query !== 'string' || !query.trim()) return { tracks: [], error: 'URL を入力してください。' };
+  try {
+    const items = await resolveInput(query.trim(), 'web-import');
+    return { tracks: items.slice(0, MAX_PLAYLIST_TRACKS).map((item) => toQueueItemDTO(item)) };
+  } catch (err) {
+    return { tracks: [], error: mapResolveError(err, query) };
+  }
 }

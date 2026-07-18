@@ -108,37 +108,28 @@ export function Player({
         <VolumeControl value={snapshot?.volume ?? 70} disabled={!canControl} onChange={(percent) => run({ type: 'setVolume', percent })} />
       </div>
 
-      {/* control groups — role-labeled so purpose is clear at a glance */}
-      <div className="mt-6 w-full max-w-md space-y-2.5">
-        <ControlGroup label="再生">
-          <Chip icon={Icons.Radio} label="オートプレイ" active={Boolean(snapshot?.autoplay)} disabled={!canControl} onClick={() => run({ type: 'setAutoplay', enabled: !snapshot?.autoplay })} />
-          <Chip icon={Icons.Pin} label="24時間" active={Boolean(snapshot?.stay247)} disabled={!canControl} onClick={() => run({ type: 'setStay247', enabled: !snapshot?.stay247 })} />
-        </ControlGroup>
-        {snapshot?.auraEnabled ? (
-          <ControlGroup label="サウンド">
-            <Chip icon={Icons.Spatial} label="360°" active={snapshot.aura360Mode === 'on'} disabled={!canControl} onClick={() => run({ type: 'setAura360', mode: snapshot.aura360Mode === 'on' ? 'off' : 'on' })} />
-            <Chip icon={Icons.Headphones} label="Aura" active={snapshot.hrirMode === 'on'} disabled={!canControl} onClick={() => run({ type: 'setHrir', mode: snapshot.hrirMode === 'on' ? 'off' : 'on' })} />
-            {snapshot.hrirMode === 'on' && snapshot.auraPresets.length > 0 ? (
-              <Dropdown
-                value={snapshot.hrirProfile ?? ''}
-                options={snapshot.auraPresets.map((p) => ({ value: p.id, label: p.label }))}
-                disabled={!canControl}
-                icon={Icons.Headphones}
-                onChange={(id) => run({ type: 'setAuraPreset', id })}
-              />
-            ) : null}
-          </ControlGroup>
-        ) : null}
+      {/* playback modes — centered row */}
+      <div className="mt-6 flex w-full max-w-md flex-wrap items-center justify-center gap-2">
+        <Chip icon={Icons.Radio} label="オートプレイ" active={Boolean(snapshot?.autoplay)} disabled={!canControl} onClick={() => run({ type: 'setAutoplay', enabled: !snapshot?.autoplay })} />
+        <Chip icon={Icons.Pin} label="24時間" active={Boolean(snapshot?.stay247)} disabled={!canControl} onClick={() => run({ type: 'setStay247', enabled: !snapshot?.stay247 })} />
       </div>
-    </div>
-  );
-}
 
-function ControlGroup({ label, children }: { label: string; children: ReactNode }) {
-  return (
-    <div className="flex items-start gap-3">
-      <span className="mt-2 w-12 flex-none text-right text-xs font-medium text-[var(--text-faint)]">{label}</span>
-      <div className="flex flex-1 flex-wrap items-center gap-2">{children}</div>
+      {/* sound (Aura) — separate centered row */}
+      {snapshot?.auraEnabled ? (
+        <div className="mt-3 flex w-full max-w-md flex-wrap items-center justify-center gap-2">
+          <Chip icon={Icons.Spatial} label="360°" active={snapshot.aura360Mode === 'on'} disabled={!canControl} onClick={() => run({ type: 'setAura360', mode: snapshot.aura360Mode === 'on' ? 'off' : 'on' })} />
+          <Chip icon={Icons.Headphones} label="Aura" active={snapshot.hrirMode === 'on'} disabled={!canControl} onClick={() => run({ type: 'setHrir', mode: snapshot.hrirMode === 'on' ? 'off' : 'on' })} />
+          {snapshot.hrirMode === 'on' && snapshot.auraPresets.length > 0 ? (
+            <Dropdown
+              value={snapshot.hrirProfile ?? ''}
+              options={snapshot.auraPresets.map((p) => ({ value: p.id, label: p.label }))}
+              disabled={!canControl}
+              icon={Icons.Headphones}
+              onChange={(id) => run({ type: 'setAuraPreset', id })}
+            />
+          ) : null}
+        </div>
+      ) : null}
     </div>
   );
 }

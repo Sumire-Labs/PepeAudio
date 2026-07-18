@@ -174,6 +174,13 @@ export const Icons = {
     </>,
   ),
   Bookmark: svg(<path d="M6 4h12v16l-6-4-6 4z" />),
+  Download: svg(
+    <>
+      <path d="M12 4v10" />
+      <path d="M8 11l4 4 4-4" />
+      <path d="M5 19h14" />
+    </>,
+  ),
   Edit: svg(
     <>
       <path d="M4 20h4l10-10-4-4L4 16v4z" />

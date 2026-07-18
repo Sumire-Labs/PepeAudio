@@ -77,7 +77,7 @@ export function Queue({ session, onSaveTrack }: { session: GuildSession; onSaveT
         <input
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          placeholder="URL または検索語を入力…"
+          placeholder="URL・プレイリストURL・検索語を入力…"
           className="w-full bg-transparent text-sm outline-none placeholder:text-[var(--text-faint)]"
         />
         {query ? (

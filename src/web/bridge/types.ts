@@ -75,6 +75,13 @@ export interface SearchCandidate {
   thumbnailUrl: string;
 }
 
+/** Result of resolving a URL/search to tracks (for importing into a saved playlist). */
+export interface ResolveResult {
+  tracks: QueueItemDTO[];
+  /** User-safe error (Japanese) when resolution failed. */
+  error?: string;
+}
+
 /**
  * One row in the guild picker: a guild the viewer shares with the bot (the bot
  * is a member, so a session can be started there even if none is active yet).
@@ -139,6 +146,8 @@ export interface BotBridge {
   runCommand(guildId: string, userId: string, command: WebCommand): Promise<CommandResult>;
   /** Runs a YouTube search (guild-independent) and returns candidates without enqueuing. */
   search(query: string): Promise<SearchCandidate[]>;
+  /** Resolves a URL (or search) to tracks WITHOUT enqueuing — used to import a playlist into a saved playlist. */
+  resolveTracks(query: string): Promise<ResolveResult>;
   /**
    * Realtime. `cb` fires with a fresh snapshot on every throttled player update,
    * and once with null when the session is destroyed. Returns an unsubscribe
