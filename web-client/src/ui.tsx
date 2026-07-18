@@ -1,5 +1,5 @@
 /** Shared UI primitives and inline SVG icons (no icon dependency, CSP-clean). */
-import type { CSSProperties, ReactNode } from 'react';
+import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 
 export function cx(...parts: Array<string | false | null | undefined>): string {
   return parts.filter(Boolean).join(' ');
@@ -163,6 +163,7 @@ export const Icons = {
     </>,
   ),
   Check: svg(<path d="M5 12.5l4.5 4.5L19 7" />),
+  ChevronDown: svg(<path d="M6 9l6 6 6-6" />),
   Close: svg(<path d="M6 6l12 12M18 6L6 18" />),
   Menu: svg(<path d="M4 7h16M4 12h16M4 17h16" />),
   Edit: svg(
@@ -257,5 +258,80 @@ export function IconButton({
       <IconComp className={icon} />
       {active ? <span className="absolute -bottom-1 h-1 w-1 rounded-full accent-bg" /> : null}
     </button>
+  );
+}
+
+/** A custom acrylic dropdown (replaces the native <select>, which can't be themed). */
+export function Dropdown({
+  value,
+  options,
+  disabled,
+  onChange,
+  icon: LeadIcon,
+  className,
+}: {
+  value: string;
+  options: Array<{ value: string; label: string }>;
+  disabled?: boolean;
+  onChange: (value: string) => void;
+  icon?: (p: { className?: string }) => ReactNode;
+  className?: string;
+}) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const onDoc = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setOpen(false);
+    };
+    document.addEventListener('mousedown', onDoc);
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('mousedown', onDoc);
+      document.removeEventListener('keydown', onKey);
+    };
+  }, [open]);
+
+  const current = options.find((o) => o.value === value);
+  return (
+    <div ref={ref} className={cx('relative', className)}>
+      <button
+        type="button"
+        disabled={disabled}
+        onClick={() => setOpen((v) => !v)}
+        className="glass flex items-center gap-2 rounded-full px-3.5 py-2 text-sm font-medium text-[var(--text)] transition active:scale-95 disabled:opacity-40"
+      >
+        {LeadIcon ? <LeadIcon className="h-4 w-4 flex-none text-[var(--text-dim)]" /> : null}
+        <span className="truncate">{current?.label ?? '—'}</span>
+        <Icons.ChevronDown className={cx('h-4 w-4 flex-none text-[var(--text-dim)] transition-transform', open ? 'rotate-180' : '')} />
+      </button>
+      {open ? (
+        <div
+          className="glass-strong absolute left-0 top-full z-30 mt-2 max-h-60 min-w-[12rem] overflow-y-auto soft-scroll rounded-2xl p-1 fade-in"
+          style={{ boxShadow: '0 16px 44px var(--shadow)' }}
+        >
+          {options.map((o) => (
+            <button
+              key={o.value}
+              onClick={() => {
+                onChange(o.value);
+                setOpen(false);
+              }}
+              className={cx(
+                'flex w-full items-center justify-between gap-3 rounded-xl px-3 py-2 text-left text-sm transition hover:bg-[var(--track-bg)]',
+                o.value === value ? 'accent font-medium' : 'text-[var(--text)]',
+              )}
+            >
+              <span className="truncate">{o.label}</span>
+              {o.value === value ? <Icons.Check className="h-4 w-4 flex-none" /> : null}
+            </button>
+          ))}
+        </div>
+      ) : null}
+    </div>
   );
 }

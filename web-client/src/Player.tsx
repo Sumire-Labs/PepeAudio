@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent, ty
 import type { QueueItemDTO, WebCommand } from './api.ts';
 import type { GuildSession } from './useGuildSession.ts';
 import { useTicker } from './useGuildSession.ts';
-import { cx, EqualizerBars, formatMs, Icons, IconButton } from './ui.tsx';
+import { cx, Dropdown, EqualizerBars, formatMs, Icons, IconButton } from './ui.tsx';
 import { useToast } from './toast.tsx';
 
 export function Player({
@@ -92,18 +92,13 @@ export function Player({
             <Chip icon={Icons.Spatial} label="360°" active={snapshot.aura360Mode === 'on'} disabled={!canControl} onClick={() => run({ type: 'setAura360', mode: snapshot.aura360Mode === 'on' ? 'off' : 'on' })} />
             <Chip icon={Icons.Headphones} label="HRIR" active={snapshot.hrirMode === 'on'} disabled={!canControl} onClick={() => run({ type: 'setHrir', mode: snapshot.hrirMode === 'on' ? 'off' : 'on' })} />
             {snapshot.hrirMode === 'on' && snapshot.auraPresets.length > 0 ? (
-              <select
+              <Dropdown
                 value={snapshot.hrirProfile ?? ''}
+                options={snapshot.auraPresets.map((p) => ({ value: p.id, label: p.label }))}
                 disabled={!canControl}
-                onChange={(e) => run({ type: 'setAuraPreset', id: e.target.value })}
-                className="glass rounded-full px-3 py-2 text-sm text-[var(--text)] outline-none disabled:opacity-40"
-              >
-                {snapshot.auraPresets.map((p) => (
-                  <option key={p.id} value={p.id} className="text-black">
-                    {p.label}
-                  </option>
-                ))}
-              </select>
+                icon={Icons.Headphones}
+                onChange={(id) => run({ type: 'setAuraPreset', id })}
+              />
             ) : null}
           </>
         ) : null}

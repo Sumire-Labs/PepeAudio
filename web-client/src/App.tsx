@@ -169,6 +169,8 @@ function Shell({ me }: { me: Me }) {
           onCycleTheme={() => setTheme(theme === 'auto' ? 'dark' : theme === 'dark' ? 'light' : 'auto')}
           onLogout={logout}
         />
+        {/* Desktop spacer: reserves the collapsed rail's width (the sidebar itself is a fixed overlay that expands on hover). */}
+        <div className="hidden md:block md:w-[4.5rem] md:flex-none" />
 
         <main className="flex min-w-0 flex-1 flex-col overflow-hidden">
           <div className="relative min-h-0 flex-1">
@@ -331,99 +333,101 @@ export function Sidebar({
   return (
     <aside
       className={cx(
-        'glass-strong fixed z-40 flex h-full w-[15.5rem] flex-none flex-col p-3 transition-transform duration-300 md:static md:z-auto md:translate-x-0',
+        // Mobile: full-width drawer toggled by `open`. Desktop: a collapsed rail
+        // (4.5rem) that expands to full width on hover, overlaying the content.
+        'glass-strong group fixed left-0 top-0 z-40 h-full w-[15.5rem] overflow-hidden transition-[width,transform] duration-300 ease-out',
         open ? 'translate-x-0' : '-translate-x-full',
+        'md:translate-x-0 md:w-[4.5rem] md:hover:w-[15.5rem]',
       )}
+      style={{ boxShadow: '0 0 40px var(--shadow)' }}
     >
-      <header className="mb-3 flex items-center gap-2.5 px-1.5 pt-1">
-        <div className="grid h-9 w-9 flex-none place-items-center rounded-xl accent-bg text-white">
-          <Icons.Headphones className="h-5 w-5" />
+      <div className="flex h-full w-[15.5rem] flex-col p-3">
+        <header className="mb-3 flex h-9 items-center gap-2.5 px-1.5">
+          <div className="grid h-9 w-9 flex-none place-items-center rounded-xl accent-bg text-white">
+            <Icons.Headphones className="h-5 w-5" />
+          </div>
+          <span className="whitespace-nowrap text-lg font-semibold tracking-tight">PepeAudio</span>
+          <button onClick={onCloseSidebar} aria-label="閉じる" className="ml-auto grid h-8 w-8 flex-none place-items-center rounded-full text-[var(--text-dim)] hover:bg-[var(--track-bg)] md:hidden">
+            <Icons.Close className="h-4 w-4" />
+          </button>
+        </header>
+
+        <nav className="mb-3 flex flex-col gap-1">
+          <NavRow icon={Icons.Play} label="プレイヤー" active={view === 'player'} onClick={() => onView('player')} />
+          <NavRow icon={Icons.Playlist} label="プレイリスト" active={view === 'playlists'} onClick={() => onView('playlists')} />
+        </nav>
+
+        <div className="mb-1 flex items-center justify-between px-2">
+          <span className="whitespace-nowrap text-xs font-semibold uppercase tracking-wide text-[var(--text-faint)]">サーバー</span>
+          <span className="text-xs text-[var(--text-faint)]">{guilds.length}</span>
         </div>
-        <span className="text-lg font-semibold tracking-tight">PepeAudio</span>
-        <button onClick={onCloseSidebar} aria-label="閉じる" className="ml-auto grid h-8 w-8 place-items-center rounded-full text-[var(--text-dim)] hover:bg-[var(--track-bg)] md:hidden">
-          <Icons.Close className="h-4 w-4" />
-        </button>
-      </header>
-
-      <div className="mb-3 flex gap-1.5">
-        <SegTab icon={Icons.Play} label="プレイヤー" active={view === 'player'} onClick={() => onView('player')} />
-        <SegTab icon={Icons.Playlist} label="プレイリスト" active={view === 'playlists'} onClick={() => onView('playlists')} />
-      </div>
-
-      <div className="mb-1 flex items-center justify-between px-2">
-        <span className="text-xs font-semibold uppercase tracking-wide text-[var(--text-faint)]">サーバー</span>
-        <span className="text-xs text-[var(--text-faint)]">{guilds.length}</span>
-      </div>
-      <div className="min-h-0 flex-1 space-y-0.5 overflow-y-auto soft-scroll pr-0.5">
-        {guilds.length === 0 ? (
-          <p className="px-2 py-4 text-sm text-[var(--text-faint)]">共通のサーバーがありません。</p>
-        ) : (
-          guilds.map((g) => {
-            const selected = selectedGuildId === g.guildId;
-            return (
-              <button
-                key={g.guildId}
-                onClick={() => onSelectGuild(g.guildId)}
-                style={selected ? { background: 'color-mix(in srgb, var(--accent) 20%, transparent)' } : undefined}
-                className={cx('flex w-full items-center gap-2.5 rounded-xl p-1.5 text-left transition', selected ? '' : 'hover:bg-[var(--track-bg)]')}
-              >
-                {g.iconUrl ? (
-                  <img src={g.iconUrl} alt="" className="h-9 w-9 flex-none rounded-xl object-cover" />
-                ) : (
-                  <div className="grid h-9 w-9 flex-none place-items-center rounded-xl bg-[var(--track-bg)] text-sm font-semibold text-[var(--text-dim)]">{g.name.slice(0, 1).toUpperCase()}</div>
-                )}
-                <div className="min-w-0 flex-1">
-                  <div className="truncate text-sm font-medium">{g.name}</div>
-                  <div className="flex items-center gap-1 text-xs text-[var(--text-dim)]">
-                    {g.status === 'playing' ? (
-                      <>
-                        <EqualizerBars className="h-2.5" />
-                        <span className="truncate">{g.currentTitle ?? '再生中'}</span>
-                      </>
-                    ) : g.hasActiveSession ? (
-                      <span>一時停止中</span>
-                    ) : (
-                      <span className="text-[var(--text-faint)]">待機中</span>
-                    )}
-                  </div>
-                </div>
-              </button>
-            );
-          })
-        )}
-      </div>
-
-      <div className="mt-2 flex items-center gap-1.5 border-t border-[var(--hairline)] pt-2">
-        <button onClick={onCycleTheme} aria-label={`テーマ: ${theme}`} title={`テーマ: ${theme}`} className="grid h-9 w-9 flex-none place-items-center rounded-full text-[var(--text-dim)] transition hover:bg-[var(--track-bg)]">
-          <ThemeIcon className="h-4 w-4" />
-        </button>
-        <div className="flex min-w-0 flex-1 items-center gap-2">
-          {me.avatarUrl ? (
-            <img src={me.avatarUrl} alt="" className="h-8 w-8 flex-none rounded-full object-cover" />
+        <div className="min-h-0 flex-1 space-y-0.5 overflow-y-auto soft-scroll pr-0.5">
+          {guilds.length === 0 ? (
+            <p className="whitespace-nowrap px-2 py-4 text-sm text-[var(--text-faint)]">共通のサーバーがありません。</p>
           ) : (
-            <div className="grid h-8 w-8 flex-none place-items-center rounded-full bg-[var(--track-bg)] text-sm">{me.username.slice(0, 1).toUpperCase()}</div>
+            guilds.map((g) => {
+              const selected = selectedGuildId === g.guildId;
+              return (
+                <button
+                  key={g.guildId}
+                  onClick={() => onSelectGuild(g.guildId)}
+                  title={g.name}
+                  style={selected ? { background: 'color-mix(in srgb, var(--accent) 20%, transparent)' } : undefined}
+                  className={cx('flex w-full items-center gap-2.5 rounded-xl p-1.5 text-left transition', selected ? '' : 'hover:bg-[var(--track-bg)]')}
+                >
+                  {g.iconUrl ? (
+                    <img src={g.iconUrl} alt="" className="h-9 w-9 flex-none rounded-xl object-cover" />
+                  ) : (
+                    <div className="grid h-9 w-9 flex-none place-items-center rounded-xl bg-[var(--track-bg)] text-sm font-semibold text-[var(--text-dim)]">{g.name.slice(0, 1).toUpperCase()}</div>
+                  )}
+                  <div className="min-w-0 flex-1">
+                    <div className="truncate text-sm font-medium">{g.name}</div>
+                    <div className="flex items-center gap-1 text-xs text-[var(--text-dim)]">
+                      {g.status === 'playing' ? (
+                        <>
+                          <EqualizerBars className="h-2.5" />
+                          <span className="truncate">{g.currentTitle ?? '再生中'}</span>
+                        </>
+                      ) : g.hasActiveSession ? (
+                        <span>一時停止中</span>
+                      ) : (
+                        <span className="text-[var(--text-faint)]">待機中</span>
+                      )}
+                    </div>
+                  </div>
+                </button>
+              );
+            })
+          )}
+        </div>
+
+        {/* footer: avatar stays visible when collapsed; name/theme/logout appear on expand */}
+        <div className="mt-2 flex items-center gap-2 border-t border-[var(--hairline)] pt-2">
+          {me.avatarUrl ? (
+            <img src={me.avatarUrl} alt="" className="h-9 w-9 flex-none rounded-full object-cover" />
+          ) : (
+            <div className="grid h-9 w-9 flex-none place-items-center rounded-full bg-[var(--track-bg)] text-sm">{me.username.slice(0, 1).toUpperCase()}</div>
           )}
           <span className="min-w-0 flex-1 truncate text-sm">{me.username}</span>
+          <button onClick={onCycleTheme} aria-label={`テーマ: ${theme}`} title={`テーマ: ${theme}`} className="grid h-8 w-8 flex-none place-items-center rounded-full text-[var(--text-dim)] transition hover:bg-[var(--track-bg)]">
+            <ThemeIcon className="h-4 w-4" />
+          </button>
+          <button onClick={onLogout} aria-label="ログアウト" title="ログアウト" className="grid h-8 w-8 flex-none place-items-center rounded-full text-[var(--text-dim)] transition hover:bg-[var(--track-bg)] hover:accent">
+            <Icons.Logout className="h-4 w-4" />
+          </button>
         </div>
-        <button onClick={onLogout} aria-label="ログアウト" title="ログアウト" className="grid h-9 w-9 flex-none place-items-center rounded-full text-[var(--text-dim)] transition hover:bg-[var(--track-bg)] hover:accent">
-          <Icons.Logout className="h-4 w-4" />
-        </button>
       </div>
     </aside>
   );
 }
 
-function SegTab({ icon: Icon, label, active, onClick }: { icon: (p: { className?: string }) => ReactNode; label: string; active: boolean; onClick: () => void }) {
+function NavRow({ icon: Icon, label, active, onClick }: { icon: (p: { className?: string }) => ReactNode; label: string; active: boolean; onClick: () => void }) {
   return (
-    <button
-      onClick={onClick}
-      className={cx(
-        'flex flex-1 items-center justify-center gap-2 rounded-xl px-3 py-2 text-sm font-medium transition',
-        active ? 'accent-bg text-white' : 'text-[var(--text-dim)] hover:bg-[var(--track-bg)] hover:text-[var(--text)]',
-      )}
-    >
-      <Icon className="h-4 w-4" />
-      <span>{label}</span>
+    <button onClick={onClick} title={label} className="flex items-center gap-2.5 rounded-xl p-1.5 text-left transition hover:bg-[var(--track-bg)]">
+      <span className={cx('grid h-9 w-9 flex-none place-items-center rounded-xl transition', active ? 'accent-bg text-white' : 'bg-[var(--track-bg)] text-[var(--text-dim)]')}>
+        <Icon className="h-5 w-5" />
+      </span>
+      <span className={cx('whitespace-nowrap text-sm font-medium', active ? 'text-[var(--text)]' : 'text-[var(--text-dim)]')}>{label}</span>
     </button>
   );
 }
