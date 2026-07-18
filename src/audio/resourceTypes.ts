@@ -33,8 +33,6 @@ export interface CreateTrackResourceParams {
   hrirFormat: HrirFormat | null;
   /** Per-IR makeup gain (dB) measured at load, baked into the afir chain to level-match normal playback (see config/hrirProfiles.ts). */
   hrirMakeupDb: number;
-  /** Per-IR tone-correction chain (ffmpeg `-af` string, possibly empty) measured at load, baked into the afir chain to flatten the BRIR's spectral tilt (see config/hrirProfiles.ts). */
-  hrirCorrectiveEq: string;
 }
 
 export interface TrackResource {

@@ -19,22 +19,9 @@ import type { HrirFormat } from '../config/hrirProfiles.js';
  * the s16le output after makeup. This is deliberately ONE gain + one limiter,
  * not the previous over-processed loudness/limiter/bass-split stack that was
  * rolled back for making things worse.
- *
- * `correctiveEq` (optional) is spliced in BEFORE the makeup gain + limiter: a
- * per-IR tone-correction chain (low-shelf / presence-peak / high-shelf) measured
- * at load (see config/hrirProfiles.measureCorrectiveEq). It flattens the BRIR's
- * "front speaker in a room" coloration — convolving finished stereo through a
- * BRIR pushes the CENTER content (bass/kick/lead vocal, which is where a mix's
- * perceived tone lives) through only the front-speaker IRs, whose boomy-bass /
- * recessed-highs response is the audible "低音が強すぎ / 高音がスカスカ" defect.
- * Placed before the limiter on purpose: taming the bass hump first means the
- * limiter no longer rides on over-hot low end (which was crushing bass
- * transients). Empty string = no measurable tilt for this IR (or measurement
- * failed) → no-op, identical to the pre-correction chain.
  */
-function makeupTail(makeupDb: number, correctiveEq: string): string {
-  const eq = correctiveEq ? `,${correctiveEq}` : '';
-  return `${eq},volume=${makeupDb.toFixed(2)}dB,alimiter=limit=0.95`;
+function makeupTail(makeupDb: number): string {
+  return `,volume=${makeupDb.toFixed(2)}dB,alimiter=limit=0.95`;
 }
 
 /**
@@ -48,11 +35,11 @@ function makeupTail(makeupDb: number, correctiveEq: string): string {
  * wrong effective pitch/speed. Caller is responsible for adding the IR file as
  * ffmpeg input index 1 (`-i <path>`, after the main `pipe:0` input).
  */
-function simpleFilterComplex(makeupDb: number, aura360Prefix: string, correctiveEq: string): string {
+function simpleFilterComplex(makeupDb: number, aura360Prefix: string): string {
   if (aura360Prefix) {
-    return `[1:a]aresample=48000[ir];[0:a]${aura360Prefix}[pre];[pre][ir]afir${makeupTail(makeupDb, correctiveEq)}[out]`;
+    return `[1:a]aresample=48000[ir];[0:a]${aura360Prefix}[pre];[pre][ir]afir${makeupTail(makeupDb)}[out]`;
   }
-  return `[1:a]aresample=48000[ir];[0:a][ir]afir${makeupTail(makeupDb, correctiveEq)}[out]`;
+  return `[1:a]aresample=48000[ir];[0:a][ir]afir${makeupTail(makeupDb)}[out]`;
 }
 
 /**
@@ -87,7 +74,7 @@ function simpleFilterComplex(makeupDb: number, aura360Prefix: string, corrective
  * omitting asplit here produced correct front-left output but near-total
  * silence from the front-right side).
  */
-function hesuvi14FilterComplex(makeupDb: number, aura360Prefix: string, correctiveEq: string): string {
+function hesuvi14FilterComplex(makeupDb: number, aura360Prefix: string): string {
   const pre = aura360Prefix ? `${aura360Prefix},` : '';
   // Virtual surround using the FRONT and SIDE speaker pairs of the HeSuVi BRIR
   // (channel indices: FL 0/1, FR 8/7, SL 2/3, SR 10/9 — note the right-side
@@ -107,7 +94,7 @@ function hesuvi14FilterComplex(makeupDb: number, aura360Prefix: string, correcti
     '[ir]pan=8c|c0=c0|c1=c1|c2=c8|c3=c7|c4=c2|c5=c3|c6=c10|c7=c9[ir8];' +
     `[0:a]${pre}pan=8c|c0=c0|c1=c0|c2=c1|c3=c1|c4=0.5*c0-0.5*c1|c5=0.5*c0-0.5*c1|c6=0.5*c1-0.5*c0|c7=0.5*c1-0.5*c0[feed];` +
     '[feed][ir8]afir=irfmt=input:irlink=true[conv];' +
-    `[conv]pan=stereo|c0=c0+c2+c4+c6|c1=c1+c3+c5+c7${makeupTail(makeupDb, correctiveEq)}[out]`
+    `[conv]pan=stereo|c0=c0+c2+c4+c6|c1=c1+c3+c5+c7${makeupTail(makeupDb)}[out]`
   );
 }
 
@@ -116,15 +103,10 @@ function hesuvi14FilterComplex(makeupDb: number, aura360Prefix: string, correcti
  * afir BRIR path, with the per-IR `makeupDb` baked into the level-match tail.
  * Both formats output a level-matched stereo signal at 48 kHz.
  */
-export function buildHrirFilterComplex(
-  format: HrirFormat,
-  makeupDb: number,
-  aura360Prefix = '',
-  correctiveEq = '',
-): string {
+export function buildHrirFilterComplex(format: HrirFormat, makeupDb: number, aura360Prefix = ''): string {
   return format === 'hesuvi14'
-    ? hesuvi14FilterComplex(makeupDb, aura360Prefix, correctiveEq)
-    : simpleFilterComplex(makeupDb, aura360Prefix, correctiveEq);
+    ? hesuvi14FilterComplex(makeupDb, aura360Prefix)
+    : simpleFilterComplex(makeupDb, aura360Prefix);
 }
 
 /**
@@ -135,12 +117,7 @@ export function buildHrirFilterComplex(
  * guarantees the measured makeup matches what actually plays. At unity the
  * limiter never engages on the ~-48 dB raw output, so it doesn't skew the
  * reading.
- *
- * `correctiveEq` is passed through so makeup is measured on the SAME graph that
- * plays (EQ then makeup): the corrective shelves/peak shift broadband level a
- * little, and measuring with them baked in keeps the level-match exact instead
- * of off by the EQ's net gain.
  */
-export function buildHrirMeasureGraph(format: HrirFormat, correctiveEq = ''): string {
-  return buildHrirFilterComplex(format, 0, '', correctiveEq).replace(/\[out\]$/, ',astats=metadata=0[out]');
+export function buildHrirMeasureGraph(format: HrirFormat): string {
+  return buildHrirFilterComplex(format, 0).replace(/\[out\]$/, ',astats=metadata=0[out]');
 }

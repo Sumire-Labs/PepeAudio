@@ -3,7 +3,7 @@ import { spawnSync } from 'node:child_process';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { logger } from '../logger.js';
-import { buildHrirFilterComplex, buildHrirMeasureGraph } from '../audio/hrirFilterComplex.js';
+import { buildHrirMeasureGraph } from '../audio/hrirFilterComplex.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PROJECT_ROOT = path.resolve(__dirname, '..', '..');
@@ -77,12 +77,7 @@ function measureRmsDb(ffmpegPath: string, args: string[]): number | null {
  * rounded to 0.1 dB; falls back to DEFAULT_HRIR_MAKEUP_DB if either measurement
  * can't be read.
  */
-export function measureHrirMakeupDb(
-  ffmpegPath: string,
-  filePath: string,
-  format: HrirFormat,
-  correctiveEq = '',
-): number {
+export function measureHrirMakeupDb(ffmpegPath: string, filePath: string, format: HrirFormat): number {
   const inRms = measureRmsDb(ffmpegPath, [
     '-hide_banner', '-nostats',
     '-f', 'lavfi', '-i', MAKEUP_NOISE_LAVFI,
@@ -92,7 +87,7 @@ export function measureHrirMakeupDb(
     '-hide_banner', '-nostats',
     '-f', 'lavfi', '-i', MAKEUP_NOISE_LAVFI,
     '-i', filePath,
-    '-filter_complex', buildHrirMeasureGraph(format, correctiveEq),
+    '-filter_complex', buildHrirMeasureGraph(format),
     '-map', '[out]', '-f', 'null', '-',
   ]);
   if (inRms === null || outRms === null) {
@@ -104,89 +99,6 @@ export function measureHrirMakeupDb(
   }
   const makeup = Math.max(0, Math.min(30, Math.round((inRms - outRms - MAKEUP_HEADROOM_DB) * 10) / 10));
   return makeup;
-}
-
-/**
- * CORRELATED (mono→stereo) pink-noise reference for the tone measurement. This
- * is the crucial difference from MAKEUP_NOISE_LAVFI (decorrelated): a stereo
- * master's centre (bass, kick, lead vocal — where the perceived tonal balance
- * lives) is convolved ONLY through the BRIR's FRONT-speaker IRs, and it's those
- * that carry the boomy-bass / recessed-highs "speaker-in-a-room" colour. The
- * decorrelated makeup reference mostly exercises the brighter, flatter SIDE IRs
- * and therefore measured this tilt as ~flat — which is why level-matching alone
- * left the audible "低音が強すぎ / 高音がスカスカ" defect in place.
- */
-const EQ_NOISE_LAVFI =
-  'anoisesrc=color=pink:amplitude=0.2:duration=3:seed=1:sample_rate=48000[m];' +
-  '[m]asplit=2[l][r];[l][r]join=inputs=2:channel_layout=stereo';
-
-/**
- * Steep, cascaded band isolations (two biquads per side ≈ 24 dB/oct skirts) for
- * reading the convolved centre-content level in four spots. `ref` (500 Hz–1 kHz)
- * is the flat anchor everything is corrected toward; the other three map 1:1 to
- * the three corrective filters below (low-shelf / presence-peak / high-shelf).
- */
-const EQ_BANDS = {
-  ref: 'highpass=f=500,highpass=f=500,lowpass=f=1000,lowpass=f=1000',
-  low: 'highpass=f=60,highpass=f=60,lowpass=f=120,lowpass=f=120',
-  presence: 'highpass=f=1000,highpass=f=1000,lowpass=f=2000,lowpass=f=2000',
-  high: 'highpass=f=6000,highpass=f=6000,lowpass=f=12000,lowpass=f=12000',
-} as const;
-
-/** Convolves the correlated reference through the REAL production graph (unity, no EQ) and returns the given band's RMS dB, or null. */
-function measureConvolvedBandRms(ffmpegPath: string, filePath: string, format: HrirFormat, band: string): number | null {
-  return measureRmsDb(ffmpegPath, [
-    '-hide_banner', '-nostats',
-    '-f', 'lavfi', '-i', EQ_NOISE_LAVFI,
-    '-i', filePath,
-    '-filter_complex', buildHrirFilterComplex(format, 0).replace(/\[out\]$/, `,${band},astats=metadata=0[out]`),
-    '-map', '[out]', '-f', 'null', '-',
-  ]);
-}
-
-/**
- * Measures a per-IR tone-correction chain that flattens the convolution's
- * centre-content spectral tilt back toward the source's balance, returned as an
- * ffmpeg `-af`-style filter string (or '' when there's nothing worth correcting
- * or the measurement fails — the chain then plays exactly as before).
- *
- * Method: convolve CORRELATED pink noise (centre content) through the real graph
- * and read four bands. The corrective gain for each shaped band is simply how
- * far it sits from the `ref` anchor, inverted:
- *   - low-shelf  @120 Hz  = ref − low        (tames the front-IR bass hump)
- *   - presence   @1.5 kHz = ref − presence   (fills the scooped clarity region)
- *   - high-shelf @6.5 kHz = ref − high        (restores air / cuts a bright IR)
- * Each is clamped so a pathological IR can't produce a wild EQ, rounded to
- * 0.1 dB, and dropped entirely when |gain| < 0.5 dB (no point spending a biquad
- * on an inaudible tweak). Validated across the three shipped profiles: baseline
- * tilts of +2.7…+4.4 dB collapse to within ~±1.6 dB of flat. The clamps are
- * asymmetric on purpose — every measured BRIR humps the bass and most recess the
- * mids, so we allow a big low cut / presence lift but only a small low boost.
- * Filter order (bass → presence → treble) matches how it's spliced before the
- * makeup gain + limiter in audio/hrirFilterComplex.ts.
- */
-export function measureCorrectiveEq(ffmpegPath: string, filePath: string, format: HrirFormat): string {
-  const ref = measureConvolvedBandRms(ffmpegPath, filePath, format, EQ_BANDS.ref);
-  const low = measureConvolvedBandRms(ffmpegPath, filePath, format, EQ_BANDS.low);
-  const presence = measureConvolvedBandRms(ffmpegPath, filePath, format, EQ_BANDS.presence);
-  const high = measureConvolvedBandRms(ffmpegPath, filePath, format, EQ_BANDS.high);
-  if (ref === null || low === null || presence === null || high === null) {
-    logger.warn(
-      { filePath, format, ref, low, presence, high },
-      'HRIR corrective-EQ measurement failed - playing this IR with no tone correction',
-    );
-    return '';
-  }
-  const round1 = (x: number): number => Math.round(x * 10) / 10;
-  const clamp = (x: number, lo: number, hi: number): number => Math.max(lo, Math.min(hi, x));
-  const lowGain = round1(clamp(ref - low, -6, 3));
-  const presGain = round1(clamp(ref - presence, -3, 6));
-  const highGain = round1(clamp(ref - high, -4, 4));
-  const parts: string[] = [];
-  if (Math.abs(lowGain) >= 0.5) parts.push(`bass=g=${lowGain}:f=120`);
-  if (Math.abs(presGain) >= 0.5) parts.push(`equalizer=f=1500:width_type=o:w=1.4:g=${presGain}`);
-  if (Math.abs(highGain) >= 0.5) parts.push(`treble=g=${highGain}:f=6500`);
-  return parts.join(',');
 }
 
 export type HrirFormat = 'simple' | 'hesuvi14';
@@ -209,14 +121,6 @@ export interface HrirProfile {
    * is auto-levelled. Baked into the filter chain by buildHrirFilterComplex.
    */
   makeupDb: number;
-  /**
-   * Per-IR tone-correction chain (ffmpeg `-af` filter string, possibly empty)
-   * measured at load (see measureCorrectiveEq) that flattens this BRIR's
-   * centre-content spectral tilt — the boomy-bass / recessed-highs colour that
-   * plain level-matching leaves behind. Spliced in before the makeup gain by
-   * buildHrirFilterComplex.
-   */
-  correctiveEq: string;
 }
 
 /**
@@ -297,16 +201,9 @@ export function loadHrirProfiles(ffmpegPath: string, dir: string = DEFAULT_HRIR_
       continue;
     }
     const id = filename.slice(0, -'.wav'.length);
-    // Order matters: derive the tone correction first (measured on the un-EQ'd
-    // convolution), then measure makeup on the graph WITH that EQ baked in so the
-    // level-match accounts for the EQ's small net gain.
-    const correctiveEq = measureCorrectiveEq(ffmpegPath, filePath, format);
-    const makeupDb = measureHrirMakeupDb(ffmpegPath, filePath, format, correctiveEq);
-    logger.info(
-      { id, format, makeupDb, correctiveEq: correctiveEq || '(none)' },
-      'Measured HRIR makeup gain + corrective EQ (level- and tone-matches the spatialised output to normal playback)',
-    );
-    loaded.push({ id, filePath, format, makeupDb, correctiveEq });
+    const makeupDb = measureHrirMakeupDb(ffmpegPath, filePath, format);
+    logger.info({ id, format, makeupDb }, 'Measured HRIR makeup gain (level-matches the spatialised output to normal playback)');
+    loaded.push({ id, filePath, format, makeupDb });
   }
   return loaded;
 }

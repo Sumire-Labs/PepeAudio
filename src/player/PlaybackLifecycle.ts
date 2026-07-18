@@ -216,7 +216,6 @@ export class PlaybackLifecycle {
         hrirFilePath: hrirProfile?.filePath ?? null,
         hrirFormat: hrirProfile?.format ?? null,
         hrirMakeupDb: hrirProfile?.makeupDb ?? 0,
-        hrirCorrectiveEq: hrirProfile?.correctiveEq ?? '',
       });
     } catch (err) {
       stream?.destroy();
