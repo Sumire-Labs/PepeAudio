@@ -96,7 +96,7 @@ export function Demo() {
           onCycleTheme={() => {}}
           onLogout={() => {}}
         />
-        <div className="hidden md:block md:w-[4.5rem] md:flex-none" />
+        <div className="side-spacer flex-none" />
         <main className="min-w-0 flex-1 overflow-hidden">
           <div className="grid h-full gap-4 p-4 lg:grid-cols-[1fr_23rem]">
             <Player session={session} onSaveTrack={() => {}} />

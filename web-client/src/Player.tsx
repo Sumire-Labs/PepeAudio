@@ -90,7 +90,7 @@ export function Player({
         {snapshot?.auraEnabled ? (
           <>
             <Chip icon={Icons.Spatial} label="360°" active={snapshot.aura360Mode === 'on'} disabled={!canControl} onClick={() => run({ type: 'setAura360', mode: snapshot.aura360Mode === 'on' ? 'off' : 'on' })} />
-            <Chip icon={Icons.Headphones} label="HRIR" active={snapshot.hrirMode === 'on'} disabled={!canControl} onClick={() => run({ type: 'setHrir', mode: snapshot.hrirMode === 'on' ? 'off' : 'on' })} />
+            <Chip icon={Icons.Headphones} label="Aura" active={snapshot.hrirMode === 'on'} disabled={!canControl} onClick={() => run({ type: 'setHrir', mode: snapshot.hrirMode === 'on' ? 'off' : 'on' })} />
             {snapshot.hrirMode === 'on' && snapshot.auraPresets.length > 0 ? (
               <Dropdown
                 value={snapshot.hrirProfile ?? ''}
@@ -106,19 +106,20 @@ export function Player({
 
       {/* actions */}
       <div className="mt-5 flex w-full max-w-md items-center justify-center gap-2">
-        <ActionButton icon={Icons.Plus} label="プレイリストに保存" disabled={!current} onClick={() => current && onSaveTrack(current)} />
-        <ActionButton icon={Icons.Stop} label="停止" danger disabled={!canControl || !snapshot?.current} onClick={() => run({ type: 'stop' })} />
+        <ActionButton icon={Icons.Plus} label="プレイリストに保存" title="現在の曲をプレイリストに保存" disabled={!current} onClick={() => current && onSaveTrack(current)} />
+        <ActionButton icon={Icons.Stop} label="停止して退出" title="再生を停止し、キューを消去してBotをVCから退出させます" danger disabled={!canControl || !snapshot?.current} onClick={() => run({ type: 'stop' })} />
       </div>
     </div>
   );
 }
 
-function ActionButton({ icon: Icon, label, danger, disabled, onClick }: { icon: (p: { className?: string }) => ReactNode; label: string; danger?: boolean; disabled?: boolean; onClick: () => void }) {
+function ActionButton({ icon: Icon, label, title, danger, disabled, onClick }: { icon: (p: { className?: string }) => ReactNode; label: string; title?: string; danger?: boolean; disabled?: boolean; onClick: () => void }) {
   return (
     <button
       type="button"
       onClick={onClick}
       disabled={disabled}
+      title={title}
       className={cx(
         'glass flex items-center gap-2 rounded-full px-4 py-2 text-sm font-medium transition active:scale-95 disabled:opacity-40',
         danger ? 'text-[var(--text-dim)] hover:accent' : 'text-[var(--text-dim)] hover:text-[var(--text)]',
