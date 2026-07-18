@@ -1,7 +1,7 @@
 /**
- * A tiny method + path router with `:param` capture. No dependencies. Route
- * handlers are bound to their app services at registration time (see
- * src/web/index.ts), so the router itself stays app-agnostic.
+ * A tiny method + path router with `:param` capture. Route handlers are bound to
+ * their app services at registration time (see src/web/index.ts), so the router
+ * itself stays app-agnostic.
  */
 import type { IncomingMessage, ServerResponse } from 'node:http';
 

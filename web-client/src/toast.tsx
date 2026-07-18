@@ -1,5 +1,4 @@
 import { createContext, useCallback, useContext, useRef, useState, type ReactNode } from 'react';
-import { cx } from './ui.tsx';
 
 interface Toast {
   id: number;
@@ -30,13 +29,9 @@ export function ToastProvider({ children }: { children: ReactNode }) {
         {toasts.map((t) => (
           <div
             key={t.id}
-            className={cx(
-              'glass-strong pointer-events-auto max-w-md rounded-2xl px-4 py-2.5 text-sm shadow-xl fade-in',
-              t.kind === 'error' ? 'text-[var(--text)]' : 'text-[var(--text)]',
-            )}
+            className="glass-strong pointer-events-auto max-w-md rounded-2xl px-4 py-2.5 text-sm text-[var(--text)] shadow-xl fade-in"
             style={{ boxShadow: '0 12px 40px var(--shadow)' }}
           >
-            {t.kind === 'error' ? <span className="mr-2 accent">●</span> : null}
             {t.message}
           </div>
         ))}

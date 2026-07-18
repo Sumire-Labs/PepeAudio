@@ -255,7 +255,7 @@ export function Playlists({
             ) : null}
             <div className="min-h-0 flex-1 space-y-1 overflow-y-auto soft-scroll">
               {detail.tracks.length === 0 ? (
-                <p className="px-1 py-4 text-sm text-[var(--text-faint)]">曲がありません。プレイヤーの「＋」やURLインポートから追加できます。</p>
+                <p className="px-1 py-4 text-sm text-[var(--text-faint)]">まだ曲がありません。</p>
               ) : (
                 detail.tracks.map((t, i) => (
                   <PlaylistRow

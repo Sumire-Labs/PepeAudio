@@ -1,7 +1,6 @@
 /**
  * Small response helpers over node:http — JSON/text/redirect, a strict security
- * header set applied to every response, and a size-capped body reader. No
- * framework, no dependencies.
+ * header set applied to every response, and a size-capped body reader.
  */
 import type { IncomingMessage, ServerResponse } from 'node:http';
 

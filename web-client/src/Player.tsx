@@ -66,7 +66,7 @@ export function Player({
 
       <div className="mt-7 w-full max-w-md text-center">
         <h2 className="truncate text-2xl font-semibold tracking-tight">{current?.title ?? '再生していません'}</h2>
-        <p className="mt-1 truncate text-[var(--text-dim)]">{current?.artist ?? 'キューに曲を追加して再生を始めましょう'}</p>
+        <p className="mt-1 truncate text-[var(--text-dim)]">{current?.artist ?? ''}</p>
         {current?.requesterName ? (
           <div className="mt-2 inline-flex items-center gap-1.5 text-xs text-[var(--text-faint)]">
             {current.requesterAvatarUrl ? <img src={current.requesterAvatarUrl} alt="" className="h-4 w-4 rounded-full" /> : null}
@@ -95,7 +95,6 @@ export function Player({
             'grid h-16 w-16 place-items-center rounded-full accent-bg text-white shadow-xl transition-transform duration-150 active:scale-90',
             !canControl || !current ? 'opacity-40' : 'hover:brightness-110',
           )}
-          style={{ boxShadow: '0 10px 30px color-mix(in srgb, var(--accent) 45%, transparent)' }}
         >
           {playing ? <Icons.Pause className="h-7 w-7" /> : <Icons.Play className="ml-0.5 h-7 w-7" />}
         </button>
@@ -213,7 +212,8 @@ function Artwork({ track, playing }: { track: QueueItemDTO | null; playing: bool
 function LoopButton({ mode, disabled, onCycle }: { mode: 'off' | 'track' | 'queue'; disabled: boolean; onCycle: (m: 'off' | 'track' | 'queue') => void }) {
   const next = mode === 'off' ? 'track' : mode === 'track' ? 'queue' : 'off';
   const Icon = mode === 'track' ? Icons.RepeatOne : Icons.Repeat;
-  return <IconButton icon={Icon} label={`リピート: ${mode}`} active={mode !== 'off'} disabled={disabled} onClick={() => onCycle(next)} />;
+  const label = mode === 'track' ? '1曲リピート' : mode === 'queue' ? 'キューをリピート' : 'リピートオフ';
+  return <IconButton icon={Icon} label={label} active={mode !== 'off'} disabled={disabled} onClick={() => onCycle(next)} />;
 }
 
 function VolumeControl({ value, disabled, onChange }: { value: number; disabled: boolean; onChange: (v: number) => void }) {

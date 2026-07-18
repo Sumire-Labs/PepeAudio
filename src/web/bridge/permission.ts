@@ -1,9 +1,9 @@
 /**
  * The authorization boundary for the web dashboard. A faithful port of
  * src/ui/permissions.ts `checkControlPermission`, re-expressed against a raw
- * userId (the browser never sends an interaction). Runs ON THE OWNING SHARD for
- * every command — the browser is trusted for nothing beyond the authenticated
- * userId. Keep this in lockstep with permissions.ts if that logic changes.
+ * userId (the browser never sends an interaction). Runs on the owning shard for
+ * every command — the browser is trusted only with the authenticated userId.
+ * Keep this in lockstep with permissions.ts if that logic changes.
  */
 import { PermissionFlagsBits, type Guild } from 'discord.js';
 import type { GuildPlayer } from '../../player/GuildPlayer.js';

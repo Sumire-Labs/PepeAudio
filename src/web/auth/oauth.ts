@@ -23,10 +23,7 @@ export function buildAuthorizeUrl(env: WebEnv, state: string): string {
     scope: OAUTH_SCOPE,
     redirect_uri: env.oauthRedirectUri,
     state,
-    // Deliberately NOT prompt=none: that silently errors for first-time users who
-    // haven't authorized the app yet (which our callback would surface as a login
-    // failure). The default consent screen is a single click and already
-    // fast-paths returning users.
+    // no prompt=none: it errors for users who haven't authorized the app yet.
   });
   return `https://discord.com/oauth2/authorize?${params.toString()}`;
 }

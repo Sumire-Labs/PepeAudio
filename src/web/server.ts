@@ -60,7 +60,7 @@ async function handleRequest(opts: StartHttpServerOptions, req: http.IncomingMes
       return;
     }
 
-    // Unmatched /api and /auth routes must NOT fall through to the SPA — return a
+    // Unmatched /api and /auth routes must not fall through to the SPA — return a
     // proper 404/405 so the client sees a real error, not index.html.
     if (url.pathname.startsWith('/api/') || url.pathname.startsWith('/auth/')) {
       json(res, 404, { error: 'Not found' });

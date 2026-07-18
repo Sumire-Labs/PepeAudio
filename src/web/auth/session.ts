@@ -1,10 +1,10 @@
 /**
  * In-memory web session store. Sessions live only in the process that runs the
  * web server (the ShardingManager in sharded mode, or the single Bot process),
- * NEVER in the shared pepeaudio.sqlite — that avoids adding an (N+1)th writer to
- * a file already written by every shard. A process restart drops sessions and
- * the user simply re-authenticates; that's an acceptable trade for not touching
- * the shared DB. Discord access/refresh tokens are intentionally NOT stored.
+ * not in the shared pepeaudio.sqlite — that keeps the web server from adding
+ * another writer to a file every shard already writes. A process restart drops
+ * sessions and the user re-authenticates, which is an acceptable trade for not
+ * touching the shared DB. Discord access/refresh tokens are not stored.
  */
 import { randomBytes } from 'node:crypto';
 

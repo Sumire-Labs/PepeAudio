@@ -1,9 +1,9 @@
 /**
- * A SEPARATE SQLite database (pepeaudio-web.sqlite) for web-dashboard data
+ * A separate SQLite database (pepeaudio-web.sqlite) for web-dashboard data
  * (saved playlists). Kept apart from the bot's pepeaudio.sqlite on purpose:
  * under sharding every shard process writes the main DB, and the web server runs
- * in a DIFFERENT process (the ShardingManager). Giving the web server its own DB
- * file means it's the ONLY writer here — no multi-process contention. This module
+ * in a different process (the ShardingManager). Giving the web server its own DB
+ * file makes it the only writer here — no multi-process contention. This module
  * is imported only under the dashboard-enabled path, so it's a no-op otherwise.
  */
 import path from 'node:path';

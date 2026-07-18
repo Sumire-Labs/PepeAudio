@@ -1,7 +1,7 @@
 /**
  * Serves the built React frontend (dist/web-client). Path-traversal-guarded and
  * with an SPA fallback: any GET that isn't an existing file and isn't an /api or
- * /auth route returns index.html so client-side routing works. No dependencies.
+ * /auth route returns index.html so client-side routing works.
  */
 import { createReadStream } from 'node:fs';
 import { stat } from 'node:fs/promises';

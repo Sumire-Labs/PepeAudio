@@ -2,7 +2,7 @@
  * Web-dashboard configuration. Entirely a no-op unless WEB_DASHBOARD_ENABLED is
  * 'true' — loadWebEnv returns null and nothing else in src/web is ever
  * constructed, so existing deployments that never set these variables keep
- * booting unchanged. Secrets are validated ONLY when the dashboard is enabled
+ * booting unchanged. Secrets are validated only when the dashboard is enabled
  * (lazy), and support the same `_FILE` Docker-secret indirection as DISCORD_TOKEN.
  */
 import path from 'node:path';

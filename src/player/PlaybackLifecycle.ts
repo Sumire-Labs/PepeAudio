@@ -267,8 +267,8 @@ export class PlaybackLifecycle {
   }
 
   /**
-   * Shared by the HRIR toggle, the volume-passthrough respawn, and
-   * ffmpeg crash recovery (and a future /seek command): kill the current
+   * Shared by the HRIR toggle, the volume-passthrough respawn, seek, and
+   * ffmpeg crash recovery: kill the current
    * ffmpeg process/stream and restart the current track from `offsetMs`,
    * without misfiring the natural-track-end path. Callers must already be
    * running inside an enqueueAction'd `*Core` method on GuildPlayer.

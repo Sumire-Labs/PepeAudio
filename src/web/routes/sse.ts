@@ -1,8 +1,8 @@
 /**
  * Server-Sent Events stream for one guild's live player state. Sends the current
  * snapshot on connect, then a fresh snapshot on every throttled player update
- * (and `null` when the session ends). SSE (not WebSocket) keeps the dependency
- * footprint at zero and passes cleanly through reverse proxies.
+ * (and `null` when the session ends). Uses SSE rather than WebSocket so it works
+ * over plain node:http and passes cleanly through reverse proxies.
  */
 import type { Router } from '../http/router.js';
 import type { WebServices } from '../services.js';

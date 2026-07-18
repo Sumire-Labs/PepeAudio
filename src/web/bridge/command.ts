@@ -1,9 +1,9 @@
 /**
  * The single command executor for the web dashboard, shared by LocalBridge and
- * the shard-side IPC bridge. Runs ON THE OWNING SHARD (it touches
- * GuildPlayerManager + the discord.js Client). Re-authorizes EVERY command via
+ * the shard-side IPC bridge. Runs on the owning shard (it touches
+ * GuildPlayerManager + the discord.js Client). Re-authorizes every command via
  * resolveViewerCapabilities before mutating anything — the browser is trusted
- * for nothing beyond the authenticated userId.
+ * only with the authenticated userId.
  */
 import type { Client, Guild } from 'discord.js';
 import * as GuildPlayerManager from '../../player/GuildPlayerManager.js';

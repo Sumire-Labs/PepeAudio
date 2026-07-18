@@ -338,6 +338,7 @@ export function Sidebar({
     return () => mq.removeEventListener('change', onChange);
   }, []);
   const ThemeIcon = theme === 'light' ? Icons.Sun : theme === 'dark' ? Icons.Moon : Icons.Spatial;
+  const themeLabel = theme === 'light' ? 'ライト' : theme === 'dark' ? 'ダーク' : '自動';
   return (
     <aside
       onMouseEnter={() => setRailHover(true)}
@@ -429,7 +430,7 @@ export function Sidebar({
         )}
         <span className="rail-label min-w-0 flex-1 truncate text-sm">{me.username}</span>
         <div className="rail-label flex flex-none items-center gap-1">
-          <button onClick={onCycleTheme} aria-label={`テーマ: ${theme}`} title={`テーマ: ${theme}`} className="grid h-8 w-8 place-items-center rounded-full text-[var(--text-dim)] transition hover:bg-[var(--track-bg)]">
+          <button onClick={onCycleTheme} aria-label={`テーマ: ${themeLabel}`} title={`テーマ: ${themeLabel}`} className="grid h-8 w-8 place-items-center rounded-full text-[var(--text-dim)] transition hover:bg-[var(--track-bg)]">
             <ThemeIcon className="h-4 w-4" />
           </button>
           <button onClick={onLogout} aria-label="ログアウト" title="ログアウト" className="grid h-8 w-8 place-items-center rounded-full text-[var(--text-dim)] transition hover:bg-[var(--track-bg)] hover:accent">

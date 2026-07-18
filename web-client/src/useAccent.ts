@@ -26,7 +26,6 @@ function normalizeAccent(r: number, g: number, b: number): [number, number, numb
  * Derives an accent color from the current artwork and sets the --accent CSS
  * vars. Loads the image with crossOrigin so the canvas isn't tainted; if the CDN
  * doesn't allow CORS (canvas read throws), it silently keeps the default accent.
- * No proxy, no backend.
  */
 export function useAccent(url: string | null): void {
   useEffect(() => {

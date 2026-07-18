@@ -1,4 +1,4 @@
-/** Shared UI primitives and inline SVG icons (no icon dependency, CSP-clean). */
+/** Shared UI primitives and inline SVG icons. */
 import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 
 export function cx(...parts: Array<string | false | null | undefined>): string {
