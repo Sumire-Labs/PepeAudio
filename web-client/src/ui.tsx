@@ -166,6 +166,14 @@ export const Icons = {
   ChevronDown: svg(<path d="M6 9l6 6 6-6" />),
   Close: svg(<path d="M6 6l12 12M18 6L6 18" />),
   Menu: svg(<path d="M4 7h16M4 12h16M4 17h16" />),
+  More: svg(
+    <>
+      <circle cx="5" cy="12" r="1.7" fill="currentColor" stroke="none" />
+      <circle cx="12" cy="12" r="1.7" fill="currentColor" stroke="none" />
+      <circle cx="19" cy="12" r="1.7" fill="currentColor" stroke="none" />
+    </>,
+  ),
+  Bookmark: svg(<path d="M6 4h12v16l-6-4-6 4z" />),
   Edit: svg(
     <>
       <path d="M4 20h4l10-10-4-4L4 16v4z" />
@@ -328,6 +336,74 @@ export function Dropdown({
             >
               <span className="truncate">{o.label}</span>
               {o.value === value ? <Icons.Check className="h-4 w-4 flex-none" /> : null}
+            </button>
+          ))}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+export interface MenuItem {
+  label: string;
+  icon?: (p: { className?: string }) => ReactNode;
+  danger?: boolean;
+  disabled?: boolean;
+  onClick: () => void;
+}
+
+/** An overflow "⋯" button that opens an acrylic action menu (outside-click / Esc to close). */
+export function Menu({ items, label = 'その他', align = 'right' }: { items: MenuItem[]; label?: string; align?: 'left' | 'right' }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const onDoc = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setOpen(false);
+    };
+    document.addEventListener('mousedown', onDoc);
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('mousedown', onDoc);
+      document.removeEventListener('keydown', onKey);
+    };
+  }, [open]);
+
+  return (
+    <div ref={ref} className="relative">
+      <button
+        type="button"
+        aria-label={label}
+        title={label}
+        onClick={() => setOpen((v) => !v)}
+        className="glass grid h-9 w-9 place-items-center rounded-full text-[var(--text-dim)] transition hover:text-[var(--text)] active:scale-90"
+      >
+        <Icons.More className="h-5 w-5" />
+      </button>
+      {open ? (
+        <div
+          className={cx('glass-strong absolute top-full z-30 mt-2 min-w-[13rem] rounded-2xl p-1 fade-in', align === 'right' ? 'right-0' : 'left-0')}
+          style={{ boxShadow: '0 16px 44px var(--shadow)' }}
+        >
+          {items.map((it) => (
+            <button
+              key={it.label}
+              disabled={it.disabled}
+              onClick={() => {
+                it.onClick();
+                setOpen(false);
+              }}
+              className={cx(
+                'flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-left text-sm transition hover:bg-[var(--track-bg)] disabled:opacity-40',
+                it.danger ? 'text-[var(--text)] hover:accent' : 'text-[var(--text)]',
+              )}
+            >
+              {it.icon ? <it.icon className="h-4 w-4 flex-none text-[var(--text-dim)]" /> : null}
+              {it.label}
             </button>
           ))}
         </div>

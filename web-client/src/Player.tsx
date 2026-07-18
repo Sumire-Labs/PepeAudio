@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent, ty
 import type { QueueItemDTO, WebCommand } from './api.ts';
 import type { GuildSession } from './useGuildSession.ts';
 import { useTicker } from './useGuildSession.ts';
-import { cx, Dropdown, EqualizerBars, formatMs, Icons, IconButton } from './ui.tsx';
+import { cx, Dropdown, EqualizerBars, formatMs, Icons, IconButton, Menu } from './ui.tsx';
 import { useToast } from './toast.tsx';
 
 export function Player({
@@ -30,7 +30,32 @@ export function Player({
   const duration = current?.durationMs ?? null;
 
   return (
-    <div className="flex h-full flex-col items-center justify-center px-6 py-8 fade-in">
+    <div className="relative flex h-full flex-col items-center justify-center px-6 py-8 fade-in">
+      {/* top-right: save + overflow (stop). Keeps the main control area uncluttered. */}
+      <div className="absolute right-4 top-4 z-10 flex items-center gap-1.5">
+        <button
+          type="button"
+          aria-label="プレイリストに保存"
+          title="現在の曲をプレイリストに保存"
+          disabled={!current}
+          onClick={() => current && onSaveTrack(current)}
+          className="glass grid h-9 w-9 place-items-center rounded-full text-[var(--text-dim)] transition hover:text-[var(--text)] active:scale-90 disabled:opacity-40"
+        >
+          <Icons.Bookmark className="h-5 w-5" />
+        </button>
+        <Menu
+          items={[
+            {
+              label: '停止して退出',
+              icon: Icons.Stop,
+              danger: true,
+              disabled: !canControl || !snapshot?.current,
+              onClick: () => run({ type: 'stop' }),
+            },
+          ]}
+        />
+      </div>
+
       {snapshot && !canControl && snapshot.viewer.denyReason ? (
         <div className="glass mb-5 max-w-md rounded-2xl px-4 py-2.5 text-center text-sm text-[var(--text-dim)]">
           {snapshot.viewer.denyReason}
@@ -83,12 +108,14 @@ export function Player({
         <VolumeControl value={snapshot?.volume ?? 70} disabled={!canControl} onChange={(percent) => run({ type: 'setVolume', percent })} />
       </div>
 
-      {/* mode toggles — grouped, labeled chips */}
-      <div className="mt-5 flex w-full max-w-md flex-wrap items-center justify-center gap-2">
-        <Chip icon={Icons.Radio} label="オートプレイ" active={Boolean(snapshot?.autoplay)} disabled={!canControl} onClick={() => run({ type: 'setAutoplay', enabled: !snapshot?.autoplay })} />
-        <Chip icon={Icons.Pin} label="24時間" active={Boolean(snapshot?.stay247)} disabled={!canControl} onClick={() => run({ type: 'setStay247', enabled: !snapshot?.stay247 })} />
+      {/* control groups — role-labeled so purpose is clear at a glance */}
+      <div className="mt-6 w-full max-w-md space-y-2.5">
+        <ControlGroup label="再生">
+          <Chip icon={Icons.Radio} label="オートプレイ" active={Boolean(snapshot?.autoplay)} disabled={!canControl} onClick={() => run({ type: 'setAutoplay', enabled: !snapshot?.autoplay })} />
+          <Chip icon={Icons.Pin} label="24時間" active={Boolean(snapshot?.stay247)} disabled={!canControl} onClick={() => run({ type: 'setStay247', enabled: !snapshot?.stay247 })} />
+        </ControlGroup>
         {snapshot?.auraEnabled ? (
-          <>
+          <ControlGroup label="サウンド">
             <Chip icon={Icons.Spatial} label="360°" active={snapshot.aura360Mode === 'on'} disabled={!canControl} onClick={() => run({ type: 'setAura360', mode: snapshot.aura360Mode === 'on' ? 'off' : 'on' })} />
             <Chip icon={Icons.Headphones} label="Aura" active={snapshot.hrirMode === 'on'} disabled={!canControl} onClick={() => run({ type: 'setHrir', mode: snapshot.hrirMode === 'on' ? 'off' : 'on' })} />
             {snapshot.hrirMode === 'on' && snapshot.auraPresets.length > 0 ? (
@@ -100,34 +127,19 @@ export function Player({
                 onChange={(id) => run({ type: 'setAuraPreset', id })}
               />
             ) : null}
-          </>
+          </ControlGroup>
         ) : null}
-      </div>
-
-      {/* actions */}
-      <div className="mt-5 flex w-full max-w-md items-center justify-center gap-2">
-        <ActionButton icon={Icons.Plus} label="プレイリストに保存" title="現在の曲をプレイリストに保存" disabled={!current} onClick={() => current && onSaveTrack(current)} />
-        <ActionButton icon={Icons.Stop} label="停止して退出" title="再生を停止し、キューを消去してBotをVCから退出させます" danger disabled={!canControl || !snapshot?.current} onClick={() => run({ type: 'stop' })} />
       </div>
     </div>
   );
 }
 
-function ActionButton({ icon: Icon, label, title, danger, disabled, onClick }: { icon: (p: { className?: string }) => ReactNode; label: string; title?: string; danger?: boolean; disabled?: boolean; onClick: () => void }) {
+function ControlGroup({ label, children }: { label: string; children: ReactNode }) {
   return (
-    <button
-      type="button"
-      onClick={onClick}
-      disabled={disabled}
-      title={title}
-      className={cx(
-        'glass flex items-center gap-2 rounded-full px-4 py-2 text-sm font-medium transition active:scale-95 disabled:opacity-40',
-        danger ? 'text-[var(--text-dim)] hover:accent' : 'text-[var(--text-dim)] hover:text-[var(--text)]',
-      )}
-    >
-      <Icon className="h-4 w-4" />
-      {label}
-    </button>
+    <div className="flex items-start gap-3">
+      <span className="mt-2 w-12 flex-none text-right text-xs font-medium text-[var(--text-faint)]">{label}</span>
+      <div className="flex flex-1 flex-wrap items-center gap-2">{children}</div>
+    </div>
   );
 }
 
