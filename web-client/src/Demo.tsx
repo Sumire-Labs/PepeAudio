@@ -4,12 +4,12 @@
  * production build. Not part of the real app flow.
  */
 import { useState } from 'react';
-import type { GuildSnapshot, QueueItemDTO } from './api.ts';
+import type { GuildSnapshot, GuildSummary, Me, QueueItemDTO } from './api.ts';
 import type { GuildSession } from './useGuildSession.ts';
 import { Ambient } from './Ambient.tsx';
 import { Player } from './Player.tsx';
 import { Queue } from './Queue.tsx';
-import { Icons } from './ui.tsx';
+import { Sidebar } from './App.tsx';
 
 // Inline data-URI gradients (no network) so the demo renders instantly.
 const PALETTES: Record<string, [string, string]> = {
@@ -72,19 +72,30 @@ export function Demo() {
     refresh() {},
   };
 
+  const me: Me = { userId: '1', username: 'DemoUser', avatarUrl: null };
+  const guilds: GuildSummary[] = [
+    { guildId: 'demo', name: 'My Server', iconUrl: null, hasActiveSession: true, status: 'playing', currentTitle: 'Midnight City' },
+    { guildId: 'g2', name: 'Gaming Hub', iconUrl: null, hasActiveSession: false, status: 'idle', currentTitle: null },
+    { guildId: 'g3', name: 'Chill Lounge', iconUrl: null, hasActiveSession: true, status: 'paused', currentTitle: 'Redbone' },
+  ];
+
   return (
     <>
       <Ambient url={snap.current?.thumbnailUrl ?? null} />
       <div className="flex h-full">
-        <aside className="glass-strong z-10 flex w-[16rem] flex-none flex-col p-3.5">
-          <div className="mb-4 flex items-center gap-2.5 px-1.5 pt-1">
-            <div className="grid h-9 w-9 place-items-center rounded-xl accent-bg text-white">
-              <Icons.Headphones className="h-5 w-5" />
-            </div>
-            <span className="text-lg font-semibold tracking-tight">PepeAudio</span>
-          </div>
-          <div className="rounded-2xl bg-[var(--track-bg)] p-2 text-sm">DEMO · My Server</div>
-        </aside>
+        <Sidebar
+          me={me}
+          guilds={guilds}
+          selectedGuildId="demo"
+          view="player"
+          theme="dark"
+          open
+          onSelectGuild={() => {}}
+          onView={() => {}}
+          onCloseSidebar={() => {}}
+          onCycleTheme={() => {}}
+          onLogout={() => {}}
+        />
         <main className="min-w-0 flex-1 overflow-hidden">
           <div className="grid h-full gap-4 p-4 lg:grid-cols-[1fr_23rem]">
             <Player session={session} onSaveTrack={() => {}} />

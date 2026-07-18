@@ -164,6 +164,7 @@ export const Icons = {
   ),
   Check: svg(<path d="M5 12.5l4.5 4.5L19 7" />),
   Close: svg(<path d="M6 6l12 12M18 6L6 18" />),
+  Menu: svg(<path d="M4 7h16M4 12h16M4 17h16" />),
   Edit: svg(
     <>
       <path d="M4 20h4l10-10-4-4L4 16v4z" />

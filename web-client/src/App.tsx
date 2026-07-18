@@ -4,7 +4,6 @@ import { useGuildSession } from './useGuildSession.ts';
 import { ToastProvider, useToast } from './toast.tsx';
 import { Ambient } from './Ambient.tsx';
 import { Login } from './Login.tsx';
-import { ServerPicker } from './ServerPicker.tsx';
 import { Player } from './Player.tsx';
 import { Queue } from './Queue.tsx';
 import { Playlists } from './Playlists.tsx';
@@ -14,7 +13,7 @@ import { cx, EqualizerBars, IconButton, Icons, Spinner } from './ui.tsx';
 import type { GuildSession } from './useGuildSession.ts';
 
 type Theme = 'auto' | 'light' | 'dark';
-type View = 'player' | 'playlists' | 'servers';
+type View = 'player' | 'playlists';
 
 export function App() {
   return (
@@ -72,7 +71,8 @@ function Shell({ me }: { me: Me }) {
   const toast = useToast();
   const [theme, setTheme] = useState<Theme>(() => (localStorage.getItem('pepe-theme') as Theme) || 'auto');
   const [selectedGuildId, setSelectedGuildId] = useState<string | null>(() => localStorage.getItem('pepe-guild'));
-  const [view, setView] = useState<View>(() => (localStorage.getItem('pepe-guild') ? 'player' : 'servers'));
+  const [view, setView] = useState<View>('player');
+  const [sidebarOpen, setSidebarOpen] = useState(false);
   const [guilds, setGuilds] = useState<GuildSummary[]>([]);
   const [savingTrack, setSavingTrack] = useState<QueueItemDTO | null>(null);
   const [playlistsVersion, setPlaylistsVersion] = useState(0);
@@ -96,19 +96,31 @@ function Shell({ me }: { me: Me }) {
   }, [theme]);
 
   useEffect(() => {
-    api
-      .getGuilds()
-      .then(({ guilds }) => setGuilds(guilds))
-      .catch(() => {});
-  }, [view]);
+    let active = true;
+    const load = () =>
+      api
+        .getGuilds()
+        .then(({ guilds }) => {
+          if (active) setGuilds(guilds);
+        })
+        .catch(() => {});
+    void load();
+    // Refresh the server list periodically so the sidebar's now-playing badges stay live.
+    const id = setInterval(() => {
+      if (!document.hidden) void load();
+    }, 15_000);
+    return () => {
+      active = false;
+      clearInterval(id);
+    };
+  }, []);
 
   const selectGuild = (id: string) => {
     setSelectedGuildId(id);
     localStorage.setItem('pepe-guild', id);
     setView('player');
+    setSidebarOpen(false);
   };
-
-  const currentGuild = guilds.find((g) => g.guildId === selectedGuildId) ?? null;
 
   const loadToQueue = selectedGuildId
     ? async (sourceUrls: string[]): Promise<boolean> => {
@@ -131,31 +143,45 @@ function Shell({ me }: { me: Me }) {
     <>
       <Ambient url={ambientUrl} />
       <div className="flex h-full">
+        <button
+          type="button"
+          aria-label="メニュー"
+          onClick={() => setSidebarOpen(true)}
+          className="glass-strong fixed left-3 top-3 z-20 grid h-10 w-10 place-items-center rounded-xl md:hidden"
+        >
+          <Icons.Menu className="h-5 w-5" />
+        </button>
+        {sidebarOpen ? <div className="fixed inset-0 z-30 bg-black/40 md:hidden" onClick={() => setSidebarOpen(false)} /> : null}
+
         <Sidebar
           me={me}
-          currentGuild={currentGuild}
+          guilds={guilds}
+          selectedGuildId={selectedGuildId}
           view={view}
           theme={theme}
-          hasGuild={Boolean(selectedGuildId)}
-          onView={setView}
+          open={sidebarOpen}
+          onSelectGuild={selectGuild}
+          onView={(v) => {
+            setView(v);
+            setSidebarOpen(false);
+          }}
+          onCloseSidebar={() => setSidebarOpen(false)}
           onCycleTheme={() => setTheme(theme === 'auto' ? 'dark' : theme === 'dark' ? 'light' : 'auto')}
           onLogout={logout}
         />
 
         <main className="flex min-w-0 flex-1 flex-col overflow-hidden">
           <div className="relative min-h-0 flex-1">
-            {view === 'servers' ? (
-              <ServerPicker selectedGuildId={selectedGuildId} onSelect={selectGuild} onUnauthorized={onUnauthorized} />
-            ) : view === 'playlists' ? (
+            {view === 'playlists' ? (
               <Playlists onLoadToQueue={loadToQueue} onUnauthorized={onUnauthorized} reloadKey={playlistsVersion} />
             ) : selectedGuildId ? (
               <PlayerLayout session={session} onSaveTrack={setSavingTrack} />
             ) : (
-              <ServerPicker selectedGuildId={selectedGuildId} onSelect={selectGuild} onUnauthorized={onUnauthorized} />
+              <NoGuildPrompt hasGuilds={guilds.length > 0} onOpenSidebar={() => setSidebarOpen(true)} />
             )}
 
-            {selectedGuildId && !session.loading && !session.connected ? (
-              <div className="pointer-events-none absolute left-1/2 top-3 z-20 -translate-x-1/2">
+            {selectedGuildId && view === 'player' && !session.loading && !session.connected ? (
+              <div className="pointer-events-none absolute left-1/2 top-3 z-10 -translate-x-1/2">
                 <div className="glass-strong flex items-center gap-2 rounded-full px-3 py-1.5 text-xs text-[var(--text-dim)]">
                   <span className="h-2 w-2 animate-pulse rounded-full bg-amber-400" /> 再接続中…
                 </div>
@@ -179,6 +205,27 @@ function Shell({ me }: { me: Me }) {
       ) : null}
       {sessionExpired ? <SessionExpiredOverlay /> : null}
     </>
+  );
+}
+
+function NoGuildPrompt({ hasGuilds, onOpenSidebar }: { hasGuilds: boolean; onOpenSidebar: () => void }) {
+  return (
+    <div className="grid h-full place-items-center px-6 text-center">
+      <div className="fade-in">
+        <div className="mx-auto mb-4 grid h-14 w-14 place-items-center rounded-2xl bg-[var(--track-bg)] text-[var(--text-dim)]">
+          <Icons.Server className="h-7 w-7" />
+        </div>
+        <h2 className="text-lg font-semibold">{hasGuilds ? 'サーバーを選択' : '共通のサーバーがありません'}</h2>
+        <p className="mt-1 max-w-xs text-sm text-[var(--text-dim)]">
+          {hasGuilds ? 'サイドバーから操作するサーバーを選んでください。' : 'Bot が参加しているサーバーにあなたも参加している必要があります。'}
+        </p>
+        {hasGuilds ? (
+          <button onClick={onOpenSidebar} className="mt-4 rounded-2xl accent-bg px-4 py-2 text-sm font-medium text-white md:hidden">
+            サーバーを選ぶ
+          </button>
+        ) : null}
+      </div>
+    </div>
   );
 }
 
@@ -255,89 +302,128 @@ function PlayerLayout({ session, onSaveTrack }: { session: ReturnType<typeof use
   );
 }
 
-function Sidebar({
+export function Sidebar({
   me,
-  currentGuild,
+  guilds,
+  selectedGuildId,
   view,
   theme,
-  hasGuild,
+  open,
+  onSelectGuild,
   onView,
+  onCloseSidebar,
   onCycleTheme,
   onLogout,
 }: {
   me: Me;
-  currentGuild: GuildSummary | null;
+  guilds: GuildSummary[];
+  selectedGuildId: string | null;
   view: View;
   theme: Theme;
-  hasGuild: boolean;
+  open: boolean;
+  onSelectGuild: (id: string) => void;
   onView: (v: View) => void;
+  onCloseSidebar: () => void;
   onCycleTheme: () => void;
   onLogout: () => void;
 }) {
   const ThemeIcon = theme === 'light' ? Icons.Sun : theme === 'dark' ? Icons.Moon : Icons.Spatial;
   return (
-    <aside className="glass-strong z-10 flex w-[16rem] flex-none flex-col p-3.5 max-lg:w-[4.5rem]">
-      <div className="mb-4 flex items-center gap-2.5 px-1.5 pt-1">
+    <aside
+      className={cx(
+        'glass-strong fixed z-40 flex h-full w-[15.5rem] flex-none flex-col p-3 transition-transform duration-300 md:static md:z-auto md:translate-x-0',
+        open ? 'translate-x-0' : '-translate-x-full',
+      )}
+    >
+      <header className="mb-3 flex items-center gap-2.5 px-1.5 pt-1">
         <div className="grid h-9 w-9 flex-none place-items-center rounded-xl accent-bg text-white">
           <Icons.Headphones className="h-5 w-5" />
         </div>
-        <span className="text-lg font-semibold tracking-tight max-lg:hidden">PepeAudio</span>
+        <span className="text-lg font-semibold tracking-tight">PepeAudio</span>
+        <button onClick={onCloseSidebar} aria-label="閉じる" className="ml-auto grid h-8 w-8 place-items-center rounded-full text-[var(--text-dim)] hover:bg-[var(--track-bg)] md:hidden">
+          <Icons.Close className="h-4 w-4" />
+        </button>
+      </header>
+
+      <div className="mb-3 flex gap-1.5">
+        <SegTab icon={Icons.Play} label="プレイヤー" active={view === 'player'} onClick={() => onView('player')} />
+        <SegTab icon={Icons.Playlist} label="プレイリスト" active={view === 'playlists'} onClick={() => onView('playlists')} />
       </div>
 
-      <button
-        onClick={() => onView('servers')}
-        className={cx('mb-3 flex items-center gap-2.5 rounded-2xl p-2 text-left transition hover:bg-[var(--track-bg)]', view === 'servers' ? 'bg-[var(--track-bg)]' : '')}
-      >
-        {currentGuild?.iconUrl ? (
-          <img src={currentGuild.iconUrl} alt="" className="h-9 w-9 flex-none rounded-xl object-cover" />
+      <div className="mb-1 flex items-center justify-between px-2">
+        <span className="text-xs font-semibold uppercase tracking-wide text-[var(--text-faint)]">サーバー</span>
+        <span className="text-xs text-[var(--text-faint)]">{guilds.length}</span>
+      </div>
+      <div className="min-h-0 flex-1 space-y-0.5 overflow-y-auto soft-scroll pr-0.5">
+        {guilds.length === 0 ? (
+          <p className="px-2 py-4 text-sm text-[var(--text-faint)]">共通のサーバーがありません。</p>
         ) : (
-          <div className="grid h-9 w-9 flex-none place-items-center rounded-xl bg-[var(--track-bg)] text-[var(--text-dim)]">
-            <Icons.Server className="h-5 w-5" />
-          </div>
+          guilds.map((g) => {
+            const selected = selectedGuildId === g.guildId;
+            return (
+              <button
+                key={g.guildId}
+                onClick={() => onSelectGuild(g.guildId)}
+                style={selected ? { background: 'color-mix(in srgb, var(--accent) 20%, transparent)' } : undefined}
+                className={cx('flex w-full items-center gap-2.5 rounded-xl p-1.5 text-left transition', selected ? '' : 'hover:bg-[var(--track-bg)]')}
+              >
+                {g.iconUrl ? (
+                  <img src={g.iconUrl} alt="" className="h-9 w-9 flex-none rounded-xl object-cover" />
+                ) : (
+                  <div className="grid h-9 w-9 flex-none place-items-center rounded-xl bg-[var(--track-bg)] text-sm font-semibold text-[var(--text-dim)]">{g.name.slice(0, 1).toUpperCase()}</div>
+                )}
+                <div className="min-w-0 flex-1">
+                  <div className="truncate text-sm font-medium">{g.name}</div>
+                  <div className="flex items-center gap-1 text-xs text-[var(--text-dim)]">
+                    {g.status === 'playing' ? (
+                      <>
+                        <EqualizerBars className="h-2.5" />
+                        <span className="truncate">{g.currentTitle ?? '再生中'}</span>
+                      </>
+                    ) : g.hasActiveSession ? (
+                      <span>一時停止中</span>
+                    ) : (
+                      <span className="text-[var(--text-faint)]">待機中</span>
+                    )}
+                  </div>
+                </div>
+              </button>
+            );
+          })
         )}
-        <div className="min-w-0 flex-1 max-lg:hidden">
-          <div className="truncate text-sm font-medium">{currentGuild?.name ?? 'サーバーを選択'}</div>
-          <div className="text-xs text-[var(--text-dim)]">切り替える</div>
-        </div>
-      </button>
+      </div>
 
-      <nav className="flex flex-col gap-1">
-        <NavItem icon={Icons.Play} label="プレイヤー" active={view === 'player'} disabled={!hasGuild} onClick={() => onView('player')} />
-        <NavItem icon={Icons.Playlist} label="プレイリスト" active={view === 'playlists'} onClick={() => onView('playlists')} />
-      </nav>
-
-      <div className="mt-auto flex flex-col gap-1">
-        <NavItem icon={ThemeIcon} label={`テーマ: ${theme}`} onClick={onCycleTheme} />
-        <div className="mt-1 flex items-center gap-2.5 rounded-2xl p-2">
+      <div className="mt-2 flex items-center gap-1.5 border-t border-[var(--hairline)] pt-2">
+        <button onClick={onCycleTheme} aria-label={`テーマ: ${theme}`} title={`テーマ: ${theme}`} className="grid h-9 w-9 flex-none place-items-center rounded-full text-[var(--text-dim)] transition hover:bg-[var(--track-bg)]">
+          <ThemeIcon className="h-4 w-4" />
+        </button>
+        <div className="flex min-w-0 flex-1 items-center gap-2">
           {me.avatarUrl ? (
             <img src={me.avatarUrl} alt="" className="h-8 w-8 flex-none rounded-full object-cover" />
           ) : (
             <div className="grid h-8 w-8 flex-none place-items-center rounded-full bg-[var(--track-bg)] text-sm">{me.username.slice(0, 1).toUpperCase()}</div>
           )}
-          <span className="min-w-0 flex-1 truncate text-sm max-lg:hidden">{me.username}</span>
-          <button onClick={onLogout} aria-label="ログアウト" title="ログアウト" className="grid h-8 w-8 flex-none place-items-center rounded-full text-[var(--text-dim)] transition hover:bg-[var(--track-bg)] max-lg:hidden">
-            <Icons.Logout className="h-4 w-4" />
-          </button>
+          <span className="min-w-0 flex-1 truncate text-sm">{me.username}</span>
         </div>
+        <button onClick={onLogout} aria-label="ログアウト" title="ログアウト" className="grid h-9 w-9 flex-none place-items-center rounded-full text-[var(--text-dim)] transition hover:bg-[var(--track-bg)] hover:accent">
+          <Icons.Logout className="h-4 w-4" />
+        </button>
       </div>
     </aside>
   );
 }
 
-function NavItem({ icon: Icon, label, active, disabled, onClick }: { icon: (p: { className?: string }) => ReactNode; label: string; active?: boolean; disabled?: boolean; onClick: () => void }) {
+function SegTab({ icon: Icon, label, active, onClick }: { icon: (p: { className?: string }) => ReactNode; label: string; active: boolean; onClick: () => void }) {
   return (
     <button
       onClick={onClick}
-      disabled={disabled}
-      title={label}
       className={cx(
-        'flex items-center gap-3 rounded-2xl px-2.5 py-2.5 text-sm font-medium transition max-lg:justify-center',
+        'flex flex-1 items-center justify-center gap-2 rounded-xl px-3 py-2 text-sm font-medium transition',
         active ? 'accent-bg text-white' : 'text-[var(--text-dim)] hover:bg-[var(--track-bg)] hover:text-[var(--text)]',
-        disabled ? 'pointer-events-none opacity-30' : '',
       )}
     >
-      <Icon className="h-5 w-5 flex-none" />
-      <span className="max-lg:hidden">{label}</span>
+      <Icon className="h-4 w-4" />
+      <span>{label}</span>
     </button>
   );
 }

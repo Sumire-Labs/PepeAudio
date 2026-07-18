@@ -2,6 +2,9 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { api, subscribeToGuild, UnauthorizedError } from './api.ts';
 import type { CommandResult, GuildSnapshot, ViewerCapabilities, WebCommand } from './api.ts';
 
+/** How often the REST poll refreshes state as an SSE fallback (see the effect below). */
+const POLL_INTERVAL_MS = 5000;
+
 /** The shard IPC push uses this exact placeholder (see server DISPLAY_ONLY_VIEWER). */
 function isDisplayOnlyViewer(v: ViewerCapabilities): boolean {
   return !v.canControl && v.denyReason === null && !v.inBotVoiceChannel;
@@ -54,44 +57,51 @@ export function useGuildSession(guildId: string | null, onUnauthorized: () => vo
     setLoading(true);
     viewerRef.current = null;
 
-    api
-      .getSnapshot(guildId)
-      .then(({ snapshot: snap }) => {
+    // Fetch the current snapshot over REST. This drives `connected` — it works
+    // even when SSE is blocked/buffered by a proxy (Cloudflare, some reverse
+    // proxies), which the polling fallback below relies on.
+    const fetchSnapshot = async (initial: boolean): Promise<void> => {
+      try {
+        const { snapshot: snap } = await api.getSnapshot(guildId);
         if (!active) return;
         apply(snap);
-        setLoading(false);
-      })
-      .catch((err) => {
-        if (err instanceof UnauthorizedError) onUnauthorized();
-        if (active) setLoading(false);
-      });
-
-    const close = subscribeToGuild(
-      guildId,
-      (snap) => {
-        if (active) apply(snap);
-      },
-      (isConnected) => {
-        if (active) setConnected(isConnected);
-      },
-    );
-
-    // Refresh accurate per-viewer caps when the tab regains focus (the user may
-    // have joined/left the voice channel while away).
-    const onFocus = () => {
-      api
-        .getSnapshot(guildId)
-        .then(({ snapshot: snap }) => {
-          if (active) apply(snap);
-        })
-        .catch(() => {});
+        setConnected(true);
+      } catch (err) {
+        if (err instanceof UnauthorizedError) {
+          onUnauthorized();
+          return;
+        }
+        if (active) setConnected(false);
+      } finally {
+        if (initial && active) setLoading(false);
+      }
     };
-    window.addEventListener('focus', onFocus);
+
+    void fetchSnapshot(true);
+
+    // SSE gives instant updates when the proxy allows it; the poll below is the
+    // reliability net so the dashboard works (and shows "connected") regardless.
+    const close = subscribeToGuild(guildId, (snap) => {
+      if (!active) return;
+      apply(snap);
+      setConnected(true);
+    });
+
+    // Poll fallback — keeps state fresh + `connected` honest even if SSE never
+    // establishes. Paused while the tab is hidden to save resources.
+    const pollId = setInterval(() => {
+      if (!document.hidden) void fetchSnapshot(false);
+    }, POLL_INTERVAL_MS);
+    const onVisible = () => {
+      if (!document.hidden) void fetchSnapshot(false);
+    };
+    document.addEventListener('visibilitychange', onVisible);
 
     return () => {
       active = false;
       close();
-      window.removeEventListener('focus', onFocus);
+      clearInterval(pollId);
+      document.removeEventListener('visibilitychange', onVisible);
     };
   }, [guildId, refreshKey, apply, onUnauthorized]);
 

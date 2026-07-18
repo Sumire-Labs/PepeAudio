@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react';
-import type { GuildSnapshot, QueueItemDTO, WebCommand } from './api.ts';
+import type { QueueItemDTO, WebCommand } from './api.ts';
 import type { GuildSession } from './useGuildSession.ts';
 import { useTicker } from './useGuildSession.ts';
 import { cx, EqualizerBars, formatMs, Icons, IconButton } from './ui.tsx';
@@ -78,17 +78,60 @@ export function Player({
         <LoopButton mode={snapshot?.loopMode ?? 'off'} disabled={!canControl} onCycle={(mode) => run({ type: 'setLoopMode', mode })} />
       </div>
 
-      {/* secondary: volume + radio + 24/7 + save */}
-      <div className="mt-6 flex w-full max-w-md items-center gap-3">
+      {/* volume */}
+      <div className="mt-6 w-full max-w-md">
         <VolumeControl value={snapshot?.volume ?? 70} disabled={!canControl} onChange={(percent) => run({ type: 'setVolume', percent })} />
-        <IconButton icon={Icons.Radio} label="オートプレイ (ラジオ)" active={snapshot?.autoplay} disabled={!canControl} onClick={() => run({ type: 'setAutoplay', enabled: !snapshot?.autoplay })} />
-        <IconButton icon={Icons.Pin} label="24時間モード" active={snapshot?.stay247} disabled={!canControl} onClick={() => run({ type: 'setStay247', enabled: !snapshot?.stay247 })} />
-        <IconButton icon={Icons.Plus} label="プレイリストに保存" disabled={!current} onClick={() => current && onSaveTrack(current)} />
-        <IconButton icon={Icons.Stop} label="停止" disabled={!canControl || !snapshot?.current} onClick={() => run({ type: 'stop' })} />
       </div>
 
-      {snapshot?.auraEnabled ? <AuraControls snapshot={snapshot} disabled={!canControl} run={run} /> : null}
+      {/* mode toggles — grouped, labeled chips */}
+      <div className="mt-5 flex w-full max-w-md flex-wrap items-center justify-center gap-2">
+        <Chip icon={Icons.Radio} label="オートプレイ" active={Boolean(snapshot?.autoplay)} disabled={!canControl} onClick={() => run({ type: 'setAutoplay', enabled: !snapshot?.autoplay })} />
+        <Chip icon={Icons.Pin} label="24時間" active={Boolean(snapshot?.stay247)} disabled={!canControl} onClick={() => run({ type: 'setStay247', enabled: !snapshot?.stay247 })} />
+        {snapshot?.auraEnabled ? (
+          <>
+            <Chip icon={Icons.Spatial} label="360°" active={snapshot.aura360Mode === 'on'} disabled={!canControl} onClick={() => run({ type: 'setAura360', mode: snapshot.aura360Mode === 'on' ? 'off' : 'on' })} />
+            <Chip icon={Icons.Headphones} label="HRIR" active={snapshot.hrirMode === 'on'} disabled={!canControl} onClick={() => run({ type: 'setHrir', mode: snapshot.hrirMode === 'on' ? 'off' : 'on' })} />
+            {snapshot.hrirMode === 'on' && snapshot.auraPresets.length > 0 ? (
+              <select
+                value={snapshot.hrirProfile ?? ''}
+                disabled={!canControl}
+                onChange={(e) => run({ type: 'setAuraPreset', id: e.target.value })}
+                className="glass rounded-full px-3 py-2 text-sm text-[var(--text)] outline-none disabled:opacity-40"
+              >
+                {snapshot.auraPresets.map((p) => (
+                  <option key={p.id} value={p.id} className="text-black">
+                    {p.label}
+                  </option>
+                ))}
+              </select>
+            ) : null}
+          </>
+        ) : null}
+      </div>
+
+      {/* actions */}
+      <div className="mt-5 flex w-full max-w-md items-center justify-center gap-2">
+        <ActionButton icon={Icons.Plus} label="プレイリストに保存" disabled={!current} onClick={() => current && onSaveTrack(current)} />
+        <ActionButton icon={Icons.Stop} label="停止" danger disabled={!canControl || !snapshot?.current} onClick={() => run({ type: 'stop' })} />
+      </div>
     </div>
+  );
+}
+
+function ActionButton({ icon: Icon, label, danger, disabled, onClick }: { icon: (p: { className?: string }) => ReactNode; label: string; danger?: boolean; disabled?: boolean; onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      className={cx(
+        'glass flex items-center gap-2 rounded-full px-4 py-2 text-sm font-medium transition active:scale-95 disabled:opacity-40',
+        danger ? 'text-[var(--text-dim)] hover:accent' : 'text-[var(--text-dim)] hover:text-[var(--text)]',
+      )}
+    >
+      <Icon className="h-4 w-4" />
+      {label}
+    </button>
   );
 }
 
@@ -177,6 +220,7 @@ function LoopButton({ mode, disabled, onCycle }: { mode: 'off' | 'track' | 'queu
 function VolumeControl({ value, disabled, onChange }: { value: number; disabled: boolean; onChange: (v: number) => void }) {
   const [local, setLocal] = useState(value);
   const timer = useRef<number | null>(null);
+  const prevVolume = useRef(value || 70);
   // Keep in sync with server pushes unless the user is mid-drag.
   const dragging = useRef(false);
   useEffect(() => {
@@ -188,10 +232,25 @@ function VolumeControl({ value, disabled, onChange }: { value: number; disabled:
     timer.current = window.setTimeout(() => onChange(v), 250);
   };
 
+  const toggleMute = () => {
+    if (disabled) return;
+    if (local > 0) {
+      prevVolume.current = local;
+      setLocal(0);
+      onChange(0);
+    } else {
+      const restore = prevVolume.current || 50;
+      setLocal(restore);
+      onChange(restore);
+    }
+  };
+
   const Ico = local === 0 ? Icons.VolumeMute : Icons.Volume;
   return (
     <div className="flex flex-1 items-center gap-2.5">
-      <Ico className="h-5 w-5 flex-none text-[var(--text-dim)]" />
+      <button type="button" onClick={toggleMute} disabled={disabled} aria-label={local === 0 ? 'ミュート解除' : 'ミュート'} title={local === 0 ? 'ミュート解除' : 'ミュート'} className="grid h-8 w-8 flex-none place-items-center rounded-full text-[var(--text-dim)] transition hover:bg-[var(--track-bg)] disabled:opacity-40">
+        <Ico className="h-5 w-5" />
+      </button>
       <input
         type="range"
         min={0}
@@ -214,29 +273,6 @@ function VolumeControl({ value, disabled, onChange }: { value: number; disabled:
         }}
       />
       <span className="w-8 flex-none text-right text-xs tabular-nums text-[var(--text-dim)]">{local}</span>
-    </div>
-  );
-}
-
-function AuraControls({ snapshot, disabled, run }: { snapshot: GuildSnapshot; disabled: boolean; run: (c: WebCommand) => void }) {
-  return (
-    <div className="mt-6 flex w-full max-w-md flex-wrap items-center justify-center gap-2">
-      <Chip icon={Icons.Spatial} label="360° Sound" active={snapshot.aura360Mode === 'on'} disabled={disabled} onClick={() => run({ type: 'setAura360', mode: snapshot.aura360Mode === 'on' ? 'off' : 'on' })} />
-      <Chip icon={Icons.Headphones} label="Aura HRIR" active={snapshot.hrirMode === 'on'} disabled={disabled} onClick={() => run({ type: 'setHrir', mode: snapshot.hrirMode === 'on' ? 'off' : 'on' })} />
-      {snapshot.hrirMode === 'on' && snapshot.auraPresets.length > 0 ? (
-        <select
-          value={snapshot.hrirProfile ?? ''}
-          disabled={disabled}
-          onChange={(e) => run({ type: 'setAuraPreset', id: e.target.value })}
-          className="glass rounded-full px-3 py-2 text-sm text-[var(--text)] outline-none disabled:opacity-40"
-        >
-          {snapshot.auraPresets.map((p) => (
-            <option key={p.id} value={p.id} className="text-black">
-              {p.label}
-            </option>
-          ))}
-        </select>
-      ) : null}
     </div>
   );
 }

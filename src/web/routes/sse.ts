@@ -11,8 +11,10 @@ import { getSession } from '../auth/guard.js';
 import type { GuildSnapshot } from '../bridge/types.js';
 
 const HEARTBEAT_MS = 15_000;
-/** Cap concurrent SSE streams per user (multiple tabs, plus a little slack) so one account can't pin open unbounded streams. */
-const MAX_SSE_PER_USER = 5;
+/** Cap concurrent SSE streams per user (multiple tabs + reconnect churn) so one account can't pin open unbounded streams. */
+const MAX_SSE_PER_USER = 8;
+/** Hard lifetime for one SSE stream. Bounds any connection a proxy leaves half-open (the client just reconnects). */
+const MAX_STREAM_MS = 30 * 60 * 1000;
 
 export function registerSseRoutes(router: Router, services: WebServices): void {
   const { env, sessions, bridge } = services;
@@ -74,10 +76,23 @@ export function registerSseRoutes(router: Router, services: WebServices): void {
     }, HEARTBEAT_MS);
     heartbeat.unref();
 
+    // Recycle the stream after a bounded lifetime so a proxy-abandoned connection
+    // can't linger forever (the browser's EventSource just reconnects).
+    const lifetime = setTimeout(() => {
+      try {
+        res.end();
+      } catch {
+        /* already closing */
+      }
+      cleanup();
+    }, MAX_STREAM_MS);
+    lifetime.unref();
+
     function cleanup(): void {
       if (closed) return;
       closed = true;
       clearInterval(heartbeat);
+      clearTimeout(lifetime);
       unsubscribe();
       const remaining = (openByUser.get(session!.userId) ?? 1) - 1;
       if (remaining <= 0) openByUser.delete(session!.userId);
