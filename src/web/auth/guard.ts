@@ -1,9 +1,3 @@
-/**
- * Session extraction and CSRF checks shared by the API/oauth routes. The session
- * id travels in an HMAC-signed HttpOnly cookie; CSRF is defended in depth by a
- * same-origin Origin/Referer check plus a custom header that cross-site requests
- * cannot set (no CORS is ever granted).
- */
 import type { RequestContext } from '../http/router.js';
 import type { SessionStore, WebSession } from './session.js';
 import { parseCookies, verify } from './cookies.js';
@@ -13,7 +7,6 @@ export const OAUTH_STATE_COOKIE = 'pepe_oauth_state';
 export const CSRF_HEADER = 'x-requested-with';
 export const CSRF_HEADER_VALUE = 'pepe-dashboard';
 
-/** Returns the authenticated session, or null. Verifies the cookie signature first. */
 export function getSession(ctx: RequestContext, sessions: SessionStore, secret: string): WebSession | null {
   const cookies = parseCookies(ctx.req.headers.cookie);
   const signed = cookies[SESSION_COOKIE];
@@ -23,7 +16,6 @@ export function getSession(ctx: RequestContext, sessions: SessionStore, secret: 
   return sessions.get(sessionId);
 }
 
-/** Reads a signed cookie's verified value, or null. */
 export function getSignedCookie(ctx: RequestContext, name: string, secret: string): string | null {
   const cookies = parseCookies(ctx.req.headers.cookie);
   const signed = cookies[name];
@@ -31,12 +23,9 @@ export function getSignedCookie(ctx: RequestContext, name: string, secret: strin
   return verify(signed, secret);
 }
 
-/**
- * CSRF check for state-changing requests: the request must be same-origin
- * (Origin, or Referer as a fallback, must match our public origin) AND carry the
- * custom X-Requested-With header. A cross-site page can forge neither without a
- * CORS grant, which the dashboard never issues.
- */
+// CSRF: require same-origin (Origin, or Referer fallback) AND the custom
+// X-Requested-With header — a cross-site page can forge neither without a CORS
+// grant the dashboard never issues.
 export function passesCsrf(ctx: RequestContext, publicOrigin: string): boolean {
   const header = ctx.req.headers[CSRF_HEADER];
   const headerValue = Array.isArray(header) ? header[0] : header;

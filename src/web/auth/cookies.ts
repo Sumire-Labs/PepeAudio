@@ -1,21 +1,15 @@
-/**
- * HMAC-signed cookie values and cookie header (de)serialization, using only
- * node:crypto. A signed value is `<value>.<base64url(HMAC-SHA256(secret, value))>`;
- * verify() recomputes the MAC and compares in constant time. Used for both the
- * session id cookie and the OAuth `state` cookie.
- */
 import { createHmac, timingSafeEqual } from 'node:crypto';
 
 function mac(value: string, secret: string): string {
   return createHmac('sha256', secret).update(value).digest('base64url');
 }
 
-/** Returns `<value>.<sig>`. `value` must not contain a '.' collision issue — it may (we split on the LAST dot). */
+// verify() splits on the LAST dot, so value may itself contain dots.
 export function sign(value: string, secret: string): string {
   return `${value}.${mac(value, secret)}`;
 }
 
-/** Returns the original value if the signature is valid, else null. Constant-time compare. */
+// Constant-time compare to avoid signature-timing leaks.
 export function verify(signed: string, secret: string): string | null {
   const lastDot = signed.lastIndexOf('.');
   if (lastDot <= 0) return null;
@@ -28,7 +22,6 @@ export function verify(signed: string, secret: string): string | null {
   return timingSafeEqual(a, b) ? value : null;
 }
 
-/** Parses a `Cookie:` header into a name→value map (values URI-decoded). */
 export function parseCookies(header: string | undefined): Record<string, string> {
   const out: Record<string, string> = {};
   if (!header) return out;
@@ -57,7 +50,6 @@ export interface CookieOptions {
   expire?: boolean;
 }
 
-/** Serializes a `Set-Cookie` value. */
 export function serializeCookie(name: string, value: string, opts: CookieOptions = {}): string {
   const parts = [`${name}=${encodeURIComponent(value)}`];
   parts.push(`Path=${opts.path ?? '/'}`);

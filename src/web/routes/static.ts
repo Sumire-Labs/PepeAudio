@@ -1,8 +1,3 @@
-/**
- * Serves the built React frontend (dist/web-client). Path-traversal-guarded and
- * with an SPA fallback: any GET that isn't an existing file and isn't an /api or
- * /auth route returns index.html so client-side routing works.
- */
 import { createReadStream } from 'node:fs';
 import { stat } from 'node:fs/promises';
 import path from 'node:path';
@@ -41,8 +36,7 @@ function sendFile(res: ServerResponse, filePath: string, cacheable: boolean): vo
   const ext = path.extname(filePath).toLowerCase();
   const contentType = MIME_TYPES[ext] ?? 'application/octet-stream';
   res.setHeader('Content-Type', contentType);
-  // Vite emits content-hashed asset filenames, so hashed assets can be cached
-  // hard; index.html must never be cached (it references the current hashes).
+  // index.html must never be cached: it references the current hashed asset names.
   res.setHeader('Cache-Control', cacheable ? 'public, max-age=31536000, immutable' : 'no-cache');
   const stream = createReadStream(filePath);
   stream.on('error', () => {
@@ -52,12 +46,6 @@ function sendFile(res: ServerResponse, filePath: string, cacheable: boolean): vo
   stream.pipe(res);
 }
 
-/**
- * Resolves and serves a static asset for a GET request whose pathname is
- * `urlPath`. Returns true if it handled the response, false if the caller should
- * treat it as not-found (it always handles GETs via the SPA fallback, so this
- * effectively always returns true for GETs under a valid clientDir).
- */
 export async function serveStatic(res: ServerResponse, clientDir: string, urlPath: string): Promise<void> {
   const rootDir = path.resolve(clientDir);
   // Normalize and confine to rootDir (defeat ../ traversal).
@@ -71,8 +59,6 @@ export async function serveStatic(res: ServerResponse, clientDir: string, urlPat
   }
 
   if (await tryStatFile(candidate)) {
-    // Hash assets (anything under an assets/ dir or with a hash-looking name)
-    // are safe to cache immutably; treat index.html and root as non-cacheable.
     const isHtml = path.extname(candidate).toLowerCase() === '.html';
     sendFile(res, candidate, !isHtml);
     return;

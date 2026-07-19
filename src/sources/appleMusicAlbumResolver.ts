@@ -5,8 +5,7 @@ import { logger } from '../logger.js';
 import { lookup, type ItunesResult, AppleMusicResolutionError } from './appleMusicClient.js';
 
 export async function resolveAppleMusicAlbum(id: string, requestedBy: string, url: string): Promise<QueueItem[]> {
-  // Album: entity=song returns the collection itself (wrapperType: 'collection')
-  // followed by one entry per track (wrapperType: 'track').
+  // Album lookup returns the collection entry first, then one entry per track.
   let results: ItunesResult[];
   try {
     results = await lookup(id, { entity: 'song' });
@@ -15,7 +14,7 @@ export async function resolveAppleMusicAlbum(id: string, requestedBy: string, ur
     throw new AppleMusicResolutionError('Apple Musicのアルバム情報の取得に失敗しました。');
   }
   const allTracks = results.filter((r) => r.wrapperType === 'track');
-  // Cap resolution work per request — mirrors Spotify's playlist/album cap (see MAX_PLAYLIST_TRACKS).
+  // DoS cap: bound resolution work per request.
   const tracks = allTracks.slice(0, MAX_PLAYLIST_TRACKS);
   if (allTracks.length > tracks.length) {
     logger.info(
@@ -27,9 +26,7 @@ export async function resolveAppleMusicAlbum(id: string, requestedBy: string, ur
     throw new AppleMusicResolutionError('Apple Musicのアルバム内の曲情報を取得できませんでした。');
   }
 
-  // YouTube matching is deferred to each item's first getStream() call (see
-  // createLazyMatchedQueueItem) rather than done eagerly here - see the same
-  // rationale in spotify.ts's playlist/album branch.
+  // YouTube matching is deferred to each item's first getStream(), not done eagerly here.
   const items: QueueItem[] = [];
   let failed = 0;
   for (const track of tracks) {

@@ -1,9 +1,7 @@
 /**
- * The authorization boundary for the web dashboard. A faithful port of
- * src/ui/permissions.ts `checkControlPermission`, re-expressed against a raw
- * userId (the browser never sends an interaction). Runs on the owning shard for
- * every command — the browser is trusted only with the authenticated userId.
- * Keep this in lockstep with permissions.ts if that logic changes.
+ * Web dashboard authorization boundary, keyed on a raw userId instead of an
+ * interaction. Keep in lockstep with src/ui/permissions.ts
+ * `checkControlPermission` if that logic changes.
  */
 import { PermissionFlagsBits, type Guild } from 'discord.js';
 import type { GuildPlayer } from '../../player/GuildPlayer.js';
@@ -22,9 +20,8 @@ export async function resolveViewerCapabilities(
     return { canControl: false, denyReason: 'サーバーの状態を確認できませんでした。もう一度お試しください。', inBotVoiceChannel: false };
   }
 
-  // Members are cached opportunistically; fetch on a miss so a legitimate user
-  // who simply isn't cached yet isn't wrongly denied. A genuine "not a member /
-  // left the guild" fetch failure is a denial.
+  // Fetch on cache miss so an uncached member isn't wrongly denied; a fetch
+  // failure (not a member / left the guild) is a denial.
   let member = guild.members.cache.get(userId);
   if (!member) {
     try {
@@ -34,13 +31,12 @@ export async function resolveViewerCapabilities(
     }
   }
 
-  // Base requirement for every mode: be in the same voice channel as the bot.
-  // member.voice.channelId is populated by the GuildVoiceStates intent (index.ts).
+  // member.voice.channelId requires the GuildVoiceStates intent (index.ts).
   if (member.voice.channelId !== player.voiceChannelId) {
     return { canControl: false, denyReason: '操作するにはBotと同じボイスチャンネルに参加してください。', inBotVoiceChannel: false };
   }
 
-  // Server managers/admins bypass the per-mode restriction (not the same-VC base).
+  // Managers/admins bypass the per-mode restriction, but not the same-VC base.
   if (member.permissions.has(PermissionFlagsBits.ManageGuild)) return allow();
 
   switch (player.permissionMode) {

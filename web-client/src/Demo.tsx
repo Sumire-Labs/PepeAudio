@@ -1,8 +1,4 @@
-/**
- * DEV-only visual preview of the full player UI with canned data. Loaded via a
- * dynamic import guarded by import.meta.env.DEV + `?demo`, so it never ships in a
- * production build. Not part of the real app flow.
- */
+// DEV-only UI preview with canned data; dynamic-imported behind import.meta.env.DEV + `?demo`, never ships to prod.
 import { useState } from 'react';
 import type { GuildSnapshot, GuildSummary, Me, QueueItemDTO } from './api.ts';
 import type { GuildSession } from './useGuildSession.ts';
@@ -11,7 +7,6 @@ import { Player } from './Player.tsx';
 import { Queue } from './Queue.tsx';
 import { Sidebar } from './App.tsx';
 
-// Inline data-URI gradients (no network) so the demo renders instantly.
 const PALETTES: Record<string, [string, string]> = {
   midnight: ['#5b2a86', '#f14b8b'],
   blind: ['#ff5f6d', '#ffc371'],
@@ -63,7 +58,6 @@ export function Demo() {
     loading: false,
     connected: true,
     async sendCommand(command) {
-      // Reflect a few toggles locally so the demo feels alive.
       if (command.type === 'togglePlayPause') setSnap((s) => ({ ...s, status: s.status === 'playing' ? 'paused' : 'playing' }));
       if (command.type === 'toggleShuffle') setSnap((s) => ({ ...s, shuffleEnabled: !s.shuffleEnabled }));
       if (command.type === 'setVolume') setSnap((s) => ({ ...s, volume: command.percent }));

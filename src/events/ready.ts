@@ -10,16 +10,9 @@ function delay(ms: number): Promise<void> {
 }
 
 /**
- * Auto-registers slash commands on every process startup (a personal/single-app
- * bot doesn't need the "deploy commands separately from the running bot"
- * separation larger teams use). Guild-scoped when GUILD_ID is set (instant),
- * otherwise global (can take up to ~1h to propagate). `scripts/register-commands.ts`
- * still exists as a manual alternative if you ever want to register without
- * starting the bot process.
- *
- * Retries with backoff on failure — a transient Discord REST hiccup at boot
- * previously left the bot fully "ready" with zero slash commands registered
- * until a manual restart, with only a log line as evidence.
+ * Retries with backoff — a transient Discord REST hiccup at boot otherwise
+ * leaves the bot "ready" with zero slash commands registered until a manual
+ * restart. Global registration (no GUILD_ID) can take ~1h to propagate.
  */
 export function registerReadyEvent(client: Client): void {
   client.once('clientReady', async (readyClient) => {

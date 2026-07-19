@@ -10,12 +10,9 @@ export function required(name: string): string {
 }
 
 /**
- * Reads a secret from `NAME`, or from the file at `NAME_FILE` when that's set.
- * The `_FILE` indirection lets Docker/Kubernetes secrets — which are mounted as
- * files (e.g. /run/secrets/discord_token) — supply the value without it ever
- * living in an environment variable. Env vars leak more easily: they're visible
- * via `docker inspect`, /proc/<pid>/environ, and are inherited by every child
- * process (yt-dlp, ffmpeg). A file-mounted secret avoids all of that.
+ * Reads a secret from `NAME`, or from a file at `NAME_FILE`. The file indirection
+ * lets Docker/K8s file-mounted secrets supply the value without it living in an
+ * env var (which leaks via `docker inspect`, /proc/environ, child-proc inheritance).
  */
 export function requiredSecret(name: string): string {
   const filePath = process.env[`${name}_FILE`];

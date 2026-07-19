@@ -17,13 +17,7 @@ export interface PanelBuildOptions {
   sofalizerAvailable: boolean;
 }
 
-/** Adds the now-playing section to `container`: the empty-state message when
- * there's no current track, otherwise the track info (title/artist/requester/
- * source), the separator, the progress bar + status line (queue/loop/shuffle),
- * and the optional lastError warning line. */
-// `_opts` is currently unused (the spatial status line was removed); it and the
-// PanelBuildOptions/sofalizerAvailable threading are dead pending the sofalizer
-// cleanup. Kept prefixed rather than removed to avoid that wider refactor here.
+// _opts is unused; kept prefixed to avoid the wider sofalizer cleanup.
 export function addNowPlayingSection(container: ContainerBuilder, player: GuildPlayer, _opts: PanelBuildOptions): void {
   const track = player.currentTrack;
   const elapsed = player.getElapsedMs();
@@ -70,10 +64,8 @@ export function addNowPlayingSection(container: ContainerBuilder, player: GuildP
   }
 }
 
-// Credits the Aura Sound System whenever HRIR is ACTUALLY applied to the current
-// resource (player.usingHrir), not merely selected (player.hrirProfile / the
-// chosen Aura Preset) - if the file went missing mid-session, resourceFactory
-// falls back silently and this footer should not keep claiming it's active.
+// Credit only when HRIR is actually applied (usingHrir), not merely selected:
+// resourceFactory falls back silently if the file goes missing mid-session.
 export function addHrirFooter(container: ContainerBuilder, player: GuildPlayer): void {
   if (player.currentTrack && player.usingHrir) {
     container.addTextDisplayComponents(new TextDisplayBuilder().setContent('-# Aura Sound System By Sumire Labs'));

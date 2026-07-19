@@ -13,13 +13,7 @@ export interface SendableChannel {
   send(options: MessageCreateOptions): Promise<Message>;
 }
 
-/**
- * Sends a brand-new panel message, then deletes whatever panel preceded it
- * for this guild (new message first, delete second — closes the race where a
- * button press on the old message lands while the delete call is in flight,
- * since interactionCreate compares against player.panelMessageId which is
- * reassigned below before the delete happens).
- */
+// Reassign panelMessageId before deleting the old message so a racing button press compares against the new id.
 export async function sendOrReplacePanel(player: GuildPlayer, channel: SendableChannel): Promise<void> {
   const previousMessage = panelMessages.get(player.guildId);
 

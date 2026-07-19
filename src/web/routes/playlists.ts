@@ -1,9 +1,5 @@
-/**
- * User-scoped saved-playlist CRUD. Loading a playlist into a guild's queue is
- * NOT here — the frontend fetches the detail then sends a `loadPlaylist` command
- * through /api/guilds/:id/command, so the same-VC authorization applies. These
- * routes only touch the per-user web DB (no bridge, no bot).
- */
+// Per-user web DB only. Loading into a guild's queue goes through
+// /api/guilds/:id/command (same-VC authz applies there), not here.
 import type { Router } from '../http/router.js';
 import type { RequestContext } from '../http/router.js';
 import type { WebServices } from '../services.js';
@@ -108,13 +104,8 @@ export function registerPlaylistRoutes(router: Router, services: WebServices): v
     json(ctx.res, 200, { playlist: detail });
   });
 
-  /**
-   * Imports a provider playlist/album URL (YouTube / Spotify / Apple Music /
-   * SoundCloud) into a saved playlist by resolving it through the bot bridge
-   * (SSRF-guarded, guild-independent) and appending the resulting tracks. Lazy
-   * collection tracks are stored as search strings (see PlaylistRepo) so loading
-   * later resolves each one individually rather than re-importing the whole set.
-   */
+  // Resolves the URL via the bot bridge (SSRF-guarded). Lazy collection tracks
+  // are stored as search strings so loading resolves each one individually.
   router.add('POST', '/api/playlists/:id/import', async (ctx) => {
     const session = authWrite(ctx);
     if (!session) return;

@@ -40,39 +40,20 @@ export interface GuildPlayerOptions {
 }
 
 /**
- * Owns every piece of mutable playback state for one guild. Every command and
- * button handler reads/writes exclusively through a GuildPlayer instance
- * looked up via GuildPlayerManager — nothing else keeps its own copy.
+ * Owns all mutable playback state for one guild; commands/buttons act only
+ * through the GuildPlayer looked up via GuildPlayerManager.
  *
- * Emits 'update' after any state change a panel render should reflect, and
- * 'destroyed' exactly once, from stop().
+ * Every playback-state mutation runs through `enqueueAction`, a per-instance
+ * promise chain that serializes them. Without it, overlapping calls interleave
+ * around the `await track.getStream()` in startTrack(): queue/history
+ * corruption, leaked ffmpeg processes, stop() racing an in-flight op to
+ * resurrect a destroyed player. The `*Core` methods are the raw logic and must
+ * NEVER call enqueueAction themselves (deadlock against their own still-pending
+ * outer call) — only public wrappers and the two AudioPlayer listeners enqueue.
  *
- * Every method that mutates playback state (skip/previous/stop/setHrirMode,
- * plus the natural track-end and crash-recovery paths) runs through
- * `enqueueAction`, a per-instance promise chain that serializes them. Without
- * this, two overlapping calls (e.g. two different users pressing skip/previous
- * within the same cooldown window, or a natural track-end racing a manual
- * button press) could interleave around the `await track.getStream()` point
- * in startTrack() — this was a confirmed, reproducible bug (queue/history
- * corruption, leaked ffmpeg processes, and stop() racing an in-flight
- * operation to "resurrect" a destroyed player). The `*Core` methods below (and
- * the equivalent *Core methods on the collaborator classes this delegates to)
- * are the actual logic and must NEVER call enqueueAction themselves (that
- * would deadlock against their own still-pending outer call) — only the
- * public wrappers and the two AudioPlayer event listeners enqueue.
- *
- * As of the file-split refactor (see docs/file-split-refactor-plan.md phase
- * 5), most of that state/logic lives in three composed collaborators —
- * PlaybackLifecycle (current track/resource/timing, start/teardown/reseek),
- * QueueHistoryManager (queue/history/lapHistory, playNextCore/previousCore),
- * TimerManager (alone/empty-queue/settings-save timers + 24/7 mode) — plus a
- * small connection-recovery helper. Each collaborator is handed plain
- * callback closures for anything it needs from GuildPlayer's own state
- * (emitUpdate, isDestroyed, getVolume, etc.) and NEVER a reference back to
- * this class or to enqueueAction itself — that's a structural guarantee
- * against mutex re-entry, not just a naming convention. Cross-cutting logic
- * that spans more than one collaborator (stopCore, setHrirModeCore,
- * handlePlaybackFailureCore) stays here.
+ * Collaborators (PlaybackLifecycle, QueueHistoryManager, TimerManager) get plain
+ * callback closures and NEVER a reference back to this class or enqueueAction —
+ * a structural guard against mutex re-entry.
  */
 export class GuildPlayer extends EventEmitter {
   readonly guildId: string;
@@ -90,18 +71,12 @@ export class GuildPlayer extends EventEmitter {
   hrirMode: AuraToggle;
   /** The Aura 360° effect (widening + bass), independent of hrirMode/Aura HRIR. */
   aura360Mode: AuraToggle;
-  /**
-   * The guild's selected Aura Preset — an HRIR profile id (see config/hrirProfiles.ts),
-   * or null if no BRIR file is configured. Restored from the persisted
-   * defaultHrirProfile at construction (falling back to the first loaded profile),
-   * and changed live via setAuraPreset when the panel's Aura Preset select menu is
-   * used. Only meaningful while Aura HRIR is on.
-   */
+  /** Selected Aura Preset — an HRIR profile id, or null if no BRIR file is configured. Only meaningful while Aura HRIR is on. */
   hrirProfile: string | null;
   volume: number;
   permissionMode: PermissionMode;
   djRoleId: string | null;
-  /** Autoplay ("radio"): when on, the queue running dry pulls related tracks instead of leaving. Persisted per guild, toggled from the panel. */
+  /** Autoplay ("radio"): when the queue runs dry, pull related tracks instead of leaving. */
   autoplay: boolean;
   lastError: string | null = null;
   destroyed = false;
@@ -121,16 +96,12 @@ export class GuildPlayer extends EventEmitter {
     this.log = childLogger({ guildId: this.guildId });
 
     const settings: GuildSettings = getGuildSettings(this.guildId);
-    // Default volume is pinned to DEFAULT_VOLUME_PERCENT (ignores the persisted
-    // per-guild volume). Aura 360° is a real user toggle again: it starts from
-    // the persisted setting (which defaults to 'on') and is flipped by the panel
-    // button; normal mode is level-trimmed to match Aura 360°-on (see constants.NORMAL_MODE_TRIM_DB).
+    // Pinned to DEFAULT_VOLUME_PERCENT, ignoring the persisted per-guild volume.
     this.volume = DEFAULT_VOLUME_PERCENT;
     this.hrirMode = AURA_ENABLED ? settings.defaultHrirMode : 'off';
     this.aura360Mode = AURA_ENABLED ? settings.defaultAura360Mode : 'off';
-    // Restore the guild's selected Aura Preset if it still resolves to a loaded
-    // profile (files can be added/removed between restarts); otherwise fall back
-    // to the first available profile, or null when the folder is empty.
+    // Fall back if the persisted profile no longer resolves (files can be
+    // added/removed between restarts); null when the folder is empty.
     const loadedProfiles = getHrirProfiles();
     const persistedProfile = settings.defaultHrirProfile;
     this.hrirProfile =
@@ -211,14 +182,10 @@ export class GuildPlayer extends EventEmitter {
     });
     this.audioPlayer.on('error', (err) => {
       this.log.error({ err }, 'AudioPlayer error');
-      // Set synchronously, BEFORE enqueueing: @discordjs/voice emits 'error'
-      // then 'stateChange'->Idle in the same synchronous callstack for a
-      // stream error. Without this, the stateChange listener above (which
-      // fires second, nested inside this same callstack) reads isRespawning
-      // as still false and enqueues a redundant playNextCore that runs after
-      // recovery completes and incorrectly treats the just-recovered track as
-      // finished, skipping it. Cleared once handlePlaybackFailureCore (which
-      // itself may call reseekCore, toggling this again) fully settles.
+      // Set synchronously BEFORE enqueueing: @discordjs/voice emits 'error' then
+      // 'stateChange'->Idle in the same synchronous callstack, so the stateChange
+      // listener (firing second) would otherwise read isRespawning as false and
+      // enqueue a redundant playNextCore that skips the just-recovered track.
       this.playback.isRespawning = true;
       void this.enqueueAction(() => this.handlePlaybackFailureCore())
         .catch((e) => this.log.error({ err: e }, 'handlePlaybackFailure failed'))
@@ -233,12 +200,10 @@ export class GuildPlayer extends EventEmitter {
   }
 
   /**
-   * Chains `action` onto this player's serialized action queue and returns its
-   * result. The chain itself never rejects (a failed action doesn't wedge
-   * subsequent ones) — callers still get the real rejection via the returned
-   * promise. Never call this from inside a `*Core` method — only from a
-   * public wrapper or an event listener — or it deadlocks against the outer
-   * call that hasn't resolved yet.
+   * Chains `action` onto the serialized action queue and returns its result. The
+   * chain never rejects (a failed action doesn't wedge later ones); callers still
+   * get the real rejection via the returned promise. Never call from inside a
+   * `*Core` method — it deadlocks against the outer call that hasn't resolved yet.
    */
   private enqueueAction<T>(action: () => Promise<T>): Promise<T> {
     const run = this.actionQueue.then(() => action());
@@ -249,7 +214,6 @@ export class GuildPlayer extends EventEmitter {
     return run;
   }
 
-  // ---- delegated read-only state (see PlaybackLifecycle/QueueHistoryManager) ----
   get currentTrack(): QueueItem | null {
     return this.playback.currentTrack;
   }
@@ -278,7 +242,6 @@ export class GuildPlayer extends EventEmitter {
     return this.timers.stay247;
   }
 
-  // ---- elapsed-time bookkeeping (wall-clock based, survives respawns) ----
   getElapsedMs(): number {
     return this.playback.getElapsedMs();
   }
@@ -313,19 +276,13 @@ export class GuildPlayer extends EventEmitter {
     this.timers.setStay247(enabled);
   }
 
-  /**
-   * Applies updated per-guild control-permission settings (from /settings) to
-   * this live player so the change takes effect on the very next interaction,
-   * not only after the player is next re-created. Pure in-memory gate state —
-   * no effect on playback.
-   */
+  /** Applies /settings permission changes to this live player so they take effect on the next interaction. Pure in-memory gate state. */
   setPermissionSettings(permissionMode: PermissionMode, djRoleId: string | null): void {
     if (this.destroyed) return;
     this.permissionMode = permissionMode;
     this.djRoleId = djRoleId;
   }
 
-  /** Public entry — used by play.command.ts to start initial playback, and internally by the natural-track-end listener. */
   async playNext(opts: { forceAdvance?: boolean } = {}): Promise<void> {
     await this.enqueueAction(() => this.queueHistory.playNextCore(opts));
   }
@@ -339,11 +296,10 @@ export class GuildPlayer extends EventEmitter {
   }
 
   /**
-   * Routed through enqueueAction (unlike a plain synchronous setter) — without
-   * this, a pause/resume landing while a skip/previous/track-transition is
-   * mid-flight (awaiting track.getStream() inside startTrack) gets silently
-   * discarded once that transition completes, since startTrack unconditionally
-   * resets pausedAt to null and calls audioPlayer.play().
+   * Routed through enqueueAction so a pause/resume landing while a track
+   * transition is mid-flight (awaiting track.getStream() inside startTrack) isn't
+   * silently discarded — startTrack unconditionally resets pausedAt to null and
+   * calls audioPlayer.play().
    */
   async pause(): Promise<void> {
     await this.enqueueAction(async () => this.playback.pauseCore());
@@ -360,9 +316,7 @@ export class GuildPlayer extends EventEmitter {
     this.timers.scheduleSettingsSave({ defaultVolume: this.volume });
 
     if (this.playback.currentResource?.volume) {
-      // Already has an inline VolumeTransformer (either a non-passthrough
-      // resource, or a previous non-100% respawn already added one) - apply
-      // directly, glitch-free, exactly as before.
+      // Already has an inline VolumeTransformer - apply directly, glitch-free.
       this.playback.currentResource.volume.setVolumeLogarithmic(this.volume / 100);
       // Normal mode is level-trimmed to match Aura 360°-on; setVolumeLogarithmic just
       // overwrote the transformer's linear gain, so re-apply the trim here.
@@ -371,12 +325,9 @@ export class GuildPlayer extends EventEmitter {
         vol.setVolume(vol.volume * NORMAL_MODE_TRIM_FACTOR);
       }
     } else if (this.playback.currentTrack && this.volume !== 100) {
-      // Currently on the Opus-passthrough fast path (resourceFactory.ts) and
-      // volume just moved away from 100% for the first time on this track -
-      // the passthrough resource has no VolumeTransformer to adjust, so
-      // respawn once to pick up an inline-volume resource. Bounded by
-      // VOLUME_COOLDOWN_MS (500ms) on the panel select, so this can't be
-      // spammed into repeated respawns.
+      // On the Opus-passthrough fast path (resourceFactory.ts) with no
+      // VolumeTransformer to adjust, and volume just left 100% - respawn once to
+      // pick up an inline-volume resource. Bounded by the panel's VOLUME_COOLDOWN_MS.
       void this.enqueueAction(() => this.playback.applyVolumeRespawnCore()).catch((err) =>
         this.log.error({ err }, 'Failed to respawn for a non-default volume change'),
       );
@@ -390,10 +341,8 @@ export class GuildPlayer extends EventEmitter {
   }
 
   /**
-   * Removes a pending queue item by id. Routed through enqueueAction (like
-   * skip/previous) so a removal can't interleave with playNextCore's in-flight
-   * queue reassignment. Added for the web dashboard's queue-management UI;
-   * returns whether an item was actually removed.
+   * Routed through enqueueAction (like skip/previous) so a removal can't
+   * interleave with playNextCore's in-flight queue reassignment.
    */
   async removeQueueItem(id: string): Promise<boolean> {
     return this.enqueueAction(async () => {
@@ -415,10 +364,9 @@ export class GuildPlayer extends EventEmitter {
   }
 
   /**
-   * Seeks the current track to `positionMs` (clamped into range), preserving
-   * pause state — reuses the same reseek machinery as the HRIR/volume respawns
-   * (PlaybackLifecycle.reseekCore). Best-effort: seeking within the buffered/
-   * downloaded range is instant; a far-forward seek re-fetches from the source.
+   * Seeks the current track to `positionMs` (clamped), preserving pause state.
+   * Best-effort: seeking within the buffered range is instant; a far-forward
+   * seek re-fetches from the source.
    */
   async seek(positionMs: number): Promise<void> {
     await this.enqueueAction(() => this.seekCore(positionMs));
@@ -439,7 +387,6 @@ export class GuildPlayer extends EventEmitter {
     }
   }
 
-  /** Jumps straight to a queued item (skips the ones before it). Returns whether it happened. */
   async jumpToQueueItem(id: string): Promise<boolean> {
     return this.enqueueAction(() => this.queueHistory.jumpToCore(id));
   }
@@ -494,7 +441,7 @@ export class GuildPlayer extends EventEmitter {
     await this.enqueueAction(() => this.setAura360ModeCore(mode));
   }
 
-  /** Mirrors setHrirModeCore — respawns the current track so the Aura 360° toggle takes effect, preserving pause state. */
+  /** Respawns the current track so the Aura 360° toggle takes effect, preserving pause state. */
   private async setAura360ModeCore(mode: AuraToggle): Promise<void> {
     if (this.destroyed || mode === this.aura360Mode) return;
     this.aura360Mode = mode;
@@ -517,11 +464,9 @@ export class GuildPlayer extends EventEmitter {
   }
 
   /**
-   * Switches the applied Aura Preset (the BRIR/HRIR impulse response used by Aura
-   * HRIR) and persists the choice. Respawns the current track ONLY when Aura HRIR
-   * is actually on — while it's off the preset isn't in the graph, so we just
-   * record the selection (it applies when Aura HRIR is next turned on). Ignores
-   * unknown ids (a stale panel select) and preserves pause state across a respawn.
+   * Switches the applied Aura Preset (BRIR/HRIR impulse response) and persists it.
+   * Respawns the current track ONLY when Aura HRIR is on; while off, just records
+   * the selection (it applies when Aura HRIR is next turned on). Ignores unknown ids.
    */
   private async setAuraPresetCore(id: string): Promise<void> {
     if (this.destroyed || id === this.hrirProfile || !getHrirProfileById(id)) return;
@@ -573,10 +518,8 @@ export class GuildPlayer extends EventEmitter {
       clearInterval(this.panelRefreshTimer);
       this.panelRefreshTimer = null;
     }
-    // Flush rather than discard: a pending debounced save (e.g. a volume or
-    // 3D-audio change within the last 2s) was previously silently dropped
-    // here — flushPendingSettingsSave performs the write rather than just
-    // cancelling the timer.
+    // Flush rather than discard: a pending debounced save (volume/3D-audio change
+    // in the last 2s) was previously dropped here; flush performs the write.
     this.timers.flushPendingSettingsSave();
     this.playback.teardownPlayback();
     this.connection.destroy();

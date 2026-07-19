@@ -10,11 +10,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PROJECT_ROOT = path.resolve(__dirname, '..', '..');
 const LOCAL_BIN = path.join(PROJECT_ROOT, 'bin', process.platform === 'win32' ? 'ffmpeg.exe' : 'ffmpeg');
 
-/**
- * Resolution order: explicit FFMPEG_PATH override > a locally staged binary
- * (populated by `npm run setup-ffmpeg`, potentially sofalizer-capable) >
- * the guaranteed-available ffmpeg-static binary (no sofalizer support).
- */
+// Order: FFMPEG_PATH > local staged binary (setup-ffmpeg, may support sofalizer) > ffmpeg-static (no sofalizer).
 export function resolveFfmpegPath(): string {
   if (env.ffmpegPathOverride && existsSync(env.ffmpegPathOverride)) {
     return env.ffmpegPathOverride;
@@ -45,11 +41,7 @@ export interface FfmpegCapabilities {
   sofalizerAvailable: boolean;
 }
 
-/**
- * Resolves the ffmpeg binary, wires FFMPEG_PATH for prism-media to pick up,
- * and probes whether the true binaural (sofalizer/libmysofa) filter is usable
- * on this host. Call once at startup; the result is cached by the caller.
- */
+// Sets FFMPEG_PATH so prism-media uses the same binary. Call once at startup; caller caches.
 export function initFfmpeg(): FfmpegCapabilities {
   const resolvedPath = resolveFfmpegPath();
   process.env.FFMPEG_PATH = resolvedPath;

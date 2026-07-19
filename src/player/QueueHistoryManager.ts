@@ -14,7 +14,7 @@ function shuffleArray<T>(input: T[]): T[] {
   return copy;
 }
 
-/** In-place Fisher–Yates — shuffles the live queue so its displayed order IS the play order. */
+/** In-place shuffle: the queue's displayed order IS the play order. */
 function shuffleInPlace<T>(arr: T[]): void {
   for (let i = arr.length - 1; i > 0; i--) {
     const j = Math.floor(Math.random() * (i + 1));
@@ -32,43 +32,30 @@ export interface QueueHistoryCallbacks {
   teardownActiveResource: () => void;
   teardownPlayback: () => void;
   startEmptyQueueTimer: () => void;
-  /** Sets currentTrack to null only - see playNextCore's two distinct idle branches (one also clears playbackStartedAt, one doesn't). */
+  /** Clears currentTrack only, not playbackStartedAt (they clear independently). */
   clearCurrentTrack: () => void;
   clearPlaybackStartedAt: () => void;
   setLastError: (message: string | null) => void;
-  /** Whether autoplay ("radio") is enabled for this guild - checked when the queue runs dry. */
   isAutoplayEnabled: () => boolean;
-  /** Fetches related "radio" tracks seeded from the just-finished track (see sources/resolveAutoplayTracks). */
   fetchAutoplayTracks: (seed: QueueItem) => Promise<QueueItem[]>;
 }
 
 /**
- * Owns the queue/history/lapHistory/loopMode/shuffleEnabled state and the
- * playNextCore/previousCore logic that mutates it. Playback itself (starting
- * a track, tearing down ffmpeg) is delegated to PlaybackLifecycle via the
- * callbacks below - this class never touches enqueueAction or holds a
- * GuildPlayer back-reference, so it cannot re-enter the mutex.
+ * Never holds a GuildPlayer back-reference and never calls enqueueAction, so it
+ * cannot re-enter the mutex.
  *
- * NOTE (deviation from the original file-split plan): the plan called for a
- * further pure/impure split of playNextCore into a separate queueAdvance.ts
- * decision-arithmetic module. That was deliberately skipped here - the two
- * "queue exhausted" branches below have a subtle, easy-to-lose asymmetry
- * (one clears playbackStartedAt, the other doesn't; one re-assigns `queue`,
- * the other doesn't), and preserving that exactly was judged more important
- * than hitting the file's line-count target. playNextCore/previousCore are
- * ported as single cohesive methods instead.
+ * The two "queue exhausted" branches in playNextCore have a subtle asymmetry
+ * (one clears playbackStartedAt, the other doesn't; one re-assigns `queue`, the
+ * other doesn't) — preserve it exactly.
  */
 export class QueueHistoryManager {
   queue: QueueItem[] = [];
   /** Capped at MAX_HISTORY — used only for the "previous" button/command. */
   history: QueueItem[] = [];
   /**
-   * Uncapped, cleared whenever it's consumed to refill `queue` on a loop:'queue'
-   * wraparound. Kept separate from `history` deliberately: `history` is capped
-   * for the "previous" stack's bounded-memory purpose, but capping it ALSO
-   * silently dropped the earliest tracks of a long queue once loop:'queue'
-   * wrapped around (a confirmed data-loss bug) — this field exists solely to
-   * reconstruct a full lap without that cap.
+   * Uncapped loop-rotation buffer, cleared when consumed to refill `queue` on a
+   * loop:'queue' wraparound. Kept separate from the capped `history`: capping it
+   * dropped the earliest tracks on wraparound (a data-loss bug).
    */
   private lapHistory: QueueItem[] = [];
 
@@ -89,8 +76,7 @@ export class QueueHistoryManager {
     }
     const accepted = items.slice(0, capacity);
     if (this.shuffleEnabled) {
-      // Interleave new items at random positions so the queue's displayed order
-      // stays the actual play order (see setShuffle + playNextCore).
+      // Interleave at random positions so the displayed queue order stays the play order.
       for (const item of accepted) {
         this.queue.splice(Math.floor(Math.random() * (this.queue.length + 1)), 0, item);
       }
@@ -107,12 +93,10 @@ export class QueueHistoryManager {
   }
 
   /**
-   * Removes a single PENDING queue item by its QueueItem.id (never the
-   * currently-playing track, which lives in PlaybackLifecycle, not here).
-   * Returns the removed item, or null if no queued item had that id. Used by
-   * the web dashboard's queue-management UI. Callers route this through
-   * GuildPlayer.enqueueAction so it can't interleave with playNextCore's
-   * queue reassignment.
+   * Removes a single PENDING queue item by id (never the currently-playing
+   * track, which lives in PlaybackLifecycle). Returns the removed item, or null
+   * if none matched. Callers route this through GuildPlayer.enqueueAction so it
+   * can't interleave with playNextCore's queue reassignment.
    */
   removeById(id: string): QueueItem | null {
     const index = this.queue.findIndex((item) => item.id === id);
@@ -137,12 +121,10 @@ export class QueueHistoryManager {
   }
 
   /**
-   * Jumps straight to a queued item by id: starts it now, discards the queued
-   * items BEFORE it (skipped over), and keeps the ones after. Deterministic
-   * regardless of shuffle (unlike playNextCore, which random-picks under
-   * shuffle). Mirrors previousCore's "start first, commit state only on success"
-   * shape so a failed start leaves queue/history untouched. Returns false if no
-   * queued item has that id.
+   * Jumps to a queued item by id: starts it now, discards the queued items
+   * before it, keeps the ones after. Deterministic regardless of shuffle. Starts
+   * first and commits queue/history only on success, so a failed start leaves
+   * them untouched. Returns false if no queued item has that id.
    */
   async jumpToCore(id: string): Promise<boolean> {
     if (this.cb.isDestroyed()) return false;
@@ -165,7 +147,7 @@ export class QueueHistoryManager {
     if (outgoing) {
       const nextHistory = [...this.history, outgoing];
       this.history = nextHistory.length > MAX_HISTORY ? nextHistory.slice(nextHistory.length - MAX_HISTORY) : nextHistory;
-      // Keep the loop rotation only while queue-loop is active (see playNextCore).
+      // Keep the loop rotation only while queue-loop is active.
       if (this.loopMode === 'queue') this.lapHistory = [...this.lapHistory, outgoing];
     }
     this.queue = remaining;
@@ -180,7 +162,7 @@ export class QueueHistoryManager {
     return count;
   }
 
-  /** Called from stopCore — clears queue/history/lapHistory together. */
+  /** Clears queue, history, and lapHistory together. */
   resetAll(): void {
     this.queue = [];
     this.history = [];
@@ -188,11 +170,9 @@ export class QueueHistoryManager {
   }
 
   /**
-   * Sets the loop mode. Switching TO 'queue' re-arms the loop rotation by
-   * clearing lapHistory, so the loop set becomes the current track + what's
-   * queued + anything added afterwards — NOT songs already played before the
-   * loop was enabled. (lapHistory is only accumulated while loop:'queue' is on;
-   * see playNextCore.)
+   * Switching TO 'queue' re-arms the loop rotation by clearing lapHistory, so
+   * the loop set becomes the current track + what's queued + anything added
+   * after — NOT songs already played before the loop was enabled.
    */
   setLoopMode(mode: LoopMode): void {
     if (mode === 'queue' && this.loopMode !== 'queue') this.lapHistory = [];
@@ -200,10 +180,9 @@ export class QueueHistoryManager {
   }
 
   /**
-   * Toggles shuffle. Enabling shuffles the CURRENT pending queue in place so its
-   * displayed order equals the play order (playNextCore always plays from the
-   * front); disabling leaves the order as-is (the pre-shuffle order can't be
-   * restored, matching how mainstream players behave).
+   * Enabling shuffles the current pending queue in place so its displayed order
+   * equals the play order (playNextCore always plays from the front); disabling
+   * leaves the order as-is (pre-shuffle order can't be restored).
    */
   setShuffle(enabled: boolean): void {
     if (enabled && !this.shuffleEnabled) shuffleInPlace(this.queue);
@@ -212,12 +191,9 @@ export class QueueHistoryManager {
 
   /**
    * Natural track-end / manual skip. `forceAdvance` bypasses loop:'track' replay
-   * (manual skip always advances). State (queue/history/lapHistory) is only
-   * committed AFTER a candidate track's stream has been confirmed playable —
-   * a failed startTrack() no longer corrupts queue/history, and instead
-   * recurses to try the next candidate. When there's truly nothing left to
-   * play, this now actually stops the AudioPlayer/ffmpeg (previously it just
-   * updated bookkeeping while the old track kept audibly playing).
+   * (manual skip always advances). queue/history/lapHistory are committed only
+   * AFTER a candidate's stream is confirmed playable, so a failed startTrack()
+   * doesn't corrupt them; it recurses to try the next candidate.
    */
   async playNextCore(opts: { forceAdvance?: boolean } = {}): Promise<void> {
     if (this.cb.isDestroyed()) return;
@@ -245,8 +221,7 @@ export class QueueHistoryManager {
         candidateHistory = candidateHistory.slice(candidateHistory.length - MAX_HISTORY);
       }
       // Only build the loop rotation while queue-loop is active — otherwise
-      // lapHistory would accumulate across the whole session (mixing in songs
-      // played before the loop, and never being freed on a long radio run).
+      // lapHistory accumulates across the whole session and is never freed.
       candidateLapHistory = this.loopMode === 'queue' ? [...this.lapHistory, finishedTrack] : this.lapHistory;
     }
 
@@ -257,10 +232,8 @@ export class QueueHistoryManager {
         candidateQueue = this.shuffleEnabled ? shuffleArray(candidateLapHistory) : [...candidateLapHistory];
         nextLapHistory = [];
       } else {
-        // Autoplay ("radio"): before giving up, try to keep the session going
-        // with tracks related to what just finished. Only when it's enabled and
-        // there's a finished track to seed from; a failure or an all-duplicates
-        // result falls through to the normal stop below.
+        // Autoplay ("radio"): before giving up, try tracks related to what just
+        // finished. A failure or all-duplicates result falls through to the stop below.
         const autoplayed =
           this.cb.isAutoplayEnabled() && finishedTrack
             ? await this.fetchFreshAutoplay(finishedTrack, candidateHistory, candidateLapHistory)
@@ -281,9 +254,8 @@ export class QueueHistoryManager {
       }
     }
 
-    // Always play from the front: shuffle now reorders the queue itself (see
-    // setShuffle + enqueue), so the head IS the correct next track and the
-    // displayed queue order matches playback.
+    // Always play from the front: shuffle reorders the queue itself, so the head
+    // IS the correct next track.
     const next = candidateQueue[0];
     if (!next) {
       this.history = candidateHistory;
@@ -296,11 +268,9 @@ export class QueueHistoryManager {
     }
     const remainingQueue = candidateQueue.slice(1);
 
-    // A link-supplied timestamp (e.g. YouTube's ?t=) applies once, on this
-    // item's first play attempt — cleared here regardless of outcome so a
-    // later loop:'track' repeat, loop:'queue' wraparound, or /previous back
-    // to this same item plays from the top instead of jumping to the link's
-    // timestamp every time.
+    // A link-supplied timestamp (e.g. YouTube's ?t=) applies once, on first
+    // play — cleared here regardless of outcome so a later loop:'track' repeat,
+    // loop:'queue' wraparound, or /previous back to this item starts from the top.
     const startOffsetMs = next.initialOffsetMs ?? 0;
     next.initialOffsetMs = null;
 
@@ -322,11 +292,10 @@ export class QueueHistoryManager {
   }
 
   /**
-   * Fetches related "radio" tracks for autoplay and filters out anything already
-   * played this session (the seed, history, and the current lap) so the radio
-   * doesn't loop the same songs back-to-back. Returns at most
-   * AUTOPLAY_ENQUEUE_COUNT items; an empty result (no relations found, fetch
-   * failed, or all duplicates) tells playNextCore to stop as usual.
+   * Fetches related "radio" tracks and filters out anything already played this
+   * session (seed, history, current lap) so the radio doesn't loop the same
+   * songs back-to-back. Returns at most AUTOPLAY_ENQUEUE_COUNT; an empty result
+   * tells playNextCore to stop as usual.
    */
   private async fetchFreshAutoplay(seed: QueueItem, history: QueueItem[], lapHistory: QueueItem[]): Promise<QueueItem[]> {
     let related: QueueItem[];

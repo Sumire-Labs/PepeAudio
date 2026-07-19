@@ -21,19 +21,15 @@ export const nowCommand: BotCommand = {
       return;
     }
 
-    // Relocating the panel reassigns the guild's panel/text channel and re-sends
-    // the message for everyone, so require the caller to actually be in the
-    // bot's voice channel — otherwise any guild member could repost/move the
-    // panel from outside the session. (This is the same base requirement every
-    // control action shares; the panel move is intentionally NOT gated by the
-    // per-guild dj-role/requester mode so any listener can summon it.)
+    // Relocating reassigns the guild's panel/text channel and re-sends for everyone,
+    // so gate on VC presence to stop outsiders moving the panel. Intentionally NOT
+    // gated by dj-role/requester mode — any listener may summon it.
     if (interaction.member.voice.channelId !== player.voiceChannelId) {
       await interaction.reply({ content: 'パネルを表示するにはBotと同じボイスチャンネルに参加してください。', flags: MessageFlags.Ephemeral });
       return;
     }
 
-    // Reposting the panel sends a fresh message; throttle per-user so it can't be
-    // used to spam a channel.
+    // Fresh message each repost — throttle per-user to prevent channel spam.
     if (!checkCooldown('now', interaction.user.id, PLAY_COOLDOWN_MS)) {
       await interaction.reply({ content: '少し間隔を空けてから再度お試しください。', flags: MessageFlags.Ephemeral });
       return;

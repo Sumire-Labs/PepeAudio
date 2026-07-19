@@ -1,10 +1,4 @@
-/**
- * Per QueueItem's contract, durationMs should be null for live/unknown-duration
- * content, but some source metadata (YouTube livestreams in progress, etc.)
- * reports 0 instead — treat that the same as null everywhere duration is used,
- * rather than each call site deciding independently (previously this file and
- * progressBar.ts disagreed: one showed "LIVE", the other showed "0:00").
- */
+// Some sources report 0 (not null) for live/unknown duration; treat 0 as live too.
 export function isLiveDuration(ms: number | null): boolean {
   return ms === null || !Number.isFinite(ms) || ms <= 0;
 }

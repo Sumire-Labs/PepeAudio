@@ -8,8 +8,7 @@ export async function searchYouTube(query: string, limit = 1): Promise<YouTubeSe
   try {
     const yt = await getInnertube();
     const search = await yt.search(query, { type: 'video' });
-    // youtubei.js's result tree typing varies by version; narrow defensively here
-    // rather than risk a hard type dependency on an unstable internal shape.
+    // youtubei.js result shape is version-fragile; narrow defensively.
     const videos = ((search as unknown as { results?: { filterType: (t: unknown) => unknown[] } }).results?.filterType(
       YTNodes.Video,
     ) ?? []) as Array<{ video_id: string; title?: { text?: string }; author?: { name?: string }; length_text?: { text?: string } }>;

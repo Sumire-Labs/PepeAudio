@@ -1,11 +1,5 @@
-/**
- * A separate SQLite database (pepeaudio-web.sqlite) for web-dashboard data
- * (saved playlists). Kept apart from the bot's pepeaudio.sqlite on purpose:
- * under sharding every shard process writes the main DB, and the web server runs
- * in a different process (the ShardingManager). Giving the web server its own DB
- * file makes it the only writer here — no multi-process contention. This module
- * is imported only under the dashboard-enabled path, so it's a no-op otherwise.
- */
+// Separate from the bot's pepeaudio.sqlite so the web server (a different process
+// under sharding) is the sole writer here, avoiding multi-process contention.
 import path from 'node:path';
 import { mkdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
@@ -22,8 +16,7 @@ const DB_PATH = path.join(DATA_DIR, 'pepeaudio-web.sqlite');
 
 export const webDb = new Database(DB_PATH);
 webDb.pragma('journal_mode = WAL');
-// Single writer, but set a busy_timeout anyway so a WAL checkpoint never surfaces
-// a transient SQLITE_BUSY to a request handler.
+// Guards against a WAL checkpoint surfacing a transient SQLITE_BUSY to a handler.
 webDb.pragma('busy_timeout = 5000');
 
 webDb.exec(`

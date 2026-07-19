@@ -1,9 +1,3 @@
-/**
- * JSON API: identity, guild list, per-guild snapshot, and the command endpoint.
- * Every route requires a valid session; the command endpoint additionally
- * requires the CSRF header + same-origin, membership in the guild, and a blunt
- * per-user rate limit on top of the per-action cooldowns inside the executor.
- */
 import type { Router } from '../http/router.js';
 import type { RequestContext } from '../http/router.js';
 import type { WebServices } from '../services.js';
@@ -101,8 +95,7 @@ export function registerApiRoutes(router: Router, services: WebServices): void {
     json(ctx.res, result.ok ? 200 : 400, result);
   });
 
-  // Search is guild-independent (it just queries YouTube), so it's not scoped to
-  // a guild id. Session + CSRF + a per-user rate limit (each call hits YouTube).
+  // Guild-independent (queries YouTube), so not scoped to a guild id.
   router.add('POST', '/api/search', async (ctx) => {
     const session = requireSession(ctx);
     if (!session) return;

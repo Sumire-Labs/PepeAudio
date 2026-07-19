@@ -14,18 +14,8 @@ interface RelatedTrack {
   thumbnailUrl: string | null;
 }
 
-/**
- * Pulls the "up next / related" sidebar feed (`watch_next_feed`) for a YouTube
- * video via youtubei.js — the same signal YouTube's own autoplay is built on.
- *
- * In youtubei.js 17.x the feed items are `LockupView` nodes (verified against a
- * live response): the video id lives in `content_id`, the title in
- * `metadata.title.text`, and the channel in the first metadata row. `content_type`
- * separates real videos from the playlist/mix lockups and the Shorts `ReelShelf`,
- * so only `'VIDEO'` lockups are kept. Every field is read defensively because
- * these node shapes drift between youtubei.js versions. Thumbnails are derived
- * from the video id (deterministic) rather than parsed out of the lockup.
- */
+// youtubei.js watch_next_feed lockups: these node shapes drift between versions,
+// so read every field defensively. Only content_type 'VIDEO' lockups are real tracks.
 async function fetchRelatedYouTube(videoId: string, limit: number): Promise<RelatedTrack[]> {
   const yt = await getInnertube();
   const info = await yt.getInfo(videoId);
@@ -49,8 +39,7 @@ async function fetchRelatedYouTube(videoId: string, limit: number): Promise<Rela
       videoId: vid,
       title: node.metadata?.title?.text ?? 'Unknown title',
       author: author ?? 'Unknown artist',
-      // Duration isn't reliably exposed on the lockup; the panel degrades to an
-      // elapsed-only display until the track actually plays.
+      // Duration isn't reliably on the lockup; panel shows elapsed-only until playback.
       durationMs: null,
       thumbnailUrl: `https://i.ytimg.com/vi/${vid}/hqdefault.jpg`,
     });
@@ -59,16 +48,8 @@ async function fetchRelatedYouTube(videoId: string, limit: number): Promise<Rela
   return out;
 }
 
-/**
- * Autoplay / "radio" source: given the track that just finished, returns a batch
- * of related YouTube tracks to keep the session going. The related feed is
- * seeded from the finished track's YouTube video id — extracted directly for
- * native YouTube items, or found via a `<artist> <title>` search for
- * Spotify/Apple/SoundCloud items (which are all matched to YouTube for playback
- * anyway). Any failure degrades to an empty list so the caller just stops rather
- * than surfacing an error. De-duplication against session history is the
- * caller's job (see QueueHistoryManager).
- */
+// Any failure degrades to an empty list so the caller stops rather than errors.
+// De-duplication against session history is the caller's job (QueueHistoryManager).
 export async function resolveAutoplayTracks(seed: QueueItem): Promise<QueueItem[]> {
   try {
     let seedVideoId = seed.sourceType === 'youtube' ? extractVideoId(seed.sourceUrl) : null;

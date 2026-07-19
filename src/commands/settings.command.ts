@@ -14,14 +14,6 @@ const PERMISSION_MODE_LABELS: Record<PermissionMode, string> = {
   'requester-only': '現在の曲をリクエストした人のみ',
 };
 
-/**
- * Server-manager-only configuration for a guild's control-permission policy.
- * `.setDefaultMemberPermissions(ManageGuild)` hides the command from
- * non-managers in the client, but that gate is advisory (admins can re-grant it
- * in Integrations settings), so execute() re-checks ManageGuild server-side.
- * Changes are persisted via guildSettingsRepo AND pushed to the live player so
- * they take effect immediately.
- */
 export const settingsCommand: BotCommand = {
   data: new SlashCommandBuilder()
     .setName('settings')
@@ -54,8 +46,7 @@ export const settingsCommand: BotCommand = {
       return;
     }
 
-    // Defense-in-depth: the default-member-permissions gate above is client-side
-    // and can be overridden per-guild, so re-check server-side.
+    // Server-side re-check: the setDefaultMemberPermissions gate is client-side and per-guild overridable.
     if (!interaction.member.permissions.has(PermissionFlagsBits.ManageGuild)) {
       await interaction.reply({
         content: 'この操作には「サーバー管理」権限が必要です。',
@@ -79,8 +70,7 @@ export const settingsCommand: BotCommand = {
       return;
     }
 
-    // subcommand === 'permission' — the only other subcommand. `mode` is
-    // constrained to the three valid values by addChoices above.
+    // `mode` is constrained to the three valid values by addChoices, so the cast is safe.
     const mode = interaction.options.getString('mode', true) as PermissionMode;
     const djRole = interaction.options.getRole('dj_role');
 
@@ -89,8 +79,7 @@ export const settingsCommand: BotCommand = {
       djRole ? { permissionMode: mode, djRoleId: djRole.id } : { permissionMode: mode },
     );
 
-    // Push the change onto the running player (if any) so it applies to the very
-    // next interaction rather than only after the player is next re-created.
+    // Push onto the running player so it applies immediately, not only after re-create.
     const player = GuildPlayerManager.get(interaction.guildId);
     if (player && !player.destroyed) {
       player.setPermissionSettings(updated.permissionMode, updated.djRoleId);

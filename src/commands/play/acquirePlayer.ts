@@ -4,18 +4,13 @@ import type { GuildPlayer } from '../../player/GuildPlayer.js';
 import { getFfmpegCapabilities } from '../../config/ffmpegState.js';
 import { logger } from '../../logger.js';
 
-/**
- * Gets (or creates) the guild's player, connected to the voice channel the
- * caller is in. Returns the ready player, or null if it already sent an
- * editReply and the caller should stop.
- */
+/** Returns the ready guild player, or null if it already sent an editReply and the caller must bail. */
 export async function acquireGuildPlayer(
   interaction: ChatInputCommandInteraction<'cached'>,
   voiceChannel: VoiceBasedChannel,
 ): Promise<GuildPlayer | null> {
-  // Re-checked here (not just before the awaits above) to close a race where
-  // a different user's /play could have created a guild player in another
-  // voice channel while this command was resolving its input.
+  // Re-check to close a race: another user's /play could have created a player
+  // in a different voice channel while this command resolved its input.
   const existing = GuildPlayerManager.get(interaction.guildId);
   if (existing && !existing.destroyed && existing.voiceChannelId !== voiceChannel.id) {
     const otherChannel = interaction.guild.channels.cache.get(existing.voiceChannelId);
@@ -26,8 +21,7 @@ export async function acquireGuildPlayer(
       });
       return null;
     }
-    // The old channel is abandoned - tear that session down so we can
-    // connect to the channel this command was actually run from.
+    // Old channel abandoned - tear it down so we can connect where this command ran.
     await GuildPlayerManager.destroy(interaction.guildId);
   }
 
@@ -43,19 +37,15 @@ export async function acquireGuildPlayer(
     await player.waitUntilReady();
   } catch (err) {
     logger.error({ err }, 'Voice connection failed to become ready');
-    // Without this, the never-ready player stays registered (not destroyed),
-    // so GuildPlayerManager.getOrCreate() keeps handing it back on every
-    // subsequent /play in this guild - permanently stuck until a manual
-    // /stop or /quit (which nothing here suggests) or a process restart.
+    // Otherwise the never-ready player stays registered and getOrCreate() keeps
+    // handing it back on every /play until a manual /stop, /quit, or restart.
     await GuildPlayerManager.destroy(interaction.guildId);
     await interaction.editReply({ content: 'ボイスチャンネルへの接続に失敗しました。もう一度お試しください。' });
     return null;
   }
 
-  // A second /play (from a different voice channel) can win the
-  // reclaim-an-abandoned-channel race above between this command's destroy()
-  // and getOrCreate() calls - if so, this command's caller isn't actually in
-  // the channel the (other) player ended up connected to.
+  // A second /play can win the reclaim race above between our destroy() and
+  // getOrCreate() - if so, the caller isn't in the channel the player connected to.
   if (player.voiceChannelId !== voiceChannel.id) {
     await interaction.editReply({
       content: `他の操作と競合したため、Botは <#${player.voiceChannelId}> に接続しました。そちらに参加してから再度お試しください。`,

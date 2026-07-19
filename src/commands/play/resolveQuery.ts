@@ -20,13 +20,7 @@ const KNOWN_ERROR_TYPES = [
   AppleMusicResolutionError,
 ];
 
-/**
- * Resolves the /play query into queue items. Handles every recognized
- * resolver error type by editing the reply with that error's own message; an
- * unrecognized error is logged and gets a generic reply instead. Returns the
- * resolved items, or null if it already handled a reply (so the caller knows
- * to stop).
- */
+/** Returns null if it already sent an error reply (caller should stop). */
 export async function resolvePlayQuery(
   query: string,
   userId: string,

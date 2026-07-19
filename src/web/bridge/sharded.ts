@@ -1,10 +1,5 @@
-/**
- * BotBridge for sharded production (the ShardingManager process, which has NO
- * discord.js Client). Reaches the shard that owns a guild via broadcastEval, and
- * receives realtime pushes via shard IPC messages. Every eval'd function is a
- * fixed, server-authored closure over nothing but (client, context) + globalThis
- * — the only dynamic data crossing the boundary is the JSON context.
- */
+// Security invariant: every broadcastEval closure is server-authored and closes
+// over nothing dynamic — only the JSON context crosses the shard boundary.
 import type { Shard, ShardingManager } from 'discord.js';
 import { logger } from '../../logger.js';
 import { isShardToManagerMessage, PEPE_UPDATE } from '../ipc.js';
@@ -41,8 +36,7 @@ export class ShardedBridge implements BotBridge {
   }
 
   async listControllableGuilds(userGuildIds: string[], _userId: string): Promise<GuildSummary[]> {
-    // Fan out to ALL shards — a guild can be on any — then flatten. Each guild is
-    // hosted by exactly one shard, so there are no duplicates.
+    // Fan out to all shards; each guild lives on exactly one, so no dedup needed.
     const raw = (await this.manager
       .broadcastEval(
         (_client, ctx: { userGuildIds: string[] }) =>
@@ -87,9 +81,8 @@ export class ShardedBridge implements BotBridge {
   }
 
   async search(query: string): Promise<SearchCandidate[]> {
-    // Guild-independent — run on a single shard (0). The result is itself an
-    // array, so unwrap only when broadcastEval wrapped it in a per-shard array
-    // (raw[0] would then also be an array).
+    // Guild-independent → shard 0. Result is itself an array, so unwrap only when
+    // broadcastEval wrapped it in a per-shard array (raw[0] would then also be one).
     const raw = (await this.manager
       .broadcastEval(
         (_client, ctx: { query: string }) => (globalThis.__pepeBridge ? globalThis.__pepeBridge.search(ctx.query) : []),
@@ -102,8 +95,7 @@ export class ShardedBridge implements BotBridge {
   }
 
   async resolveTracks(query: string): Promise<ResolveResult> {
-    // Guild-independent — run on a single shard (0). The result is an object
-    // ({ tracks, error? }), so unwrap the per-shard array wrapper if present.
+    // Guild-independent → shard 0. Result is an object, so unwrap the per-shard array wrapper.
     const raw = (await this.manager
       .broadcastEval(
         (_client, ctx: { query: string }) =>

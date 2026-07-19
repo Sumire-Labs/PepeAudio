@@ -8,9 +8,7 @@ export function renderComponents(player: GuildPlayer) {
 }
 
 export function renderSendOptions(player: GuildPlayer): MessageCreateOptions {
-  // Silent: the info section mentions the requester (`<@id>`), which would
-  // otherwise ping them (and everyone else with mention notifications on)
-  // every time a fresh panel is sent.
+  // Silent: the info section's `<@id>` would ping the requester on every fresh panel.
   return {
     flags: [MessageFlags.IsComponentsV2, MessageFlags.SuppressNotifications],
     components: renderComponents(player),

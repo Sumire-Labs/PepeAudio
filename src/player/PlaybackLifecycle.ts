@@ -19,22 +19,18 @@ export interface PlaybackLifecycleCallbacks {
   getVolume: () => number;
   getHrirMode: () => AuraToggle;
   getAura360Mode: () => AuraToggle;
-  /** The guild's currently-selected Aura Preset (HRIR profile id), read fresh per track so a live preset switch takes effect on the next respawn. Null when no BRIR file is configured. */
+  /** Read fresh per track so a live Aura Preset switch applies on the next respawn. Null when no BRIR file is configured. */
   getHrirProfileId: () => string | null;
   setLastError: (message: string | null) => void;
   clearEmptyQueueTimer: () => void;
-  /** Reads whatever's likely to play next (queue[0]) - see startTrack's prefetch call. */
+  /** Whatever's likely to play next (queue[0]). */
   peekUpcoming: () => QueueItem | undefined;
 }
 
 /**
- * Owns the currently-playing track's resource/process lifecycle: starting,
- * tearing down, pausing/resuming, and reseeking (HRIR toggle, volume-
- * passthrough respawn, crash recovery). Never touches enqueueAction or holds
- * a GuildPlayer back-reference - everything it needs from GuildPlayer's own
- * state (volume, hrirMode, destroyed, lastError, emit('update')) comes
- * through the injected callbacks, so this class is structurally incapable of
- * re-entering the mutex.
+ * Owns the currently-playing track's resource/process lifecycle. Reaches
+ * GuildPlayer state only through injected callbacks (never a back-reference),
+ * so it is structurally incapable of re-entering the enqueueAction mutex.
  */
 export class PlaybackLifecycle {
   currentResource: AudioResource | null = null;
@@ -53,8 +49,7 @@ export class PlaybackLifecycle {
   currentTrackRetryCount = 0;
   isRespawning = false;
 
-  // Background full-speed buffer of the current track to a temp file — lets a
-  // reseek (toggle/volume/crash) do a fast input-side seek instead of re-fetching.
+  // Background full-speed buffer of the current track for fast reseeks.
   private currentTempFile: string | null = null;
   private tempFileComplete = false;
   private bufferSource: Readable | null = null;
@@ -66,7 +61,6 @@ export class PlaybackLifecycle {
     private readonly cb: PlaybackLifecycleCallbacks,
   ) {}
 
-  // ---- elapsed-time bookkeeping (wall-clock based, survives respawns) ----
   getElapsedMs(): number {
     if (this.playbackStartedAt === null) return 0;
     const end = this.pausedAt ?? Date.now();
@@ -78,14 +72,10 @@ export class PlaybackLifecycle {
   }
 
   /**
-   * Kills the currently active ffmpeg process/source stream, if any, without
-   * touching the AudioPlayer or currentResource — used right before starting a
-   * DIFFERENT track (skip/previous/loop:track replay/reseek) so the outgoing
-   * track's process is explicitly torn down rather than relying on
-   * @discordjs/voice's AudioPlayer.play() destroying the old resource's
-   * playStream and hoping ffmpeg exits on its own from the resulting broken pipe.
-   * Safe to call even when there's nothing active (destroyFfmpegProcess/slot
-   * release are idempotent).
+   * Kills the active ffmpeg process/source stream without touching the
+   * AudioPlayer or currentResource — used right before starting a DIFFERENT
+   * track so the outgoing process is explicitly torn down instead of relying on
+   * AudioPlayer.play() breaking the pipe. Idempotent; safe when nothing active.
    */
   teardownActiveResource(): void {
     if (this.activeFfmpegProcess) {
@@ -97,7 +87,6 @@ export class PlaybackLifecycle {
     this.activeSourceStream = null;
   }
 
-  /** Stops the AudioPlayer and tears down any active ffmpeg process/source stream, whichever path is in use. */
   teardownPlayback(): void {
     this.teardownActiveResource();
     this.clearTrackBuffer();
@@ -106,12 +95,10 @@ export class PlaybackLifecycle {
   }
 
   /**
-   * Starts a SECOND, full-speed download of `track` into a temp file, decoupled
-   * from playback pacing so it completes quickly. Once complete, reseeks (toggle/
-   * volume/crash) input-seek that file instead of re-fetching + decode-discarding,
-   * which is the whole point — snappy effect toggles. Purely best-effort: any
-   * failure just leaves reseeks on the original re-fetch path. NOT torn down on a
-   * reseek (only teardownActiveResource is), so the buffer keeps filling.
+   * Starts a SECOND, full-speed download of `track` into a temp file so a later
+   * reseek can input-seek it instead of re-fetching. Best-effort: any failure
+   * just leaves reseeks on the re-fetch path. NOT torn down on a reseek (only
+   * teardownActiveResource is), so the buffer keeps filling.
    */
   private startTrackBuffer(track: QueueItem): void {
     this.clearTrackBuffer();
@@ -136,7 +123,6 @@ export class PlaybackLifecycle {
       .catch((err) => this.log.debug({ err }, 'Track buffer getStream failed (reseek re-fetches instead)'));
   }
 
-  /** Aborts any in-flight buffer download and deletes the temp file. */
   private clearTrackBuffer(): void {
     this.bufferSource?.destroy();
     this.bufferSource = null;
@@ -147,28 +133,23 @@ export class PlaybackLifecycle {
   }
 
   /**
-   * `resetRetryCount` defaults to true (a genuinely new track starting fresh).
-   * handlePlaybackFailureCore explicitly passes `false` when retrying the SAME
-   * track in place via reseekCore — resetting on every startTrack call
-   * (including in-place crash retries) previously meant a track that failed,
-   * "succeeded" just long enough to reset the counter, then failed again
-   * could retry indefinitely instead of respecting MAX_FFMPEG_CRASH_RETRIES.
+   * `resetRetryCount` defaults to true (new track starting fresh).
+   * handlePlaybackFailureCore passes `false` when retrying the SAME track in
+   * place via reseekCore — otherwise a track that "succeeds" just long enough
+   * to reset the counter, then fails again, could retry past
+   * MAX_FFMPEG_CRASH_RETRIES forever.
    *
-   * Public only so QueueHistoryManager (a sibling collaborator) can start
-   * playback for a newly-picked track — this is INTERNAL USE ONLY for a
-   * respawn: never call it directly to respawn the current track, use
-   * reseekCore() instead (it's the only thing that correctly sets/clears
-   * isRespawning around the call).
+   * Public only so QueueHistoryManager can start a newly-picked track. To
+   * respawn the CURRENT track never call this directly — use reseekCore(), the
+   * only path that correctly sets/clears isRespawning around the call.
    */
   async startTrack(track: QueueItem, seekOffsetMs = 0, opts: { resetRetryCount?: boolean; fromBuffer?: boolean } = {}): Promise<void> {
     const resetRetryCount = opts.resetRetryCount ?? true;
     const fromBuffer = opts.fromBuffer ?? false;
     this.cb.clearEmptyQueueTimer();
 
-    // Source selection: a COMPLETED background buffer of this same track lets a
-    // reseek read the temp file with a fast input-side seek — no yt-dlp re-fetch,
-    // no decode-and-discard. Otherwise fetch a fresh stream (and, on a genuinely
-    // new track, kick off the background buffer for next time).
+    // A COMPLETED background buffer lets a reseek input-seek the temp file (no
+    // re-fetch/decode-discard); otherwise fetch fresh and kick off the buffer.
     const canUseBuffer =
       fromBuffer && this.tempFileComplete && this.currentTempFile !== null && existsSync(this.currentTempFile);
 
@@ -182,8 +163,7 @@ export class PlaybackLifecycle {
       stream = resolved.stream;
       inputType = resolved.inputType;
       if (this.cb.isDestroyed()) {
-        // The player was torn down while we were awaiting the stream — discard
-        // it rather than committing a resource to a dead voice connection.
+        // Torn down while awaiting the stream — discard it, don't commit a resource to a dead connection.
         stream.destroy();
         throw new Error('GuildPlayer destroyed while resolving stream');
       }
@@ -192,12 +172,11 @@ export class PlaybackLifecycle {
       }
     }
 
-    // getHrirProfileById reads a list cached once at startup, so this always
-    // resolves whenever the selected id is non-null - it can't detect the
-    // file being deleted mid-session. resourceFactory's existsSync check (and
-    // its own warning log) is the real "does the file still exist" check;
-    // created.usingHrir below reflects what ACTUALLY happened for this track.
-    // Read fresh each track so a live Aura Preset switch applies on respawn.
+    // getHrirProfileById reads a startup-cached list, so it resolves whenever
+    // the id is non-null and can't detect the file being deleted mid-session —
+    // resourceFactory's existsSync is the real check, and created.usingHrir
+    // below reflects what actually happened. Read fresh each track so a live
+    // Aura Preset switch applies on respawn.
     const profileId = this.cb.getHrirProfileId();
     const hrirProfile = profileId ? getHrirProfileById(profileId) : undefined;
 
@@ -240,13 +219,10 @@ export class PlaybackLifecycle {
     this.audioPlayer.play(resource);
     this.cb.emitUpdate();
 
-    // Fire-and-forget warm-up for whatever's likely to play next (e.g. a lazily-
-    // matched Spotify/Apple Music item's YouTube search - see youtubeMatch.ts).
-    // Deliberately NOT routed through enqueueAction: prefetch never mutates
-    // playback state, so chaining it onto the mutex would block the next real
-    // skip/previous behind a network request for no reason. Wrong when shuffle
-    // is on (queue[0] isn't necessarily next) but harmless either way - it
-    // just means the cache warms for a track that doesn't end up playing next.
+    // Fire-and-forget warm-up for whatever's likely to play next. Deliberately
+    // NOT routed through enqueueAction: prefetch never mutates playback state, so
+    // chaining it onto the mutex would block the next real skip behind a network
+    // request. Wrong under shuffle (queue[0] isn't necessarily next) but harmless.
     this.cb.peekUpcoming()?.prefetch?.().catch(() => {});
   }
 
@@ -266,13 +242,11 @@ export class PlaybackLifecycle {
   }
 
   /**
-   * Shared by the HRIR toggle, the volume-passthrough respawn, seek, and
-   * ffmpeg crash recovery: kill the current
-   * ffmpeg process/stream and restart the current track from `offsetMs`,
-   * without misfiring the natural-track-end path. Callers must already be
-   * running inside an enqueueAction'd `*Core` method on GuildPlayer.
-   * `resetRetryCount` is forwarded to startTrack — crash recovery passes
-   * `false` since it's retrying the SAME track in place (see startTrack's doc).
+   * Shared by HRIR toggle, volume-passthrough respawn, seek, and ffmpeg crash
+   * recovery: kill the current process/stream and restart the current track from
+   * `offsetMs` without misfiring the natural-track-end path. Callers must already
+   * be inside an enqueueAction'd `*Core` method. `resetRetryCount` is forwarded
+   * to startTrack (crash recovery passes false — same track retried in place).
    */
   async reseekCore(offsetMs: number, opts: { resetRetryCount?: boolean } = {}): Promise<void> {
     if (!this.currentTrack) return;
@@ -280,7 +254,6 @@ export class PlaybackLifecycle {
     this.isRespawning = true;
     try {
       this.teardownActiveResource();
-      // fromBuffer: use the buffered temp file (fast input-seek) if it's ready.
       await this.startTrack(track, offsetMs, { ...opts, fromBuffer: true });
     } finally {
       this.isRespawning = false;
@@ -288,10 +261,9 @@ export class PlaybackLifecycle {
   }
 
   /**
-   * Mirrors setHrirModeCore's respawn/pause-preservation shape. Re-checks
-   * its own preconditions (rather than trusting the caller's snapshot) since
-   * this runs asynchronously behind the enqueueAction mutex - volume or track
-   * may have changed again by the time it actually executes.
+   * Re-checks its own preconditions rather than trusting the caller's snapshot:
+   * it runs asynchronously behind the enqueueAction mutex, so volume or track
+   * may have changed again by the time it executes.
    */
   async applyVolumeRespawnCore(): Promise<void> {
     if (this.cb.isDestroyed() || !this.currentTrack || this.hasInlineVolume || this.cb.getVolume() === 100) return;

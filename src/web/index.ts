@@ -1,10 +1,4 @@
-/**
- * Composition root for the web dashboard. Given a BotBridge (LocalBridge in
- * single-process mode, ShardedBridge in the manager) and the parsed WebEnv, it
- * wires up sessions, the playlist repo, all route groups, and the HTTP server.
- * Called only when WEB_DASHBOARD_ENABLED is true, so importing this file (and
- * everything it pulls in, including the web DB) stays off the default path.
- */
+// Only import when WEB_DASHBOARD_ENABLED is true — this pulls in the web DB and its deps, keeping them off the default path.
 import { startHttpServer } from './server.js';
 import { Router } from './http/router.js';
 import { SessionStore } from './auth/session.js';

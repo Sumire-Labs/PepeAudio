@@ -2,10 +2,8 @@ import { entersState, VoiceConnectionStatus, type VoiceConnection } from '@disco
 import type { childLogger } from '../logger.js';
 
 /**
- * Wires up automatic teardown when the voice connection drops and doesn't
- * recover on its own within a short grace window. Never touches enqueueAction
- * or holds a GuildPlayer back-reference - `onLost` is a plain callback
- * (GuildPlayer passes its own `stop()`), so this can't re-enter the mutex.
+ * `onLost` is a plain callback (GuildPlayer passes its own `stop()`), not a
+ * back-reference, so teardown can't re-enter the mutex.
  */
 export function attachConnectionRecovery(
   connection: VoiceConnection,

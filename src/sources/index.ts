@@ -13,12 +13,9 @@ export { NoMatchFoundError, SpotifyResolutionError } from './spotify.js';
 export { SoundCloudUnavailableError } from './soundcloud.js';
 export { AppleMusicResolutionError } from './appleMusic.js';
 
-/** Single entry point `/play` uses: classifies the input and dispatches to the right resolver. */
 export async function resolveInput(query: string, requestedBy: string): Promise<QueueItem[]> {
   const kind = classifyInput(query);
-  // Downstream URL parsing (new URL(), spotify-uri) requires a scheme; a link
-  // pasted as e.g. "youtube.com/watch?v=..." classifies fine but previously
-  // threw deep inside extractVideoId()/spotify-uri with a confusing error.
+  // Downstream parsers (new URL(), spotify-uri) need a scheme, which a schemeless paste lacks.
   const normalized = kind === 'search' ? query : normalizeUrlInput(query);
 
   switch (kind) {

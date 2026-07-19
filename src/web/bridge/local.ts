@@ -1,9 +1,3 @@
-/**
- * BotBridge for single-process mode (npm run dev / start:single): the web server
- * shares the process with the Client and GuildPlayerManager, so every call is a
- * direct in-process method call. Realtime is wired via GuildPlayerManager's
- * 'created' emitter plus each player's own 'update'/'destroyed' events.
- */
 import type { Client } from 'discord.js';
 import * as GuildPlayerManager from '../../player/GuildPlayerManager.js';
 import type { GuildPlayer } from '../../player/GuildPlayer.js';
@@ -43,7 +37,7 @@ export class LocalBridge implements BotBridge {
     const result: GuildSummary[] = [];
     for (const guildId of userGuildIds) {
       const guild = this.client.guilds.cache.get(guildId);
-      if (!guild) continue; // the bot isn't a member of this guild — can't control it
+      if (!guild) continue;
       const player = GuildPlayerManager.get(guildId);
       const active = Boolean(player && !player.destroyed);
       result.push({
@@ -120,8 +114,7 @@ export class LocalBridge implements BotBridge {
     player.once('destroyed', onDestroyed);
     this.hooks.set(player.guildId, { player, onUpdate, onDestroyed });
 
-    // Push an immediate snapshot so a just-created (or newly-subscribed) player's
-    // current state reaches the browser without waiting for the next update.
+    // Immediate snapshot so current state reaches the browser without waiting for the next update.
     this.pushAll(player.guildId);
   }
 

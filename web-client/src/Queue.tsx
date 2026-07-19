@@ -4,7 +4,6 @@ import type { GuildSession } from './useGuildSession.ts';
 import { cx, formatMs, Icons, Spinner } from './ui.tsx';
 import { useToast } from './toast.tsx';
 
-/** Heuristic: does the input look like a link (→ add directly) rather than a search term (→ show candidates)? */
 function looksLikeUrl(q: string): boolean {
   return /^https?:\/\//i.test(q) || /\b(youtube\.com|youtu\.be|spotify\.com|soundcloud\.com|music\.apple\.com)\b/i.test(q);
 }

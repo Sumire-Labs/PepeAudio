@@ -1,9 +1,4 @@
-/**
- * OAuth2 login routes: /auth/login (start), /auth/callback (finish), /auth/logout.
- * The login leg is CSRF-protected by a signed `state` cookie compared in the
- * callback; the redirect_uri is a fixed env value (never taken from the request),
- * so there's no open-redirect surface.
- */
+// redirect_uri is a fixed env value (never from the request) to avoid open-redirect.
 import { randomBytes } from 'node:crypto';
 import type { Router } from '../http/router.js';
 import type { WebServices } from '../services.js';

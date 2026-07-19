@@ -1,15 +1,6 @@
 export class AppleMusicResolutionError extends Error {}
 
-/**
- * Apple has no public streaming API for third-party playback, but the classic
- * iTunes Lookup API (https://itunes.apple.com/lookup) is free, key-less, and
- * still live — it resolves a numeric track/collection id to metadata
- * (verified directly: curl'd a real Apple Music track id and a real album id
- * with entity=song and got back trackName/artistName/track listings). We only
- * ever build this URL ourselves from a validated numeric id extracted from the
- * pasted link — the user's raw URL is never itself fetched, matching the same
- * SSRF-safe pattern as the YouTube resolver's canonical-URL rebuild.
- */
+// SSRF-safe: URL is built here from a validated numeric id, never by fetching the user's raw pasted link.
 const ITUNES_LOOKUP_URL = 'https://itunes.apple.com/lookup';
 
 export interface ItunesResult {

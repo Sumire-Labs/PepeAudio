@@ -1,9 +1,4 @@
-/**
- * Parses a YouTube URL's start-time parameter into milliseconds.
- * Supports both conventions YouTube actually uses:
- *   - plain seconds: ?t=90 / &start=90
- *   - letter-suffixed: ?t=1h2m3s / &t=2m3s / &t=45s (any subset, in order)
- */
+/** Parses a YouTube start-time param (?t= / &start=, plain seconds or 1h2m3s) to ms. */
 export function parseYouTubeTimestamp(url: string): number | null {
   let parsed: URL;
   try {
@@ -28,10 +23,7 @@ export function parseYouTubeTimestamp(url: string): number | null {
   return null;
 }
 
-/**
- * Parses a SoundCloud "share at this time" URL fragment into milliseconds.
- * SoundCloud's own share links use #t=1:23 (mm:ss) or #t=83 (plain seconds).
- */
+/** Parses a SoundCloud "#t=" share fragment (mm:ss or plain seconds) to ms. */
 export function parseSoundCloudTimestamp(url: string): number | null {
   let parsed: URL;
   try {
@@ -39,7 +31,7 @@ export function parseSoundCloudTimestamp(url: string): number | null {
   } catch {
     return null;
   }
-  const hash = parsed.hash; // e.g. "#t=1:23"
+  const hash = parsed.hash;
   const mmss = hash.match(/^#t=(\d+):(\d{1,2})$/);
   if (mmss) {
     const minutes = parseInt(mmss[1]!, 10);

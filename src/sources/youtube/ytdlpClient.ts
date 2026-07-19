@@ -3,23 +3,12 @@ import { YtDlp, helpers as ytDlpHelpers } from 'ytdlp-nodejs';
 import { logger } from '../../logger.js';
 
 const ytDlpInstance = new YtDlp();
-/**
- * Caches the readiness check itself as an in-flight promise (mirroring
- * innertubePromise in innertubeClient.ts) rather than a plain boolean — with a boolean, two
- * tracks resolving concurrently on a cold start could both see "not ready"
- * and both independently call checkInstallationAsync()/downloadYtDlp()
- * (a confirmed race: downloadYtDlp does a bare existsSync-then-write with no
- * lock/temp-file, so two concurrent downloads can corrupt each other).
- */
+// In-flight promise (not a boolean) so concurrent cold-start downloads serialize — the
+// underlying download has no lock and would otherwise race and corrupt each other.
 let ytDlpReadyPromise: Promise<void> | null = null;
 
-/**
- * A freshly-downloaded yt-dlp binary is written to disk BEFORE its checksum is
- * verified, so a mismatch (or an unavailable checksum list) leaves an
- * unverified binary behind. Remove it — otherwise the next getYtDlp() call's
- * checkInstallationAsync() would silently adopt that unverified binary instead
- * of re-downloading and re-verifying.
- */
+// The binary is written to disk before its checksum is verified; remove it on failure so the
+// next getYtDlp() doesn't silently adopt an unverified binary instead of re-downloading.
 async function removeUnverifiedYtDlp(): Promise<void> {
   try {
     const binaryPath = ytDlpHelpers.findYtdlpBinary();
@@ -32,23 +21,15 @@ async function removeUnverifiedYtDlp(): Promise<void> {
   }
 }
 
-/**
- * yt-dlp is the primary engine for actually streaming audio (see
- * createYouTubeStreamGetter for why) — this is the seam to check first if
- * playback starts failing across the board.
- */
 export async function getYtDlp(): Promise<YtDlp> {
   if (!ytDlpReadyPromise) {
     ytDlpReadyPromise = ytDlpInstance.checkInstallationAsync().then(
       () => undefined,
       async () => {
         logger.warn('yt-dlp binary not found - attempting a checksum-verified download');
-        // Use the checksum-verifying downloader (validates against the release's
-        // SHA2-256SUMS) rather than the bare download. It throws on a checksum
-        // MISMATCH and resolves with verified:false when the checksum list
-        // itself couldn't be fetched — refuse to run the binary in either case
-        // and clean it up, so we never execute an unverified yt-dlp. Callers
-        // fall back to youtubei.js when this rejects.
+        // downloadYtDlpVerified throws on a checksum MISMATCH but resolves verified:false when the
+        // SHA2-256SUMS list can't be fetched — refuse and clean up in both cases so we never run an
+        // unverified binary. Callers fall back to youtubei.js when this rejects.
         try {
           const result = await ytDlpHelpers.downloadYtDlpVerified();
           if (!result.verified) {

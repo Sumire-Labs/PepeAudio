@@ -1,16 +1,7 @@
-/**
- * The IPC contract between shard children and the ShardingManager for the web
- * dashboard, plus the `globalThis.__pepeBridge` type shared by both sides.
- *
- * - The shard side (shardBridgeGlobal.ts) stashes a PepeShardBridge on globalThis
- *   so the manager's broadcastEval'd functions can reach it (a stringified eval
- *   can't close over manager-side imports).
- * - The shard side pushes ShardToManagerMessage over client.shard.send(); the
- *   manager (ShardedBridge) receives them via shard.on('message').
- */
+// The bridge is stashed on globalThis because broadcastEval runs as a stringified
+// eval that can't close over manager-side imports.
 import type { CommandResult, GuildSnapshot, GuildSummary, ResolveResult, SearchCandidate, WebCommand } from './bridge/types.js';
 
-/** The surface the manager invokes on each shard via broadcastEval. */
 export interface PepeShardBridge {
   getSnapshot(guildId: string, userId: string): Promise<GuildSnapshot | null>;
   runCommand(guildId: string, userId: string, command: WebCommand): Promise<CommandResult>;

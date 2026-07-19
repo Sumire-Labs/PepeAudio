@@ -8,14 +8,9 @@ import { enqueueAndConfirm } from '../commands/play/enqueueAndConfirm.js';
 import { checkCooldown } from '../util/rateLimiter.js';
 import { PLAY_COOLDOWN_MS } from '../player/constants.js';
 
-/**
- * Handles the modal shown by the panel's "➕ 曲を追加" button (see
- * ui/addQueueModal.ts). Reuses /play's own query-resolution/enqueue logic
- * (resolvePlayQuery/enqueueAndConfirm) rather than duplicating it.
- */
 export async function handleAddQueueModalSubmit(interaction: ModalSubmitInteraction): Promise<void> {
   const parsed = parseAddQueueModalId(interaction.customId);
-  if (!parsed) return; // not ours
+  if (!parsed) return;
 
   if (!interaction.inCachedGuild() || interaction.guildId !== parsed.guildId) {
     await interaction.reply({ content: '不正な操作です。', flags: MessageFlags.Ephemeral });
@@ -28,11 +23,9 @@ export async function handleAddQueueModalSubmit(interaction: ModalSubmitInteract
     return;
   }
 
-  // Re-check staleness/permission at submit time too - filling out a modal can
-  // take a while, during which the panel could have been replaced or the user
-  // could have left the voice channel. ModalSubmitInteraction.message is the
-  // origin message the modal was launched from (present here since it's always
-  // launched from a button on the panel message).
+  // Re-check staleness at submit: filling the modal takes time, so the panel may
+  // have been replaced meanwhile. interaction.message is the panel message the
+  // modal launched from.
   if (interaction.message && interaction.message.id !== player.panelMessageId) {
     await interaction.reply({ content: 'このパネルは古くなっています。最新のパネルをご利用ください。', flags: MessageFlags.Ephemeral });
     return;
@@ -44,9 +37,8 @@ export async function handleAddQueueModalSubmit(interaction: ModalSubmitInteract
     return;
   }
 
-  // Share /play's cooldown bucket (same scope + window): this modal reuses the
-  // exact same expensive resolve/search path, so without this a user could
-  // alternate /play and the panel's add-queue modal to defeat either limit.
+  // Share /play's cooldown bucket: this modal hits the same expensive resolve
+  // path, so a separate limit would let users alternate the two to defeat both.
   if (!checkCooldown('play', interaction.user.id, PLAY_COOLDOWN_MS)) {
     await interaction.reply({ content: '少し間隔を空けてから再度お試しください。', flags: MessageFlags.Ephemeral });
     return;

@@ -9,24 +9,17 @@ function applyAccent([r, g, b]: [number, number, number]): void {
   root.setProperty('--accent-b', String(b));
 }
 
-/** Pushes a color into a pleasant accent range: boost saturation, clamp lightness. */
 function normalizeAccent(r: number, g: number, b: number): [number, number, number] {
   const max = Math.max(r, g, b);
   const min = Math.min(r, g, b);
   const lum = (max + min) / 2;
-  // Too dark or too washed-out → keep the default accent.
   if (max - min < 18 || lum < 24) return DEFAULT_ACCENT;
-  // Nudge mid-lightness up a touch so the accent reads on the dark UI.
   const lift = lum < 90 ? 1.35 : 1;
   const clamp = (v: number) => Math.max(0, Math.min(255, Math.round(v * lift)));
   return [clamp(r), clamp(g), clamp(b)];
 }
 
-/**
- * Derives an accent color from the current artwork and sets the --accent CSS
- * vars. Loads the image with crossOrigin so the canvas isn't tainted; if the CDN
- * doesn't allow CORS (canvas read throws), it silently keeps the default accent.
- */
+/** crossOrigin load avoids tainting the canvas; a CORS-blocked read throws and falls back to the default accent. */
 export function useAccent(url: string | null): void {
   useEffect(() => {
     if (!url) {

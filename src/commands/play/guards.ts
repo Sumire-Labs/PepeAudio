@@ -7,14 +7,8 @@ export interface PreflightPassResult {
   voiceChannel: VoiceBasedChannel;
 }
 
-/**
- * Runs the guard checks every /play invocation must pass before doing any
- * real work. On failure it sends the appropriate ephemeral reply itself and
- * returns null. On success it returns the interaction narrowed by
- * `inCachedGuild()` — that type-predicate narrowing does not cross a
- * function-call boundary, so callers must use this returned, already-narrowed
- * reference rather than trying to re-narrow the original interaction.
- */
+// inCachedGuild() narrowing doesn't cross the call boundary; callers must use
+// the returned narrowed interaction, not re-narrow the original.
 export async function runPreflightGuards(
   interaction: ChatInputCommandInteraction,
 ): Promise<PreflightPassResult | null> {

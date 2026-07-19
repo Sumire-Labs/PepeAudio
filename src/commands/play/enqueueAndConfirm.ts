@@ -6,12 +6,7 @@ import { buildQueuedConfirmation } from '../../ui/panelBuilder.js';
 import { escapeMd } from '../../ui/panelMarkdown.js';
 import { logger } from '../../logger.js';
 
-/**
- * Enqueues the resolved items onto the player and confirms the addition,
- * starting playback first if the player was idle. On the one recoverable
- * failure (queue at capacity) it edits the reply and returns; otherwise it
- * handles every remaining reply/confirmation itself.
- */
+/** Owns every reply/confirmation for the command — the caller must not reply after this. */
 export async function enqueueAndConfirm(
   interaction: RepliableInteraction<'cached'>,
   player: GuildPlayer,
@@ -24,9 +19,7 @@ export async function enqueueAndConfirm(
     return;
   }
 
-  // The deferred reply is only an ephemeral placeholder — every success path
-  // below confirms via a public Components V2 card instead, so clear it now
-  // rather than leaving an empty ephemeral message lingering.
+  // Success paths confirm via a public card, so drop the ephemeral placeholder.
   await interaction.deleteReply().catch(() => {});
   const channel = interaction.channel;
   const sendable: SendableChannel | null = channel && 'send' in channel ? channel : null;
@@ -34,8 +27,7 @@ export async function enqueueAndConfirm(
   if (wasIdle) {
     await player.playNext();
 
-    // Send/replace the live player panel. Playback already started, so a
-    // panel-send hiccup shouldn't make the whole command look like it failed.
+    // Playback already started; a panel-send failure must not fail the command.
     if (sendable) {
       try {
         await sendOrReplacePanel(player, sendable);
@@ -45,11 +37,6 @@ export async function enqueueAndConfirm(
     }
   }
 
-  // Confirm the addition with a public Components V2 card — identical shape
-  // whether this was the first track (shown just under the freshly-sent
-  // panel) or an addition to an already-playing queue, so both cases look
-  // the same. Sent publicly so everyone sees what got queued, not just the
-  // requester.
   const queuedItems = addedCount < items.length ? items.slice(0, addedCount) : items;
   let confirmationSent = false;
   if (sendable) {
@@ -63,9 +50,7 @@ export async function enqueueAndConfirm(
       logger.error({ err }, 'Failed to send the queue-added confirmation');
     }
   }
-  // The deferred reply was already deleted above, so on failure the
-  // requester would otherwise see nothing at all despite the track(s)
-  // genuinely having been enqueued - fall back to an ephemeral follow-up.
+  // The deferred reply was deleted, so without this the requester sees nothing.
   if (!confirmationSent) {
     const firstTitle = queuedItems[0]?.title ?? '';
     const fallbackText =

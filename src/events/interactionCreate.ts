@@ -23,9 +23,7 @@ export function registerInteractionCreateEvent(client: Client): void {
         return;
       }
     } catch (err) {
-      // Expected when a user clicks a stale panel or the 3s response window
-      // closed before we could answer — there's nothing to recover and trying
-      // to reply would just fail again, so log quietly and stop.
+      // Stale panel / expired 3s window: nothing to recover, retrying would fail.
       if (isDeadInteractionError(err)) {
         logger.debug({ err }, 'Interaction expired or was already handled before we could respond');
         return;

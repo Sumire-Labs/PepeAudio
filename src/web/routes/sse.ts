@@ -1,9 +1,3 @@
-/**
- * Server-Sent Events stream for one guild's live player state. Sends the current
- * snapshot on connect, then a fresh snapshot on every throttled player update
- * (and `null` when the session ends). Uses SSE rather than WebSocket so it works
- * over plain node:http and passes cleanly through reverse proxies.
- */
 import type { Router } from '../http/router.js';
 import type { WebServices } from '../services.js';
 import { json } from '../http/respond.js';
@@ -18,7 +12,6 @@ const MAX_STREAM_MS = 30 * 60 * 1000;
 
 export function registerSseRoutes(router: Router, services: WebServices): void {
   const { env, sessions, bridge } = services;
-  // Live SSE connection count per userId, for the concurrency cap below.
   const openByUser = new Map<string, number>();
 
   router.add('GET', '/api/guilds/:id/events', async (ctx) => {
@@ -60,7 +53,6 @@ export function registerSseRoutes(router: Router, services: WebServices): void {
       }
     };
 
-    // Initial snapshot (per-viewer capabilities accurate for the REST fetch).
     const initial = await bridge.getSnapshot(guildId, session.userId);
     send(initial);
 
@@ -76,8 +68,6 @@ export function registerSseRoutes(router: Router, services: WebServices): void {
     }, HEARTBEAT_MS);
     heartbeat.unref();
 
-    // Recycle the stream after a bounded lifetime so a proxy-abandoned connection
-    // can't linger forever (the browser's EventSource just reconnects).
     const lifetime = setTimeout(() => {
       try {
         res.end();

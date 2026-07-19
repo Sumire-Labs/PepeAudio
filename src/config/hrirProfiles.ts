@@ -11,41 +11,21 @@ const PROJECT_ROOT = path.resolve(__dirname, '..', '..');
 /** Gitignored — see assets/hrir_profiles/README.md. Nothing here is bundled or downloaded by this bot. */
 export const DEFAULT_HRIR_PROFILES_DIR = path.join(PROJECT_ROOT, 'assets', 'hrir_profiles');
 
-/** Bounds how long a single ffmpeg channel-count probe may run before we give up on that file. */
 const PROBE_TIMEOUT_MS = 10_000;
 
-/** Bounds the (one-per-loaded-profile) makeup-gain measurement convolution at startup. */
 const MAKEUP_MEASURE_TIMEOUT_MS = 20_000;
 
-/**
- * Headroom (dB) left BELOW a perfect RMS level-match, so hot / loudness-war
- * masters don't ride continuously into the safety limiter. Measured: without it,
- * a ~-9 dBFS-RMS master convolves + makes up to peaks around +3.7 dBFS and
- * alimiter=0.95 clamps ~3-4 dB nonstop — audible over-limiting ("harsh"/pumping).
- * With this margin, hot masters land near the limiter threshold instead of
- * slamming into it, so the limiter is a true safety net. Trades a few dB of
- * loudness (recover it with the volume control) for a clean, un-pumped signal.
- * Tunable by ear.
- */
+/** Headroom (dB) below a perfect RMS level-match so hot masters don't ride continuously into the safety limiter (audible over-limiting/pumping). Tunable by ear. */
 const MAKEUP_HEADROOM_DB = 4;
 
-/**
- * Fallback makeup used only if the measurement below fails to produce a number
- * (ffmpeg error/timeout/unparseable output). Room BRIRs cluster around ~20 dB
- * of insertion loss; this is a deliberately conservative under-estimate (already
- * minus the headroom above) so the fallback never over-boosts into the limiter.
- * Real deployments measure their own value and never hit this.
- */
+/** Fallback makeup if measurement fails (ffmpeg error/timeout/unparseable); deliberately conservative so it never over-boosts into the limiter. */
 const DEFAULT_HRIR_MAKEUP_DB = 14;
 
 /**
- * Decorrelated pink-noise reference signal, generated entirely in-process by
- * ffmpeg's lavfi source (no temp files). Decorrelated (two seeds joined to
- * stereo) rather than mono-duplicated because a stereo master's SIDE energy is
- * what the BRIR spatialises — a correlated signal under-reads the level loss by
- * ~2 dB. `join` with an explicit stereo layout is required so the downstream
- * `pan=...|c0=FL...` can address channels by name; lavfi rejects a trailing
- * output pad label, so the graph deliberately ends unlabelled.
+ * Decorrelated pink noise (two seeds joined to stereo, not mono-duplicated): a
+ * correlated signal under-reads the BRIR level loss by ~2 dB. `join` needs an
+ * explicit stereo layout so the downstream `pan=...|c0=FL...` can address channels
+ * by name; lavfi rejects a trailing output pad label, so the graph ends unlabelled.
  */
 const MAKEUP_NOISE_LAVFI =
   'anoisesrc=color=pink:amplitude=0.2:duration=4:seed=1:sample_rate=48000[l];' +
@@ -60,7 +40,6 @@ function parseLastRmsDb(output: string): number | null {
   return Number.isFinite(value) ? value : null;
 }
 
-/** Runs ffmpeg with the given args and returns the last astats RMS-level reading, or null on failure. */
 function measureRmsDb(ffmpegPath: string, args: string[]): number | null {
   const result = spawnSync(ffmpegPath, args, { encoding: 'utf8', timeout: MAKEUP_MEASURE_TIMEOUT_MS });
   if (result.error || result.signal) return null;
@@ -68,14 +47,10 @@ function measureRmsDb(ffmpegPath: string, args: string[]): number | null {
 }
 
 /**
- * Measures the makeup gain (dB) for this IR by convolving the reference signal
- * through the REAL production graph (at unity makeup) and comparing output RMS
- * to input RMS — running the actual graph, not a re-derived approximation,
- * guarantees the number matches what plays. Then subtracts MAKEUP_HEADROOM_DB so
- * the result sits a few dB BELOW a perfect level-match: hot masters land near the
- * limiter threshold instead of slamming ~3-4 dB into it. Clamped to [0, 30] dB,
- * rounded to 0.1 dB; falls back to DEFAULT_HRIR_MAKEUP_DB if either measurement
- * can't be read.
+ * Measures makeup gain (dB) by convolving the reference through the REAL production
+ * graph at unity makeup and comparing output/input RMS — the actual graph, not a
+ * re-derived approximation, so the number matches what plays. Falls back to
+ * DEFAULT_HRIR_MAKEUP_DB if either measurement can't be read.
  */
 export function measureHrirMakeupDb(ffmpegPath: string, filePath: string, format: HrirFormat): number {
   const inRms = measureRmsDb(ffmpegPath, [
@@ -109,31 +84,24 @@ export interface HrirProfile {
   /** Absolute path to the WAV impulse-response file. */
   filePath: string;
   /**
-   * 'simple': plain mono/stereo IR, used directly by audio/hrirFilterComplex.buildHrirFilterComplex.
-   * 'hesuvi14': a genuine HeSuVi-style 14-channel HRIR (see audio/hrirFilterComplex.ts
-   * for the exact channel mapping this was verified against).
+   * 'simple': plain mono/stereo IR, used directly. 'hesuvi14': genuine HeSuVi-style
+   * 14-channel HRIR (see audio/hrirFilterComplex.ts for the channel mapping).
    */
   format: HrirFormat;
   /**
-   * Makeup gain (dB) that level-matches this IR's convolved output to the
-   * pristine passthrough — measured against this exact file at load (see
-   * measureHrirMakeupDb), NOT a hardcoded constant, so any bring-your-own BRIR
-   * is auto-levelled. Baked into the filter chain by buildHrirFilterComplex.
+   * Makeup gain (dB) that level-matches this IR's convolved output to pristine
+   * passthrough — measured per-file at load (measureHrirMakeupDb), not hardcoded,
+   * so any bring-your-own BRIR is auto-levelled.
    */
   makeupDb: number;
 }
 
 /**
- * Reads the exact channel count via ffmpeg's `ashowinfo` filter (prints a numeric
- * `channels:N` field to stderr) rather than parsing the human-readable "Guessed
- * Channel Layout" name ffmpeg logs by default - that's just a display label for
- * well-known channel counts (e.g. any 14-channel file gets called "9.1.4" even
- * though HeSuVi's own files aren't really a 9.1.4 immersive-audio signal) and
- * isn't a reliable way to get the actual number. ffprobe would give this more
- * directly but isn't bundled alongside our resolved ffmpeg binary.
- * Bounded by PROBE_TIMEOUT_MS — this runs synchronously at startup, before the
- * Discord client logs in and with no watchdog; a stalled ffmpeg process on a
- * corrupt/pathological file would otherwise hang the whole bot indefinitely.
+ * Reads the channel count via ffmpeg's `ashowinfo` `channels:N` field, NOT the
+ * human-readable "Guessed Channel Layout" label — that's a display-only guess (any
+ * 14-channel file gets called "9.1.4"). ffprobe would be more direct but isn't
+ * bundled with our ffmpeg. Timeout-bounded because this runs synchronously at
+ * startup with no watchdog; a stalled ffmpeg on a pathological file would hang the bot.
  */
 function probeChannelCount(ffmpegPath: string, filePath: string): number | null {
   const result = spawnSync(
@@ -154,13 +122,10 @@ function probeChannelCount(ffmpegPath: string, filePath: string): number | null 
 }
 
 /**
- * Classifies a probed channel count into a supported format, or null if
- * unsupported. 14 channels is HeSuVi's standard "with reverb" HRIR shape
- * (verified 2026-07-11 against real atmos.wav/dht.wav files from an actual
- * HeSuVi install — see ffmpegFilters.ts for the channel-mapping details).
- * HeSuVi's "no reverb" (`-` suffixed) files use a different, still-unverified
- * 7-channel layout and are deliberately not supported - shipping a guessed
- * mapping there risks a silently-wrong (not crashing) result.
+ * Classifies a probed channel count into a supported format, or null. 14 = HeSuVi's
+ * standard "with reverb" HRIR shape (verified against real HeSuVi files). HeSuVi's
+ * "no reverb" 7-channel layout is deliberately unsupported: a guessed mapping there
+ * risks a silently-wrong (not crashing) result.
  */
 function classifyFormat(channelCount: number | null): HrirFormat | null {
   if (channelCount === 1 || channelCount === 2) return 'simple';
@@ -169,15 +134,11 @@ function classifyFormat(channelCount: number | null): HrirFormat | null {
 }
 
 /**
- * Scans a local directory for user-supplied HRIR/BRIR WAV files (bring-your-own —
- * see assets/hrir_profiles/README.md for why none are bundled). Missing directory
- * is not an error: the feature is simply unavailable until someone populates it.
- * EVERY file with a supported channel count is loaded as a selectable "Aura
- * Preset" (see the panel's preset select menu) — the guild picks which one is
- * applied and the choice persists (guildSettingsRepo.defaultHrirProfile). Each
- * file is probed and level-measured once at startup; the (alphabetical) first is
- * the default until a guild selects otherwise. Files with an unsupported channel
- * count are skipped with a warning rather than aborting the whole scan.
+ * Scans a local dir for user-supplied HRIR/BRIR WAVs (bring-your-own — see
+ * assets/hrir_profiles/README.md). Missing directory is not an error. Every file
+ * with a supported channel count is probed and level-measured once at startup and
+ * offered as a preset; the alphabetical first is the default until a guild selects
+ * otherwise. Unsupported channel counts are skipped with a warning, not aborting the scan.
  */
 export function loadHrirProfiles(ffmpegPath: string, dir: string = DEFAULT_HRIR_PROFILES_DIR): HrirProfile[] {
   let entries: string[];

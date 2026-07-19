@@ -8,11 +8,7 @@ export interface CreateTrackResourceParams {
   /** Live piped source for a fresh play; omitted for a buffered input-seek reseek (seekableInput is used instead). */
   stream?: Readable;
   inputType?: StreamType;
-  /**
-   * Absolute path to a fully-buffered temp file of this track (see PlaybackLifecycle).
-   * When set, ffmpeg reads it with a FAST input-side seek (`-ss` before `-i`) instead
-   * of re-fetching + output-seeking — this is what makes an HRIR toggle snappy.
-   */
+  /** When set, ffmpeg reads this temp file with a fast input-side seek (`-ss` before `-i`) instead of re-fetching + output-seeking — makes toggles snappy. */
   seekableInput?: string;
   hrirMode: AuraToggle;
   sofalizerAvailable: boolean;
@@ -21,17 +17,13 @@ export interface CreateTrackResourceParams {
   /** Elapsed playback position to resume from (used on respawn/toggle/reseek). */
   seekOffsetMs: number;
   volumePercent: number;
-  /**
-   * Absolute path to a bring-your-own HRIR/BRIR WAV file (see config/hrirProfiles.ts),
-   * or null. Takes priority over hrirMode/sofalizer when set - the two paths are
-   * mutually exclusive (layering both would double up spatialization).
-   */
+  /** Takes priority over hrirMode/sofalizer when set — the two paths are mutually exclusive (layering both would double up spatialization). */
   hrirFilePath: string | null;
   /** The Aura 360° effect (widening + bass), independent of hrirMode/Aura HRIR. */
   aura360Mode: AuraToggle;
   /** Required alongside hrirFilePath — selects which filter_complex chain applies (see hrirFilterComplex.ts). */
   hrirFormat: HrirFormat | null;
-  /** Per-IR makeup gain (dB) measured at load, baked into the afir chain to level-match normal playback (see config/hrirProfiles.ts). */
+  /** Per-IR makeup gain (dB), baked into the afir chain to level-match normal playback. */
   hrirMakeupDb: number;
 }
 
@@ -41,6 +33,6 @@ export interface TrackResource {
   ffmpegProcess: ChildProcess | null;
   usingSofalizer: boolean;
   usingHrir: boolean;
-  /** Whether `resource` was created with `inlineVolume: true` — false on the Opus-passthrough fast path (100% volume, nothing else needing ffmpeg/transcoding). */
+  /** False on the Opus-passthrough fast path (100% volume, no ffmpeg/transcoding); otherwise true. */
   hasInlineVolume: boolean;
 }

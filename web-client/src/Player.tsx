@@ -116,7 +116,6 @@ export function Player({
       {/* sound (Aura) — separate centered row */}
       {snapshot?.auraEnabled ? (
         <div className="mt-3 flex w-full max-w-md flex-wrap items-center justify-center gap-2">
-          <Chip icon={Icons.Spatial} label="360°" active={snapshot.aura360Mode === 'on'} disabled={!canControl} onClick={() => run({ type: 'setAura360', mode: snapshot.aura360Mode === 'on' ? 'off' : 'on' })} />
           <Chip icon={Icons.Headphones} label="Aura" active={snapshot.hrirMode === 'on'} disabled={!canControl} onClick={() => run({ type: 'setHrir', mode: snapshot.hrirMode === 'on' ? 'off' : 'on' })} />
           {snapshot.hrirMode === 'on' && snapshot.auraPresets.length > 0 ? (
             <Dropdown

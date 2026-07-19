@@ -4,7 +4,6 @@ export function secondsToMs(seconds: number | null | undefined): number | null {
   return Math.round(seconds * 1000);
 }
 
-/** Canonical YouTube video IDs are exactly 11 URL-safe base64 chars. */
 export const VIDEO_ID_RE = /^[A-Za-z0-9_-]{11}$/;
 
 export function extractVideoId(url: string): string | null {
@@ -14,10 +13,8 @@ export function extractVideoId(url: string): string | null {
   } catch {
     return null;
   }
-  // Host check is a security boundary, not a convenience: extractVideoId's
-  // result becomes the URL handed to yt-dlp, so an exact-host match (not a
-  // substring `includes`) is what keeps a look-alike host like
-  // `youtu.be.attacker.com` out of the download path.
+  // Security boundary: result is handed to yt-dlp, so match host exactly (not
+  // substring `includes`) to block look-alikes like `youtu.be.attacker.com`.
   const host = parsed.hostname.toLowerCase();
   if (host === 'youtu.be') {
     return parsed.pathname.split('/').filter(Boolean)[0] ?? null;

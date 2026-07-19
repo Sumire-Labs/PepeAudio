@@ -12,17 +12,13 @@ import {
 import { stopRefreshLoop } from './panelRefreshLoop.js';
 
 /**
- * Edits the panel message. Guarded so at most one message.edit() call is ever
- * in flight per guild at a time — two overlapping edits (e.g. the periodic
- * refresh tick landing while a button-triggered edit is still in flight)
- * could otherwise resolve out of order and leave a stale render as the last
- * word. If a render request comes in while one is in flight, exactly one
- * trailing edit fires afterward (picking up whatever the latest state is by
- * then) rather than either dropping it or stacking unbounded edits.
+ * At most one message.edit() in flight per guild — overlapping edits can resolve
+ * out of order and leave a stale render as the last word. A mid-flight request
+ * coalesces into one trailing edit.
  */
 export async function editPanel(player: GuildPlayer): Promise<void> {
   const message = panelMessages.get(player.guildId);
-  if (!message || message.id !== player.panelMessageId) return; // stale/out-of-date guard
+  if (!message || message.id !== player.panelMessageId) return;
 
   if (editInFlight.has(player.guildId)) {
     editPendingAfterInFlight.add(player.guildId);
@@ -33,9 +29,7 @@ export async function editPanel(player: GuildPlayer): Promise<void> {
   lastEditAt.set(player.guildId, Date.now());
 
   if (player.status === 'idle') {
-    // Nothing playing/queued (natural queue exhaustion or /stop) - remove the
-    // stale panel entirely rather than leaving a disabled "no track" message
-    // cluttering the channel. The next /play or /now sends a fresh one.
+    // Idle: delete the panel rather than leave a stale "no track" message; next /play or /now sends a fresh one.
     try {
       await message.delete();
     } catch (err) {
@@ -44,11 +38,8 @@ export async function editPanel(player: GuildPlayer): Promise<void> {
         logger.warn({ err, guildId: player.guildId }, 'Failed to delete idle panel message');
       }
     }
-    // Re-check after the await: a concurrent sendOrReplacePanel() may have
-    // already installed a BRAND NEW panel while the delete above was in
-    // flight (e.g. a /play right as the queue emptied). If panelMessages no
-    // longer points at the message we started with, this cleanup must not
-    // clobber the new panel's bookkeeping.
+    // Re-check after the await: a concurrent sendOrReplacePanel() may have installed
+    // a new panel while the delete was in flight; don't clobber its bookkeeping.
     if (panelMessages.get(player.guildId) === message) {
       stopRefreshLoop(player);
       panelMessages.delete(player.guildId);
@@ -94,7 +85,7 @@ export async function editPanel(player: GuildPlayer): Promise<void> {
 
 export function scheduleCoalescedEdit(player: GuildPlayer): void {
   const guildId = player.guildId;
-  if (pendingEditTimers.has(guildId)) return; // an edit is already queued
+  if (pendingEditTimers.has(guildId)) return;
 
   const elapsedSinceLast = Date.now() - (lastEditAt.get(guildId) ?? 0);
   if (elapsedSinceLast >= MIN_EDIT_GAP_MS) {

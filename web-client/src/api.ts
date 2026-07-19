@@ -1,10 +1,3 @@
-/**
- * Typed client for the PepeAudio dashboard API. Mirrors the server DTOs in
- * src/web/bridge/types.ts. All state-changing requests carry the CSRF header the
- * server requires; a 401 anywhere means the session expired → the app returns to
- * the login screen.
- */
-
 export type SourceType = 'youtube' | 'spotify' | 'soundcloud' | 'applemusic';
 export type LoopMode = 'off' | 'track' | 'queue';
 export type AuraToggle = 'off' | 'on';
@@ -127,7 +120,6 @@ export interface PlaylistDetail extends PlaylistSummary {
 const CSRF_HEADER = 'X-Requested-With';
 const CSRF_VALUE = 'pepe-dashboard';
 
-/** Thrown when the session is gone; the app catches it and shows the login screen. */
 export class UnauthorizedError extends Error {
   constructor() {
     super('unauthorized');
@@ -208,18 +200,11 @@ export const api = {
   addPlaylistTrack(id: string, track: PlaylistTrackDTO): Promise<{ playlist: PlaylistDetail }> {
     return request('POST', `/api/playlists/${id}/tracks`, { track });
   },
-  /** Imports a provider playlist/album URL into a saved playlist server-side. */
   importPlaylist(id: string, url: string): Promise<{ playlist: PlaylistDetail; added: number }> {
     return request('POST', `/api/playlists/${id}/import`, { url });
   },
 };
 
-/**
- * Subscribes to a guild's live state via SSE. `onSnapshot` fires with each
- * snapshot (or null when the session ends). `onStatus` reports connectivity
- * (EventSource auto-reconnects; it flips to false on drop, true on (re)open).
- * Returns a close function.
- */
 export function subscribeToGuild(
   guildId: string,
   onSnapshot: (snapshot: GuildSnapshot | null) => void,

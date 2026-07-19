@@ -1,10 +1,3 @@
-/**
- * Web-dashboard configuration. Entirely a no-op unless WEB_DASHBOARD_ENABLED is
- * 'true' — loadWebEnv returns null and nothing else in src/web is ever
- * constructed, so existing deployments that never set these variables keep
- * booting unchanged. Secrets are validated only when the dashboard is enabled
- * (lazy), and support the same `_FILE` Docker-secret indirection as DISCORD_TOKEN.
- */
 import path from 'node:path';
 import { required, requiredSecret } from '../config/env.js';
 
@@ -19,17 +12,10 @@ export interface WebEnv {
   clientId: string;
   clientSecret: string;
   sessionSecret: string;
-  /** Mark the session cookie Secure when the public URL is https (production). */
   secureCookies: boolean;
-  /** Directory the built frontend is served from. */
   clientDir: string;
 }
 
-/**
- * Returns the parsed web env, or null when the dashboard is disabled. `clientId`
- * is the already-validated public application id from the core env. `clientDir`
- * is where the compiled frontend lives (dist/web-client alongside the server).
- */
 export function loadWebEnv(clientId: string, clientDir: string): WebEnv | null {
   if (process.env.WEB_DASHBOARD_ENABLED !== 'true') return null;
 
@@ -66,12 +52,8 @@ export function loadWebEnv(clientId: string, clientDir: string): WebEnv | null {
   };
 }
 
-/**
- * Resolves where the built frontend lives. `callerDir` is the directory of the
- * entry module (dist/ when compiled, src/ under tsx). The frontend always builds
- * to dist/web-client, so from a compiled entry it's a sibling and from a src
- * entry it's ../dist/web-client. WEB_CLIENT_DIR overrides both.
- */
+// callerDir is src/ under tsx, dist/ when compiled; the frontend always builds to
+// dist/web-client (sibling of dist/, ../dist/web-client from src/). WEB_CLIENT_DIR overrides.
 export function resolveClientDir(callerDir: string): string {
   if (process.env.WEB_CLIENT_DIR) return path.resolve(process.env.WEB_CLIENT_DIR);
   return path.basename(callerDir) === 'src'

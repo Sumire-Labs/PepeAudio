@@ -1,11 +1,7 @@
 import { useEffect, useRef } from 'react';
 import type { GuildSession } from './useGuildSession.ts';
 
-/**
- * Global playback keyboard shortcuts (Space = play/pause, ←/→ = prev/skip,
- * ↑/↓ = volume). Ignored while typing in a field or without control permission.
- * Reads the session through a ref so the listener binds once.
- */
+// Session is read via a ref so the keydown listener binds once (deps: [enabled]).
 export function useKeyboardShortcuts(session: GuildSession, enabled: boolean): void {
   const ref = useRef(session);
   ref.current = session;

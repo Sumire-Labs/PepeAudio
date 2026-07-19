@@ -6,20 +6,16 @@ import { editPanel, scheduleCoalescedEdit } from './panelEdit.js';
 
 export function ensureRefreshLoop(player: GuildPlayer): void {
   if (player.panelRefreshTimer) return;
-  // The setInterval tick itself stays fixed at PANEL_PERIODIC_REFRESH_MS
-  // (10s) - no timer rescheduling needed. What varies with load is how many
-  // ticks actually result in an edit: panelRefreshIntervalMs() scales the
-  // minimum gap up as more guilds are simultaneously playing, so this reacts
-  // to load changes immediately rather than needing to re-arm a timer.
+  // Fixed tick; load throttling happens via the per-edit gap check below, not by re-arming the timer.
   player.panelRefreshTimer = setInterval(() => {
     if (player.destroyed) {
       stopRefreshLoop(player);
       return;
     }
-    if (player.status !== 'playing') return; // only tick while actually playing
+    if (player.status !== 'playing') return;
     const activeCount = GuildPlayerManager.all().filter((p) => p.status === 'playing').length;
     const elapsedSinceLast = Date.now() - (lastEditAt.get(player.guildId) ?? 0);
-    if (elapsedSinceLast < panelRefreshIntervalMs(activeCount)) return; // a discrete-event edit just happened, or load-throttled
+    if (elapsedSinceLast < panelRefreshIntervalMs(activeCount)) return;
     void editPanel(player);
   }, PANEL_PERIODIC_REFRESH_MS);
 }
@@ -39,8 +35,6 @@ export function attachUpdateListener(player: GuildPlayer): void {
   player.once('destroyed', () => {
     subscribedGuilds.delete(player.guildId);
     stopRefreshLoop(player);
-    // Not touching panelMessages here: stop() already emitted a final 'update'
-    // just before this, which editPanel() (idle branch) handles by deleting
-    // the panel itself and clearing panelMessages/panelMessageId.
+    // Don't touch panelMessages here: stop()'s final 'update' already routed through editPanel()'s idle branch, which deletes the panel and clears it.
   });
 }

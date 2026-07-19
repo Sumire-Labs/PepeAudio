@@ -11,14 +11,8 @@ export class SpotifyResolutionError extends Error {}
 
 const spotify = spotifyUrlInfoFactory(fetch);
 
-/**
- * Defense-in-depth before handing a URL to spotify-url-info (which fetches
- * whatever URL it derives from the input). classifyInput() already routes only
- * Spotify hosts here, but — mirroring sanitizeSoundCloudUrl — this resolver
- * re-validates the parsed host rather than trusting the caller, then rebuilds a
- * clean https URL dropping any embedded credentials, port, and fragment. Ensures
- * no resolver relies solely on its caller for the SSRF host check.
- */
+// SSRF defense-in-depth: re-validate the parsed host instead of trusting the
+// caller, and rebuild a clean https URL dropping any credentials/port/fragment.
 function sanitizeSpotifyUrl(rawUrl: string): string {
   let parsed: URL;
   try {
@@ -46,8 +40,7 @@ export async function resolveSpotifyUrl(rawUrl: string, requestedBy: string): Pr
     }
 
     const allRawTracks = rawData.trackList ?? [rawData];
-    // Cap resolution work per request — a huge playlist would otherwise trigger
-    // one YouTube search per track and exhaust the host (see MAX_PLAYLIST_TRACKS).
+    // Cap per request: a huge playlist would otherwise fan out to one YouTube search per track.
     const rawTracks = allRawTracks.slice(0, MAX_PLAYLIST_TRACKS);
     if (allRawTracks.length > rawTracks.length) {
       logger.info(
@@ -55,12 +48,9 @@ export async function resolveSpotifyUrl(rawUrl: string, requestedBy: string): Pr
         'Spotify playlist/album exceeds the per-request track cap - resolving only the first tracks',
       );
     }
-    // YouTube matching is deferred to each item's first getStream() call (see
-    // createLazyMatchedQueueItem) rather than done eagerly here - a large
-    // playlist would otherwise block this command's response on one YouTube
-    // search per track. Only metadata extraction can fail synchronously here;
-    // an actual "no YouTube match" failure now surfaces later, per-track, via
-    // GuildPlayer's existing playback-failure skip-to-next handling.
+    // YouTube matching is deferred to each item's first getStream() (lazy) so a
+    // large playlist doesn't block the response on one search per track; "no match"
+    // then surfaces later per-track via GuildPlayer's skip-to-next handling.
     const items: QueueItem[] = [];
     let failed = 0;
     for (const rawTrack of rawTracks) {

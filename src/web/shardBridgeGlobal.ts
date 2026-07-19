@@ -1,10 +1,6 @@
 /**
- * Runs inside each shard child (an index.ts process under the ShardingManager).
- * Stashes a PepeShardBridge on globalThis so the manager's broadcastEval'd
- * functions can reach this shard's GuildPlayerManager, and pushes throttled
- * player-state updates back to the manager over the shard IPC channel — but only
- * for guilds a browser is actually watching (tracked in `webSubscribed`), so
- * idle guilds generate zero IPC traffic.
+ * Only pushes player-state updates for guilds a browser is watching (webSubscribed),
+ * so idle guilds generate zero shard IPC traffic.
  */
 import type { Client } from 'discord.js';
 import * as GuildPlayerManager from '../player/GuildPlayerManager.js';
@@ -51,7 +47,6 @@ export function installShardBridge(client: Client): ShardBridgeHandle {
     });
   };
 
-  // Attach to already-live players and any created later.
   for (const player of GuildPlayerManager.all()) attachPush(player);
   const onCreated = (player: GuildPlayer): void => attachPush(player);
   GuildPlayerManager.events.on('created', onCreated);
@@ -94,7 +89,6 @@ export function installShardBridge(client: Client): ShardBridgeHandle {
     setWebSubscribed(guildId, on) {
       if (on) {
         webSubscribed.add(guildId);
-        // Push current state immediately so the browser sees it without waiting.
         pushSnapshot(guildId);
       } else {
         webSubscribed.delete(guildId);

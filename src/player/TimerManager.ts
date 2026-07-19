@@ -6,13 +6,6 @@ export interface TimerCallbacks {
   stop: () => Promise<void>;
 }
 
-/**
- * Owns the alone/empty-queue/settings-save timers plus the 24/7 (stay247)
- * flag that gates them. Never touches enqueueAction or holds a GuildPlayer
- * back-reference - the empty-queue timeout's eventual full-stop goes through
- * the injected `stop` callback (GuildPlayer's own public stop() method)
- * instead of calling back into GuildPlayer directly.
- */
 export class TimerManager {
   stay247: boolean;
   private aloneTimer: NodeJS.Timeout | null = null;
@@ -38,7 +31,7 @@ export class TimerManager {
 
   startEmptyQueueTimer(): void {
     this.clearEmptyQueueTimer();
-    if (this.stay247) return; // 24/7 mode - never auto-disconnect on an empty queue
+    if (this.stay247) return;
     this.emptyQueueTimer = setTimeout(() => {
       this.log.info('Queue empty timeout reached — disconnecting');
       void this.cb.stop().catch((err) => this.log.error({ err }, 'stop() failed from empty-queue timeout'));
@@ -48,7 +41,7 @@ export class TimerManager {
   /** Started/cancelled by voiceStateUpdate.ts, which owns VC member-count checks. */
   startAloneTimer(onFire: () => void): void {
     this.cancelAloneTimer();
-    if (this.stay247) return; // 24/7 mode - never auto-disconnect for being alone
+    if (this.stay247) return;
     this.aloneTimer = setTimeout(onFire, ALONE_TIMEOUT_MS);
   }
 
@@ -59,7 +52,7 @@ export class TimerManager {
     }
   }
 
-  /** Toggles 24/7 mode. Enabling immediately cancels any already-running alone/empty-queue countdown. */
+  /** Enabling immediately cancels any running alone/empty-queue countdown. */
   setStay247(enabled: boolean): void {
     this.stay247 = enabled;
     if (enabled) {
@@ -80,11 +73,7 @@ export class TimerManager {
     }, 2_000);
   }
 
-  /**
-   * Called from stopCore — flushes (rather than discards) a pending debounced
-   * save: a plain clearTimeout alone would silently drop a volume/3D-audio
-   * change made within the last 2s.
-   */
+  /** Flushes (not discards) a pending debounced save; a bare clearTimeout would silently drop a change made in the last 2s. */
   flushPendingSettingsSave(): void {
     if (this.settingsSaveTimer) {
       clearTimeout(this.settingsSaveTimer);

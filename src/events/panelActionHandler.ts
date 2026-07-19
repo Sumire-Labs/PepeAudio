@@ -14,7 +14,7 @@ import { logger } from '../logger.js';
 
 export async function handleButtonOrSelect(interaction: ButtonInteraction | StringSelectMenuInteraction): Promise<void> {
   const parsed = parseCustomId(interaction.customId);
-  if (!parsed) return; // not one of ours
+  if (!parsed) return;
 
   if (!interaction.inCachedGuild() || interaction.guildId !== parsed.guildId) {
     await safeReply(interaction, { content: '不正な操作です。', flags: MessageFlags.Ephemeral });
@@ -27,7 +27,7 @@ export async function handleButtonOrSelect(interaction: ButtonInteraction | Stri
     return;
   }
 
-  // The crux of "only the newest panel works": any interaction on a superseded message is rejected here.
+  // Only the newest panel works: reject interactions on a superseded message.
   if (interaction.message.id !== player.panelMessageId) {
     await safeReply(interaction, { content: 'このパネルは古くなっています。最新のパネルをご利用ください。', flags: MessageFlags.Ephemeral });
     return;
@@ -46,13 +46,12 @@ export async function handleButtonOrSelect(interaction: ButtonInteraction | Stri
   }
 
   if (parsed.action === 'addQueue') {
-    // showModal() must be the interaction's first/only response - it cannot follow deferUpdate() below, unlike every other action.
+    // showModal() must be the first response — it cannot follow the deferUpdate() below.
     await interaction.showModal(buildAddQueueModal(parsed.guildId));
     return;
   }
 
-  // If the ack fails the interaction is already dead — bail rather than run the
-  // action against a token Discord will reject (and avoid the 10062/40060 noise).
+  // If the ack fails the interaction is dead — bail to avoid 10062/40060 errors.
   if (!(await safeDeferUpdate(interaction))) return;
 
   try {
@@ -88,7 +87,7 @@ export async function handleButtonOrSelect(interaction: ButtonInteraction | Stri
         break;
       }
       case 'hrir':
-        if (!AURA_ENABLED) break; // dormant no-op if the feature is flag-disabled
+        if (!AURA_ENABLED) break;
         await player.setHrirMode(player.hrirMode === 'off' ? 'on' : 'off');
         break;
       case 'aura360':

@@ -1,21 +1,13 @@
 export type LinkKind = 'youtube' | 'spotify' | 'soundcloud' | 'applemusic' | 'search';
 
-/**
- * Used only to prepend a scheme so bare "youtube.com/..." style input can be
- * parsed as a URL. This is a convenience, NOT the security boundary — the real
- * host check happens in classifyInput() after parsing. Anchored to the start so
- * it can't be tricked by a known host appearing later in the string.
- */
+// Convenience for prepending a scheme, NOT the security boundary (that's classifyInput's
+// parsed-host check). Anchored to start so a known host later in the string can't trick it.
 const KNOWN_HOST_NO_SCHEME_RE =
   /^(?:(?:www|m|music)\.)?(?:youtube\.com|youtu\.be|open\.spotify\.com|soundcloud\.com)\/|^music\.apple\.com\//i;
 
-/**
- * Host allowlists. These are the security boundary: an input is only treated as
- * a provider link (and thus handed to a resolver that will fetch it) when its
- * *parsed hostname* is one of these. Suffix checks (`.youtube.com`) cover
- * legitimate subdomains (www/m/music) while rejecting look-alikes such as
- * `youtu.be.attacker.com` or `evil.com/?x=youtube.com/watch?`.
- */
+// Security boundary: input is only treated as a provider link (handed to a fetching resolver)
+// when its parsed hostname matches. Suffix checks accept subdomains (www/m/music) while
+// rejecting look-alikes like `youtu.be.attacker.com`.
 function isYouTubeHost(host: string): boolean {
   return host === 'youtu.be' || host === 'youtube.com' || host.endsWith('.youtube.com');
 }
@@ -29,16 +21,10 @@ function isAppleMusicHost(host: string): boolean {
   return host === 'music.apple.com';
 }
 
-/**
- * Classifies an input by the URL's ACTUAL parsed hostname, never by a substring
- * match. This is a deliberate SSRF guard: a string like
- * `https://169.254.169.254/?v=x&r=youtube.com/watch?` merely *contains*
- * "youtube.com/watch?" but resolves to a non-provider host — it must NOT be
- * treated as a YouTube link, because the raw URL would otherwise be handed to
- * yt-dlp (a generic downloader that will fetch any host). Such inputs fall
- * through to 'search', which is only ever used as search *text* and never
- * fetched as a URL.
- */
+// SSRF guard: classify by parsed hostname, never a substring match.
+// `https://169.254.169.254/?v=x&r=youtube.com/watch?` contains "youtube.com/watch?" but must
+// NOT be treated as YouTube — yt-dlp would fetch the raw host. Non-provider hosts fall through
+// to 'search', which is only used as search text and never fetched as a URL.
 export function classifyInput(query: string): LinkKind {
   const normalized = normalizeUrlInput(query);
   let host: string;
@@ -54,12 +40,8 @@ export function classifyInput(query: string): LinkKind {
   return 'search';
 }
 
-/**
- * classifyInput()/downstream URL parsing (new URL(), spotify-uri's parse())
- * require a full scheme and throw on e.g. "youtube.com/watch?v=..." pasted
- * without "https://" — a real, confirmed failure mode. Only known-host inputs
- * get a scheme prepended; plain search text is left untouched.
- */
+// URL parsing (new URL(), spotify-uri) needs a scheme and throws on e.g. "youtube.com/watch?v=..."
+// pasted without https://. Only known-host inputs get a scheme prepended; search text is untouched.
 export function normalizeUrlInput(query: string): string {
   const trimmed = query.trim();
   if (/^https?:\/\//i.test(trimmed)) return trimmed;

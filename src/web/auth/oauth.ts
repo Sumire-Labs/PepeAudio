@@ -1,9 +1,3 @@
-/**
- * Discord OAuth2 authorization-code flow, using only global fetch (Node 22). The
- * bot's client secret is used server-side for the token exchange and never
- * leaves this process; access tokens are used transiently to read the user's
- * identity + guild list and are then discarded (not stored in the session).
- */
 import type { WebEnv } from '../config.js';
 
 const DISCORD_API = 'https://discord.com/api/v10';
@@ -28,7 +22,6 @@ export function buildAuthorizeUrl(env: WebEnv, state: string): string {
   return `https://discord.com/oauth2/authorize?${params.toString()}`;
 }
 
-/** Exchanges the authorization code for an access token. Throws on failure. */
 export async function exchangeCode(env: WebEnv, code: string): Promise<string> {
   const body = new URLSearchParams({
     grant_type: 'authorization_code',
@@ -56,7 +49,6 @@ export async function fetchUser(accessToken: string): Promise<DiscordUser> {
   return (await resp.json()) as DiscordUser;
 }
 
-/** Returns the ids of the guilds the user is a member of. */
 export async function fetchGuildIds(accessToken: string): Promise<string[]> {
   const resp = await fetch(`${DISCORD_API}/users/@me/guilds`, {
     headers: { Authorization: `Bearer ${accessToken}` },

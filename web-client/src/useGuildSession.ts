@@ -2,7 +2,6 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { api, subscribeToGuild, UnauthorizedError } from './api.ts';
 import type { CommandResult, GuildSnapshot, ViewerCapabilities, WebCommand } from './api.ts';
 
-/** How often the REST poll refreshes state as an SSE fallback (see the effect below). */
 const POLL_INTERVAL_MS = 5000;
 
 /** The shard IPC push uses this exact placeholder (see server DISPLAY_ONLY_VIEWER). */
@@ -15,17 +14,11 @@ export interface GuildSession {
   /** Client Date.now() when the current snapshot arrived, for progress extrapolation. */
   receivedAt: number;
   loading: boolean;
-  /** Whether the realtime SSE stream is currently connected. */
   connected: boolean;
   sendCommand: (command: WebCommand) => Promise<CommandResult>;
   refresh: () => void;
 }
 
-/**
- * Subscribes to one guild's live state over SSE, keeps the last accurate
- * per-viewer capabilities across display-only pushes, and exposes a command
- * sender that folds the command's returned snapshot back into state.
- */
 export function useGuildSession(guildId: string | null, onUnauthorized: () => void): GuildSession {
   const [snapshot, setSnapshot] = useState<GuildSnapshot | null>(null);
   const [receivedAt, setReceivedAt] = useState(0);
@@ -57,9 +50,7 @@ export function useGuildSession(guildId: string | null, onUnauthorized: () => vo
     setLoading(true);
     viewerRef.current = null;
 
-    // Fetch the current snapshot over REST. This drives `connected` — it works
-    // even when SSE is blocked/buffered by a proxy (Cloudflare, some reverse
-    // proxies), which the polling fallback below relies on.
+    // Drives `connected`; works even when a proxy blocks/buffers SSE.
     const fetchSnapshot = async (initial: boolean): Promise<void> => {
       try {
         const { snapshot: snap } = await api.getSnapshot(guildId);
@@ -79,16 +70,13 @@ export function useGuildSession(guildId: string | null, onUnauthorized: () => vo
 
     void fetchSnapshot(true);
 
-    // SSE gives instant updates when the proxy allows it; the poll below is the
-    // reliability net so the dashboard works (and shows "connected") regardless.
     const close = subscribeToGuild(guildId, (snap) => {
       if (!active) return;
       apply(snap);
       setConnected(true);
     });
 
-    // Poll fallback — keeps state fresh + `connected` honest even if SSE never
-    // establishes. Paused while the tab is hidden to save resources.
+    // Poll fallback in case SSE never connects.
     const pollId = setInterval(() => {
       if (!document.hidden) void fetchSnapshot(false);
     }, POLL_INTERVAL_MS);

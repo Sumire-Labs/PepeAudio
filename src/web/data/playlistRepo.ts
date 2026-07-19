@@ -1,9 +1,3 @@
-/**
- * CRUD for user-scoped saved playlists, backed by the dedicated web DB. Every
- * read/write is keyed by the authenticated userId so a user can only ever touch
- * their own playlists. Positions are kept dense (0..n-1) so append is O(1) and
- * reorder/remove is a full transactional rewrite via replaceTracks.
- */
 import { randomUUID } from 'node:crypto';
 import { webDb } from './webDb.js';
 import type { SourceType } from '../bridge/types.js';
@@ -39,9 +33,7 @@ export type RepoResult = { ok: true } | { error: string };
 
 function sanitizeName(name: unknown): string | null {
   if (typeof name !== 'string') return null;
-  // Strip ASCII control characters (C0 range + DEL) so a name can't smuggle
-  // newlines/escape sequences; then trim and length-cap. Filtered by codepoint
-  // to avoid a control-character regex literal.
+  // Strip ASCII control chars (C0 + DEL) so a name can't smuggle newlines/escapes; by codepoint to avoid a control-char regex.
   let cleaned = '';
   for (const ch of name) {
     const code = ch.codePointAt(0) ?? 0;
@@ -55,9 +47,7 @@ function sanitizeName(name: unknown): string | null {
 function isValidTrack(track: unknown): track is PlaylistTrackDTO {
   if (!track || typeof track !== 'object') return false;
   const t = track as Record<string, unknown>;
-  // sourceUrl may be a provider URL OR a plain "artist title" search string
-  // (see normalizeTrackForSave) — both are only ever handed to resolveInput,
-  // which is SSRF-guarded by classifyInput, so a non-URL string is safe.
+  // sourceUrl may be a provider URL or a plain "artist title" search string; both go only to resolveInput (SSRF-guarded by classifyInput).
   if (typeof t.sourceUrl !== 'string' || t.sourceUrl.trim().length === 0 || t.sourceUrl.length > MAX_FIELD_LENGTH) return false;
   if (typeof t.title !== 'string' || t.title.length > MAX_FIELD_LENGTH) return false;
   if (typeof t.artist !== 'string' || t.artist.length > MAX_FIELD_LENGTH) return false;
@@ -67,19 +57,13 @@ function isValidTrack(track: unknown): track is PlaylistTrackDTO {
   return true;
 }
 
-/**
- * Detects a collection (playlist/album/set) URL — as opposed to a single track.
- * Lazily-resolved collection items (Spotify/Apple/YouTube playlists) all carry
- * the SAME collection URL as their sourceUrl, so persisting it verbatim would
- * make every saved track re-import the WHOLE collection each time the playlist
- * is loaded. normalizeTrackForSave rewrites those to a search string instead.
- */
+// Collection (playlist/album/set) URLs are shared by every track in the collection, so persisting one verbatim would re-import the whole collection on load.
 function looksLikeCollection(url: string): boolean {
   let parsed: URL;
   try {
     parsed = new URL(url);
   } catch {
-    return false; // already a plain search string, not a URL — leave as-is
+    return false;
   }
   const host = parsed.hostname.toLowerCase();
   const path = parsed.pathname.toLowerCase();
@@ -93,17 +77,11 @@ function looksLikeCollection(url: string): boolean {
   return false;
 }
 
-/**
- * If a track's sourceUrl points at a collection (shared across every track in
- * that collection), replace it with an "artist title" search string so loading
- * resolves to the single track rather than re-importing the whole collection.
- * A no-op (idempotent) for per-track URLs and already-normalized search strings.
- */
+// Rewrites a collection sourceUrl to an "artist title" search string; idempotent for per-track URLs and existing search strings.
 function normalizeTrackForSave(track: PlaylistTrackDTO): PlaylistTrackDTO {
   if (!looksLikeCollection(track.sourceUrl)) return track;
   const query = (`${track.artist} ${track.title}`.trim() || track.title.trim()).slice(0, MAX_FIELD_LENGTH);
-  // If we somehow have no title/artist to search by, keep the original rather
-  // than storing an empty string (isValidTrack would reject that on reload).
+  // Keep the original if there's nothing to search by — an empty string would be rejected by isValidTrack on reload.
   return query.length > 0 ? { ...track, sourceUrl: query } : track;
 }
 
@@ -192,7 +170,6 @@ export class PlaylistRepo {
     return { ok: true };
   }
 
-  /** Appends a single track (used by "add current track" / "add from search"). */
   addTrack(userId: string, id: string, track: unknown): RepoResult {
     const detail = this.get(userId, id);
     if (!detail) return { error: 'プレイリストが見つかりません。' };
@@ -213,11 +190,7 @@ export class PlaylistRepo {
     return { ok: true };
   }
 
-  /**
-   * Appends many tracks at once (used by "import from URL"). Validates and
-   * collection-normalizes each, caps the batch to the remaining room, and writes
-   * transactionally. Returns how many were actually added.
-   */
+  /** Appends many tracks (import from URL); silently caps the batch to the remaining room. */
   addTracks(userId: string, id: string, tracks: unknown): { ok: true; added: number } | { error: string } {
     const detail = this.get(userId, id);
     if (!detail) return { error: 'プレイリストが見つかりません。' };

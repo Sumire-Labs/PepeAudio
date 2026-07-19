@@ -1,11 +1,5 @@
-/**
- * In-memory web session store. Sessions live only in the process that runs the
- * web server (the ShardingManager in sharded mode, or the single Bot process),
- * not in the shared pepeaudio.sqlite — that keeps the web server from adding
- * another writer to a file every shard already writes. A process restart drops
- * sessions and the user re-authenticates, which is an acceptable trade for not
- * touching the shared DB. Discord access/refresh tokens are not stored.
- */
+// In-memory only (not in the shared sqlite — avoids a second writer to a file every shard writes).
+// Discord access/refresh tokens are never stored.
 import { randomBytes } from 'node:crypto';
 
 export interface WebSession {
@@ -13,15 +7,15 @@ export interface WebSession {
   userId: string;
   username: string;
   avatar: string | null;
-  /** Guild ids the user belongs to (from the OAuth `guilds` scope), refreshed on a TTL. */
+  /** From the OAuth `guilds` scope; refreshed on a TTL. */
   guildIds: string[];
   guildsFetchedAt: number;
   createdAt: number;
   lastSeenAt: number;
 }
 
-const SESSION_TTL_MS = 7 * 24 * 60 * 60 * 1000; // 7 days of inactivity
-const SWEEP_INTERVAL_MS = 60 * 60 * 1000; // hourly
+const SESSION_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+const SWEEP_INTERVAL_MS = 60 * 60 * 1000;
 
 export class SessionStore {
   private readonly sessions = new Map<string, WebSession>();
@@ -48,7 +42,7 @@ export class SessionStore {
     return session;
   }
 
-  /** Returns the session and updates lastSeenAt, or null if unknown/expired. */
+  /** Side effect: bumps lastSeenAt (sliding TTL). null if unknown/expired. */
   get(id: string | undefined): WebSession | null {
     if (!id) return null;
     const session = this.sessions.get(id);

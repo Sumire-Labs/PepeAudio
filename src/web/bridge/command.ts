@@ -1,10 +1,5 @@
-/**
- * The single command executor for the web dashboard, shared by LocalBridge and
- * the shard-side IPC bridge. Runs on the owning shard (it touches
- * GuildPlayerManager + the discord.js Client). Re-authorizes every command via
- * resolveViewerCapabilities before mutating anything — the browser is trusted
- * only with the authenticated userId.
- */
+// Runs on the owning shard. Re-authorizes every command (resolveViewerCapabilities)
+// before mutating — the browser is trusted only with the authenticated userId.
 import type { Client, Guild } from 'discord.js';
 import * as GuildPlayerManager from '../../player/GuildPlayerManager.js';
 import type { GuildPlayer } from '../../player/GuildPlayer.js';
@@ -48,7 +43,6 @@ const KNOWN_RESOLVE_ERRORS = [
   AppleMusicResolutionError,
 ];
 
-/** Turns a resolver error into a user-safe message, mirroring resolvePlayQuery. */
 function mapResolveError(err: unknown, query: string): string {
   if (KNOWN_RESOLVE_ERRORS.some((ErrorType) => err instanceof ErrorType)) {
     return (err as Error).message;
@@ -61,7 +55,6 @@ function fail(error: string): CommandResult {
   return { ok: false, error };
 }
 
-/** Snapshot of the (possibly just-mutated) player, or null if the session ended. */
 function snapshotOrNull(guildId: string, viewer: ViewerCapabilities, guild: Guild | undefined): CommandResult {
   const player = GuildPlayerManager.get(guildId);
   return { ok: true, snapshot: player && !player.destroyed ? buildSnapshot(player, viewer, guild) : null };
@@ -76,8 +69,7 @@ export async function runWebCommand(
   const guild = client.guilds.cache.get(guildId);
   if (!guild) return fail('サーバーが見つかりません。');
 
-  // addTrack / loadPlaylist may need to CREATE a session; every other command
-  // requires an existing player.
+  // addTrack/loadPlaylist may create a session; every other command needs an existing player.
   if (command.type === 'addTrack') return runAddTrack(guildId, userId, command.query, guild);
   if (command.type === 'loadPlaylist') return runLoadPlaylist(guildId, userId, command.sourceUrls, guild);
 
@@ -87,7 +79,6 @@ export async function runWebCommand(
   const viewer = await resolveViewerCapabilities(guild, userId, player);
   if (!viewer.canControl) return fail(viewer.denyReason ?? '権限がありません。');
 
-  // Per-action cooldown, independent per command type (mirrors the Discord panel).
   const isVolumeLike = command.type === 'setVolume' || command.type === 'setAuraPreset' || command.type === 'seek';
   const cooldownMs = isVolumeLike ? VOLUME_COOLDOWN_MS : BUTTON_COOLDOWN_MS;
   if (!checkCooldown(`web:${command.type}`, userId, cooldownMs)) {
@@ -173,7 +164,7 @@ export async function runWebCommand(
         break;
       }
       default: {
-        // Exhaustiveness guard: addTrack/loadPlaylist handled above.
+        // addTrack/loadPlaylist handled above.
         const _never: never = command;
         return fail('未対応の操作です。');
       }
@@ -186,11 +177,7 @@ export async function runWebCommand(
   return snapshotOrNull(guildId, viewer, guild);
 }
 
-/**
- * Gets (creating if needed) the guild's player and authorizes the caller. New
- * sessions require the caller to be in a voice channel (so we can read the VC +
- * adapterCreator), matching acquireGuildPlayer.
- */
+// New sessions require the caller in a voice channel (to read the VC + adapterCreator).
 async function ensurePlayerForAdd(
   guildId: string,
   userId: string,
@@ -204,8 +191,7 @@ async function ensurePlayerForAdd(
 
     player = GuildPlayerManager.getOrCreate({
       guildId,
-      // The web UI is the panel, so there's no natural text channel — use the
-      // voice channel's own chat. No panel is auto-sent for web-initiated sessions.
+      // No natural text channel for web sessions — use the voice channel's own chat.
       textChannelId: voiceChannel.id,
       voiceChannelId: voiceChannel.id,
       adapterCreator: guild.voiceAdapterCreator,
@@ -225,7 +211,6 @@ async function ensurePlayerForAdd(
   return { player, viewer };
 }
 
-/** Enqueues resolved items and starts playback if the player was idle. */
 async function enqueueAndMaybeStart(player: GuildPlayer, items: QueueItem[]): Promise<number> {
   if (items.length === 0) return 0;
   const wasIdle = !player.currentTrack;
@@ -256,14 +241,9 @@ async function runAddTrack(guildId: string, userId: string, query: unknown, guil
   return snapshotOrNull(guildId, viewer, guild);
 }
 
-/**
- * Loads a saved playlist into the queue WITHOUT blocking the request on every
- * track's network resolve. It resolves just enough (up to PLAYLIST_SYNC_CAP) to
- * get playback going, returns immediately, then resolves + enqueues the rest in
- * the background — each enqueue emits an update that streams to the browser over
- * SSE. This keeps a big playlist from hanging the HTTP request (and hitting
- * reverse-proxy timeouts).
- */
+// Resolves up to PLAYLIST_SYNC_CAP to start playback, returns, then resolves +
+// enqueues the rest in the background so a big playlist can't hang the HTTP request
+// (reverse-proxy timeouts).
 async function runLoadPlaylist(guildId: string, userId: string, sourceUrls: unknown, guild: Guild): Promise<CommandResult> {
   if (!checkCooldown('play', userId, PLAY_COOLDOWN_MS)) return fail('少し間隔を空けてください。');
   const urls = (Array.isArray(sourceUrls) ? sourceUrls : [])
@@ -275,7 +255,6 @@ async function runLoadPlaylist(guildId: string, userId: string, sourceUrls: unkn
   if ('error' in ensured) return fail(ensured.error);
   const { player, viewer } = ensured;
 
-  // Resolve synchronously until we have at least one playable track (bounded).
   const initial: QueueItem[] = [];
   let cursor = 0;
   for (; cursor < urls.length && cursor < PLAYLIST_SYNC_CAP && initial.length === 0; cursor++) {
@@ -298,11 +277,10 @@ async function runLoadPlaylist(guildId: string, userId: string, sourceUrls: unkn
   return snapshotOrNull(guildId, viewer, guild);
 }
 
-/** Resolves + enqueues the remaining playlist URLs one at a time, after the response is sent. */
 async function resolveRestInBackground(guildId: string, userId: string, urls: string[]): Promise<void> {
   for (const url of urls) {
     const player = GuildPlayerManager.get(guildId);
-    if (!player || player.destroyed) return; // session ended — stop working
+    if (!player || player.destroyed) return;
     let items: QueueItem[];
     try {
       items = await resolveInput(url.trim(), userId);
@@ -314,11 +292,7 @@ async function resolveRestInBackground(guildId: string, userId: string, urls: st
   }
 }
 
-/**
- * Runs a YouTube search and returns lightweight candidates (no enqueue). Used by
- * the dashboard's "pick from search results" flow. Guild-independent, so the
- * sharded bridge can run it on any shard.
- */
+/** YouTube search → lightweight candidates (no enqueue). Guild-independent. */
 export async function runWebSearch(query: string): Promise<SearchCandidate[]> {
   const results = await searchYouTube(query, 6);
   return results.map((r) => ({
@@ -329,14 +303,9 @@ export async function runWebSearch(query: string): Promise<SearchCandidate[]> {
   }));
 }
 
-/**
- * Resolves a URL/search to track DTOs WITHOUT enqueuing — for importing a
- * playlist into a SAVED playlist. Reuses resolveInput (so playlist URLs expand
- * and SSRF guards apply). Guild-independent, so the sharded bridge can run it on
- * any shard. Lazy items (Spotify/Apple playlists) come back with null
- * duration/thumbnail; the saved playlist stores them by title+artist (see
- * playlistRepo), which the loader resolves via search.
- */
+// Resolves a URL/search to track DTOs WITHOUT enqueuing (for importing into a saved
+// playlist); SSRF-guarded via resolveInput. Lazy items (Spotify/Apple playlists) come
+// back with null duration/thumbnail; the saved playlist stores them by title+artist.
 export async function runWebResolve(query: string): Promise<ResolveResult> {
   if (typeof query !== 'string' || !query.trim()) return { tracks: [], error: 'URL を入力してください。' };
   try {

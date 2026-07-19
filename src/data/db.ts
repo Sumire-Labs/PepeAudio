@@ -7,10 +7,7 @@ import { logger } from '../logger.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PROJECT_ROOT = path.resolve(__dirname, '..', '..');
-// DATA_DIR lets the SQLite file live outside the code tree (e.g. a mounted
-// Docker volume) so guild settings survive container/image recreation and a
-// non-root runtime can own a writable location. Unset = project root, which
-// preserves the original behavior for local runs.
+// DATA_DIR keeps the SQLite file outside the code tree (e.g. a Docker volume); unset = project root.
 const DATA_DIR = env.dataDir ?? PROJECT_ROOT;
 mkdirSync(DATA_DIR, { recursive: true });
 const DB_PATH = path.join(DATA_DIR, 'pepeaudio.sqlite');
@@ -29,15 +26,9 @@ db.exec(`
   );
 `);
 
-// Lightweight migrations: ALTER TABLE ADD COLUMN errors if the column already
-// exists, so guard each with a PRAGMA check rather than a bare try/catch —
-// this runs on every startup against a table that may already exist from
-// before any of these columns were introduced. CREATE TABLE IF NOT EXISTS
-// above only defines the columns present since the very first release; every
-// column added later must be migrated in here too, or a guild_settings table
-// that predates it will be missing the column and every read/write against it
-// (guildSettingsRepo.ts's prepared statements, evaluated at import time) will
-// throw "no such column" and crash the whole process at startup.
+// ALTER TABLE ADD COLUMN throws if the column exists, so guard each with the PRAGMA check.
+// Every column added after the initial CREATE must be migrated here too: guildSettingsRepo
+// prepares statements at import time, so a missing column throws "no such column" at startup.
 const guildSettingsColumns = db.prepare('PRAGMA table_info(guild_settings)').all() as Array<{ name: string }>;
 const existingColumnNames = new Set(guildSettingsColumns.map((col) => col.name));
 const guildSettingsMigrations: Array<{ column: string; ddl: string }> = [

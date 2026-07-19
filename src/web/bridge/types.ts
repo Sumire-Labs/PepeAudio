@@ -1,12 +1,8 @@
 /**
- * The contract between the web HTTP layer and the bot. Everything here is pure
- * types with NO runtime imports, so it can be imported from any process — the
- * ShardingManager (which has no discord.js Client) included. Concrete bridges
- * (LocalBridge, ShardedBridge) implement `BotBridge`; the HTTP routes depend
- * only on this interface, never on GuildPlayer directly.
- *
- * All shapes are JSON-serializable: a snapshot must survive `structuredClone`
- * across the shard IPC boundary, so no functions, class instances, or Maps.
+ * Types only, no runtime imports, so this can be imported from any process
+ * (the ShardingManager included — it has no discord.js Client). Shapes must be
+ * JSON-serializable to survive structuredClone across the shard IPC boundary:
+ * no functions, class instances, or Maps.
  */
 
 export type SourceType = 'youtube' | 'spotify' | 'soundcloud' | 'applemusic';
@@ -14,7 +10,7 @@ export type LoopMode = 'off' | 'track' | 'queue';
 export type AuraToggle = 'off' | 'on';
 export type PermissionMode = 'same-voice-channel' | 'dj-role' | 'requester-only';
 
-/** A queue/current/history entry, stripped of QueueItem's functions (getStream/prefetch) and internal offset. */
+/** QueueItem without its functions (getStream/prefetch) or internal offset. */
 export interface QueueItemDTO {
   id: string;
   title: string;
@@ -31,15 +27,13 @@ export interface QueueItemDTO {
   requesterAvatarUrl: string | null;
 }
 
-/** What the current viewer (the authenticated Discord user) is allowed to do with this session. */
 export interface ViewerCapabilities {
   canControl: boolean;
-  /** User-safe reason (Japanese, mirrors the Discord panel strings) when canControl is false. */
+  /** User-safe reason (Japanese) when canControl is false. */
   denyReason: string | null;
   inBotVoiceChannel: boolean;
 }
 
-/** Full display + control state for one guild's player, as sent to the browser (initial fetch + every SSE push). */
 export interface GuildSnapshot {
   guildId: string;
   status: 'idle' | 'playing' | 'paused';
@@ -56,7 +50,6 @@ export interface GuildSnapshot {
   hrirMode: AuraToggle;
   aura360Mode: AuraToggle;
   hrirProfile: string | null;
-  /** Available Aura Presets (id + label) so the frontend can render the select without a second call. */
   auraPresets: Array<{ id: string; label: string }>;
   stay247: boolean;
   permissionMode: PermissionMode;
@@ -67,7 +60,6 @@ export interface GuildSnapshot {
   viewer: ViewerCapabilities;
 }
 
-/** A YouTube search result for the "pick from search" add-track flow. */
 export interface SearchCandidate {
   title: string;
   author: string;
@@ -75,17 +67,12 @@ export interface SearchCandidate {
   thumbnailUrl: string;
 }
 
-/** Result of resolving a URL/search to tracks (for importing into a saved playlist). */
 export interface ResolveResult {
   tracks: QueueItemDTO[];
   /** User-safe error (Japanese) when resolution failed. */
   error?: string;
 }
 
-/**
- * One row in the guild picker: a guild the viewer shares with the bot (the bot
- * is a member, so a session can be started there even if none is active yet).
- */
 export interface GuildSummary {
   guildId: string;
   name: string;
@@ -96,9 +83,8 @@ export interface GuildSummary {
 }
 
 /**
- * Every state-changing operation the browser can request. A discriminated union
- * so the command executor exhaustively handles each and rejects anything else.
- * Numeric/enum payloads are re-validated server-side before touching the player.
+ * Every state-changing operation the browser can request. Numeric/enum payloads
+ * are re-validated server-side before touching the player.
  */
 export type WebCommand =
   | { type: 'skip' }
@@ -127,18 +113,18 @@ export interface CommandResult {
   ok: boolean;
   /** User-safe error message (Japanese) when ok is false. */
   error?: string;
-  /** Fresh snapshot after the command succeeded, for immediate UI update (null if the session ended, e.g. stop). */
+  /** Fresh snapshot after success; null if the session ended (e.g. stop). */
   snapshot?: GuildSnapshot | null;
 }
 
 /**
- * The single seam between the HTTP layer and the bot. Implemented by LocalBridge
- * (single process, direct calls) and ShardedBridge (manager process, broadcastEval
- * + shard IPC). Every method takes the authenticated userId; nothing about the
- * caller is trusted beyond that — authorization is re-checked on the owning shard.
+ * The seam between the HTTP layer and the bot (LocalBridge = single process,
+ * ShardedBridge = manager + shard IPC). Every method takes the authenticated
+ * userId; the caller is not trusted beyond that — authorization is re-checked
+ * on the owning shard.
  */
 export interface BotBridge {
-  /** The subset of the viewer's guilds (from the OAuth `guilds` scope) that currently have a bot session. */
+  /** The subset of the viewer's OAuth `guilds` that currently have a bot session. */
   listControllableGuilds(userGuildIds: string[], userId: string): Promise<GuildSummary[]>;
   /** null when the guild has no active player (or isn't on any shard yet). Recomputes viewer capabilities. */
   getSnapshot(guildId: string, userId: string): Promise<GuildSnapshot | null>;
@@ -146,17 +132,14 @@ export interface BotBridge {
   runCommand(guildId: string, userId: string, command: WebCommand): Promise<CommandResult>;
   /** Runs a YouTube search (guild-independent) and returns candidates without enqueuing. */
   search(query: string): Promise<SearchCandidate[]>;
-  /** Resolves a URL (or search) to tracks WITHOUT enqueuing — used to import a playlist into a saved playlist. */
+  /** Resolves a URL (or search) to tracks WITHOUT enqueuing. */
   resolveTracks(query: string): Promise<ResolveResult>;
   /**
-   * Realtime. `cb` fires with a fresh snapshot on every throttled player update,
-   * and once with null when the session is destroyed. Returns an unsubscribe
-   * function. `userId` lets the single-process bridge compute live per-viewer
-   * capabilities; the sharded bridge fans one shard push out to all subscribers,
-   * so its pushes carry a display-only `viewer` (control always re-authorizes on
-   * write through runCommand regardless).
+   * `cb` fires with a fresh snapshot on every throttled player update, and once
+   * with null when the session is destroyed; returns an unsubscribe function.
+   * The sharded bridge fans one push out to all subscribers, so its `viewer` is
+   * display-only — control always re-authorizes on write via runCommand.
    */
   subscribe(guildId: string, userId: string, cb: (snapshot: GuildSnapshot | null) => void): () => void;
-  /** Tears down listeners/IPC handlers. */
   close(): void;
 }

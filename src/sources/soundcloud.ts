@@ -8,15 +8,10 @@ import { logger } from '../logger.js';
 export class SoundCloudUnavailableError extends Error {}
 
 /**
- * Defense-in-depth before handing a URL to scdl (a downloader that will fetch
- * whatever URL it's given). classifyInput() already routes only SoundCloud
- * hosts here, but this resolver re-validates rather than trusting the caller,
- * then rebuilds a clean URL from the validated parts: forces https and drops
- * any embedded credentials, non-standard port, and fragment. The path and query
- * are kept intact — SoundCloud private/unlisted shares carry a required
- * `?secret_token=` in the query. Unlike the YouTube/Apple resolvers there's no
- * numeric id to canonicalize against (a SoundCloud track's identity IS its
- * path), so this is the strongest normalization available here.
+ * Re-validate the host and rebuild a clean https URL before handing it to scdl
+ * (which fetches whatever URL it's given) — don't trust the caller's routing.
+ * Drops credentials, port, and fragment but KEEPS the query: SoundCloud
+ * private/unlisted shares require a `?secret_token=`.
  */
 function sanitizeSoundCloudUrl(rawUrl: string): string {
   let parsed: URL;
@@ -39,12 +34,9 @@ interface ScdlTrackInfo {
 }
 
 /**
- * @vncsprd/soundcloud-downloader caches its scraped client_id forever once
- * set — confirmed by reading its compiled source: setClientID() with no
- * argument is a no-op if a client_id is already cached, so a stale/rotated
- * client_id (SoundCloud rotates these without notice) never self-heals no
- * matter how many 401s come back. There's no public API to force a refresh,
- * so this reaches into the (TypeScript-only-private) cached field directly.
+ * scdl caches its scraped client_id forever; a stale one (SoundCloud rotates
+ * them without notice) never self-heals and there's no public refresh API, so
+ * clear the (TypeScript-only-private) cached field directly.
  */
 function forceClientIdRefresh(): void {
   (scdl as unknown as { _clientID?: string })._clientID = undefined;
@@ -68,8 +60,7 @@ async function withClientIdRetry<T>(fn: () => Promise<T>): Promise<T> {
 }
 
 export async function resolveSoundCloudUrl(url: string, requestedBy: string): Promise<QueueItem[]> {
-  // Parse the timestamp from the ORIGINAL url (its `#t=` fragment) before
-  // sanitizing strips the fragment; everything downstream uses the clean url.
+  // Parse the `#t=` fragment from the ORIGINAL url before sanitize strips it.
   const initialOffsetMs = parseSoundCloudTimestamp(url);
   const cleanUrl = sanitizeSoundCloudUrl(url);
 
@@ -87,7 +78,6 @@ export async function resolveSoundCloudUrl(url: string, requestedBy: string): Pr
     createQueueItem({
       title: info.title ?? 'Unknown title',
       artist: info.user?.username ?? 'Unknown artist',
-      // Per QueueItem's contract, durationMs is null for live/unknown-duration content.
       durationMs: typeof info.duration === 'number' && info.duration > 0 ? info.duration : null,
       thumbnailUrl: info.artwork_url ?? null,
       sourceType: 'soundcloud',

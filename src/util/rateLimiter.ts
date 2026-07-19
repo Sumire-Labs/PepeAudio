@@ -1,8 +1,6 @@
 const lastActionAt = new Map<string, number>();
 
-// Longer than any cooldown actually used in this bot (max is PLAY_COOLDOWN_MS,
-// a few seconds) - this is purely to bound memory over a long-running process,
-// not a functional cooldown window.
+// Bounds map memory over a long-running process; not a functional cooldown window.
 const ENTRY_MAX_AGE_MS = 60 * 60 * 1000;
 const SWEEP_INTERVAL_MS = 10 * 60 * 1000;
 
@@ -16,11 +14,7 @@ export function checkCooldown(scope: string, key: string, cooldownMs: number): b
   return true;
 }
 
-/**
- * `lastActionAt` previously grew forever - one entry per (scope, userId) pair
- * ever seen, never removed, for the life of the process. Periodically sweep
- * out anything old enough that it can no longer affect any real cooldown check.
- */
+// Sweep stale entries; lastActionAt would otherwise grow unbounded (one entry per (scope, key) forever).
 const sweepTimer = setInterval(() => {
   const cutoff = Date.now() - ENTRY_MAX_AGE_MS;
   for (const [key, timestamp] of lastActionAt) {

@@ -79,7 +79,6 @@ function Shell({ me }: { me: Me }) {
 
   const [sessionExpired, setSessionExpired] = useState(false);
   const onUnauthorized = useCallback(() => {
-    // Session expired — show a gentle re-login prompt instead of a hard reload.
     setSessionExpired(true);
   }, []);
 
@@ -105,7 +104,6 @@ function Shell({ me }: { me: Me }) {
         })
         .catch(() => {});
     void load();
-    // Refresh the server list periodically so the sidebar's now-playing badges stay live.
     const id = setInterval(() => {
       if (!document.hidden) void load();
     }, 15_000);
@@ -169,7 +167,7 @@ function Shell({ me }: { me: Me }) {
           onCycleTheme={() => setTheme(theme === 'auto' ? 'dark' : theme === 'dark' ? 'light' : 'auto')}
           onLogout={logout}
         />
-        {/* Desktop spacer: reserves the collapsed rail's width (the sidebar itself is a fixed overlay that expands on hover). */}
+        {/* Reserves the collapsed rail's width; the rail itself is a fixed overlay. */}
         <div className="side-spacer flex-none" />
 
         <main className="flex min-w-0 flex-1 flex-col overflow-hidden">
@@ -344,11 +342,7 @@ export function Sidebar({
       onMouseEnter={() => setRailHover(true)}
       onMouseLeave={() => setRailHover(false)}
       className={cx(
-        // Mobile: full-width drawer toggled by `open`. Desktop: a 4.5rem icon
-        // rail that expands to full width while hovered. Width is set INLINE on
-        // desktop (highest priority, avoids a class-cascade override) and falls
-        // back to the CSS drawer width on mobile. Labels/centering key off the
-        // `is-open` class via .rail-* rules (see index.css).
+        // Width is set inline on desktop to beat the class cascade; falls back to the CSS drawer width on mobile.
         'glass-strong side-rail fixed left-0 top-0 z-40 flex h-full flex-col overflow-hidden p-3 transition-[width,transform] duration-300 ease-out',
         open ? 'translate-x-0' : '-translate-x-full',
         'md:translate-x-0',
@@ -375,7 +369,6 @@ export function Sidebar({
         <span className="whitespace-nowrap text-xs font-semibold uppercase tracking-wide text-[var(--text-faint)]">サーバー</span>
         <span className="text-xs text-[var(--text-faint)]">{guilds.length}</span>
       </div>
-      {/* thin divider shown only on the collapsed desktop rail */}
       <div className="rail-collapsed-only mb-1 hidden h-px bg-[var(--hairline)] md:block" />
 
       <div className="min-h-0 flex-1 space-y-0.5 overflow-y-auto soft-scroll">
@@ -421,7 +414,6 @@ export function Sidebar({
         )}
       </div>
 
-      {/* footer: avatar stays centered when collapsed; the rest reveals on expand */}
       <div className="rail-center mt-2 flex items-center gap-2 border-t border-[var(--hairline)] pt-2">
         {me.avatarUrl ? (
           <img src={me.avatarUrl} alt="" className="h-9 w-9 flex-none rounded-full object-cover" />

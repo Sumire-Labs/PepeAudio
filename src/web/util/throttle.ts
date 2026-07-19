@@ -1,9 +1,4 @@
-/**
- * Leading + trailing throttle. A burst of calls collapses to at most one
- * invocation per `ms` window, with a guaranteed trailing invocation after the
- * burst so the final state is never dropped. Used to coalesce player 'update'
- * bursts (e.g. a volume drag) into bounded realtime pushes.
- */
+/** Leading + trailing throttle: one call per `ms` window, with a guaranteed trailing call so the final state is never dropped. */
 export function throttle(fn: () => void, ms: number): () => void {
   let lastInvoke = 0;
   let timer: NodeJS.Timeout | null = null;
