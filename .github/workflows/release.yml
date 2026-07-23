@@ -48,7 +48,7 @@ jobs:
           format: cyclonedx-json
           artifact-name: sbom-${{ github.ref_name }}.cdx.json
       - name: Scan image
-        uses: anchore/scan-action@v6
+        uses: anchore/scan-action@v7
         with:
           image: ${{ env.IMAGE }}:${{ github.ref_name }}
           severity-cutoff: high
