@@ -12,6 +12,7 @@ export interface PlayerCommands {
   stop(): void;
   toggleShuffle(): void;
   toggleAura(): void;
+  toggleAura360(): void;
   clearQueue(): void;
   setLoop(mode: LoopMode): void;
   setPreset(name: string): void;
@@ -89,6 +90,7 @@ export function usePlayerHub(guildId: string | null): PlayerSession {
     stop: () => invoke("Control", "Stop"),
     toggleShuffle: () => invoke("Control", "Shuffle"),
     toggleAura: () => invoke("Control", "ToggleAura"),
+    toggleAura360: () => invoke("Control", "ToggleAura360"),
     clearQueue: () => invoke("Control", "ClearQueue"),
     setLoop: (mode) => invoke("SetLoop", mode),
     setPreset: (name) => invoke("SetPreset", name),

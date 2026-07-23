@@ -54,6 +54,74 @@ public class EffectChainTests
     }
 
     [Fact]
+    public void Aura360_renders_through_the_rear_brir_speakers()
+    {
+        var tmp = Path.Combine(Path.GetTempPath(), $"pepe_{Guid.NewGuid():N}.wav");
+        File.WriteAllBytes(tmp, new byte[64]);
+        try
+        {
+            var chain = new EffectChainBuilder(new StubLibrary(new HeSuViPreset("Aura", tmp, 14)));
+            var graph = chain.Build(new EffectSettings { AuraEnabled = true, Aura360Enabled = true });
+            // Tone stage sits before the convolution.
+            var tone = graph.IndexOf("equalizer=f=60", StringComparison.Ordinal);
+            var convolution = graph.IndexOf("headphone=", StringComparison.Ordinal);
+            Assert.True(tone >= 0 && convolution > tone, "tone stage must sit in the pre-convolution branch");
+            // Six speakers, rears from the real HeSuVi back pairs (BL c4/c5, BR right-ear-first c12/c11).
+            Assert.Contains("join=inputs=6", graph);
+            Assert.Contains("headphone=map=FL|FR|SL|SR|BL|BR:hrir=stereo", graph);
+            Assert.Contains("c0=c4|c1=c5", graph);
+            Assert.Contains("c0=c12|c1=c11", graph);
+            // Asymmetric rear pre-delays + air-absorption lowpass = diffuse, distant rear field.
+            Assert.Contains("adelay=15", graph);
+            Assert.Contains("adelay=21", graph);
+            Assert.Contains("lowpass=f=6500", graph);
+            // The Haas widen stage is only for rear-less paths; real rears replace it here.
+            Assert.DoesNotContain("stereowiden", graph);
+        }
+        finally { File.Delete(tmp); }
+    }
+
+    [Fact]
+    public void Aura360_uses_its_own_measured_makeup()
+    {
+        var preset = new HeSuViPreset("Aura", "/presets/a.wav", 14, MakeupDb: 10, Makeup360Db: 20);
+        Assert.Contains("volume=10dB", AuraConvolution.Build(preset, "aresample=48000", "aformat=x"));
+        Assert.Contains("volume=20dB", AuraConvolution.Build(preset, "aresample=48000", "aformat=x", aura360: true));
+    }
+
+    [Fact]
+    public void Aura360_on_a_rearless_preset_falls_back_to_haas_widening()
+    {
+        var preset = new HeSuViPreset("Stereo", "/presets/s.wav", 4);
+        var graph = AuraConvolution.Build(preset, "aresample=48000", "aformat=x", aura360: true);
+        Assert.Contains("stereowiden", graph);
+        Assert.Contains("afir=", graph);
+    }
+
+    [Fact]
+    public void Standalone_aura360_is_limited_before_s16()
+    {
+        var chain = new EffectChainBuilder(new StubLibrary(null));
+        var graph = chain.Build(new EffectSettings { AuraEnabled = false, Aura360Enabled = true });
+        Assert.Contains("equalizer=f=60", graph);
+        Assert.Contains("stereowiden", graph);
+        Assert.Contains("crossfeed=strength=0.4", graph);
+        // No makeup tail downstream in the bypass path, so the bass boost needs its own limiter.
+        Assert.Contains("alimiter=limit=0.95:level=false:latency=1", graph);
+        Assert.DoesNotContain("afir", graph);
+    }
+
+    [Fact]
+    public void Aura360_off_leaves_the_chain_untouched()
+    {
+        var chain = new EffectChainBuilder(new StubLibrary(null));
+        var graph = chain.Build(new EffectSettings { AuraEnabled = false, Aura360Enabled = false });
+        Assert.DoesNotContain("stereowiden", graph);
+        Assert.DoesNotContain("equalizer", graph);
+        Assert.DoesNotContain("alimiter", graph);
+    }
+
+    [Fact]
     public void Output_stage_pins_48k_with_soxr_and_dither()
     {
         var chain = new EffectChainBuilder(new StubLibrary(null));

@@ -13,6 +13,7 @@ public enum PlayerControl
     VolumeDown,
     SetVolume,
     ToggleAura,
+    ToggleAura360,
     SetPreset,
     SetAutoplay,
     ShowQueue,

@@ -33,6 +33,7 @@ public sealed record PlayerSnapshotDto(
     bool Autoplay,
     int Volume,
     bool AuraEnabled,
+    bool Aura360Enabled,
     string PresetName,
     IReadOnlyList<string> Presets,
     int CrossfadeMs,
@@ -80,6 +81,6 @@ public static class PlayerSnapshot
             s.Queue.Select(q => Map(q.Id, q.Track)).ToList(),
             s.History.Select(q => Map(q.Id, q.Track)).ToList(),
             loop, s.Shuffle, s.Autoplay, s.Volume,
-            s.AuraEnabled, s.PresetName, presets, s.CrossfadeMs, s.Epoch, s.UpdatedAt);
+            s.AuraEnabled, s.Aura360Enabled, s.PresetName, presets, s.CrossfadeMs, s.Epoch, s.UpdatedAt);
     }
 }

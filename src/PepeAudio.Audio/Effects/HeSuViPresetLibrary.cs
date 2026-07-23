@@ -26,7 +26,7 @@ public sealed class HeSuViPresetLibrary : IHeSuViPresetLibrary
     private const double Headroom = 4;        // keep a hot master off the limiter after the boost
     private const int MeasureTimeoutMs = 20_000;
     private const string CacheFileName = ".makeup-cache.json";
-    private const int CacheVersion = 1;       // bump when the measure graph semantics change
+    private const int CacheVersion = 2;       // bump when the measure graph semantics change
     // Two decorrelated pink-noise channels — a correlated signal under-reads the convolution loss.
     private const string PinkNoise =
         "anoisesrc=color=pink:amplitude=0.2:duration=2:seed=1:sample_rate=48000[l];" +
@@ -64,16 +64,17 @@ public sealed class HeSuViPresetLibrary : IHeSuViPresetLibrary
                     log.LogWarning("Preset '{Name}' is {Rate} Hz (expected 48000); its IR is soxr-resampled at play time — prefer a native 48 kHz file.", name, sampleRate);
                 var sha = Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(path)));
                 if (cache.Entries.TryGetValue(name, out var hit) && hit.Sha256 == sha)
-                    preset = preset with { MakeupDb = hit.MakeupDb };
-                else if (MeasureMakeup(ffmpeg, preset, inputRms.Value, log) is { } measured)
+                    preset = preset with { MakeupDb = hit.MakeupDb, Makeup360Db = hit.Makeup360Db };
+                else if (MeasureMakeup(ffmpeg, preset, inputRms.Value, log, aura360: false) is { } plain &&
+                         MeasureMakeup(ffmpeg, preset, inputRms.Value, log, aura360: true) is { } depth)
                 {
-                    preset = preset with { MakeupDb = measured };
-                    cache.Entries[name] = new MakeupEntry { Sha256 = sha, MakeupDb = measured };
+                    preset = preset with { MakeupDb = plain, Makeup360Db = depth };
+                    cache.Entries[name] = new MakeupEntry { Sha256 = sha, MakeupDb = plain, Makeup360Db = depth };
                     dirty = true;
                 }
                 else
                     log.LogWarning("Makeup measurement failed for preset '{Name}'; using default {Db} dB (not cached).", name, preset.MakeupDb);
-                log.LogInformation("Preset '{Name}' ({Ch}ch): makeup {Db} dB.", name, channels, preset.MakeupDb);
+                log.LogInformation("Preset '{Name}' ({Ch}ch): makeup {Db} dB, 360° {Db360} dB.", name, channels, preset.MakeupDb, preset.Makeup360Db);
             }
             else
                 log.LogWarning("Preset '{Name}' has {Ch} channels (unsupported); it will pass through.", name, channels);
@@ -104,13 +105,13 @@ public sealed class HeSuViPresetLibrary : IHeSuViPresetLibrary
 
     public IReadOnlyCollection<HeSuViPreset> All => _presets.Values;
 
-    private static double? MeasureMakeup(string ffmpeg, HeSuViPreset preset, double? inputRms, ILogger log)
+    private static double? MeasureMakeup(string ffmpeg, HeSuViPreset preset, double? inputRms, ILogger log, bool aura360)
     {
         if (inputRms is not { } inRms) return null;
         var outRms = MeasureRms(ffmpeg, new[]
         {
             "-hide_banner", "-f", "lavfi", "-i", PinkNoise,
-            "-filter_complex", AuraConvolution.BuildMeasureGraph(preset), "-map", "[out]", "-f", "null", "-",
+            "-filter_complex", AuraConvolution.BuildMeasureGraph(preset, aura360), "-map", "[out]", "-f", "null", "-",
         }, log);
         return outRms is { } o ? Math.Clamp(Math.Round(inRms - o - Headroom, 1), 0, 30) : null;
     }
@@ -175,5 +176,6 @@ public sealed class HeSuViPresetLibrary : IHeSuViPresetLibrary
     {
         public string Sha256 { get; set; } = "";
         public double MakeupDb { get; set; }
+        public double Makeup360Db { get; set; }
     }
 }

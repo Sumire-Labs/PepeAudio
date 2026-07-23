@@ -106,6 +106,7 @@ export function Player({ session, onSaveTrack }: { session: PlayerSession; onSav
       <div className="mt-6 flex w-full max-w-md flex-wrap items-center justify-center gap-2">
         <Chip icon={Icons.Radio} label="オートプレイ" active={Boolean(snapshot?.autoplay)} onClick={() => cmd.setAutoplay(!snapshot?.autoplay)} />
         <Chip icon={Icons.Spatial} label="Aura" active={Boolean(snapshot?.auraEnabled)} onClick={() => cmd.toggleAura()} />
+        <Chip icon={Icons.Spatial} label="360°" active={Boolean(snapshot?.aura360Enabled)} onClick={() => cmd.toggleAura360()} />
       </div>
 
       {/* Aura (HRIR) preset selector — shown only while Aura is on AND presets are loaded.

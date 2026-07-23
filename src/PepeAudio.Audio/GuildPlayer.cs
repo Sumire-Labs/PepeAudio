@@ -105,8 +105,8 @@ public sealed class GuildPlayer : IGuildPlayer
     {
         var next = EffectSettings.From(settings);
         var effectChanged = _primary is not null &&
-            (next.AuraEnabled != _fx.AuraEnabled || next.PresetName != _fx.PresetName ||
-             next.Normalization != _fx.Normalization);
+            (next.AuraEnabled != _fx.AuraEnabled || next.Aura360Enabled != _fx.Aura360Enabled ||
+             next.PresetName != _fx.PresetName || next.Normalization != _fx.Normalization);
         _fx = next;
         _autoplayEnabled = settings.Autoplay;
         if (effectChanged) _pendingEffect = true;
@@ -176,19 +176,29 @@ public sealed class GuildPlayer : IGuildPlayer
                     // so StartNextAsync below pulls the freshly-fronted jump target instead.
                     if (_dropIncoming) { _incoming?.Dispose(); _incoming = null; }
                     _dropIncoming = false;
-                    _primary = _incoming;
+                    var promoted = _incoming; // prefetched next, if MaybeStartOverlap started one
                     _incoming = null;
                     _crossfading = false;
                     var skipped = _skip;
-                    _skip = false;
                     var wasRestart = _sameTrackRestart;
                     _sameTrackRestart = false;
                     // Suppress the history push only for a genuine same-track restart ending on its
                     // own; a skip/jump away (skipped) means `finished` is a real outgoing track.
                     if (_navBack || (wasRestart && !skipped)) _navBack = false; else PushHistory(finished);
-                    if (_primary is not null) _lastTrack = _primary.Track;
-                    _primary ??= await StartNextAsync(ct);
-                    if (_primary is null) break;
+                    if (promoted is not null)
+                    {
+                        // A prefetched next satisfies the skip; consume the flag here.
+                        _primary = promoted;
+                        _skip = false;
+                        _lastTrack = promoted.Track;
+                    }
+                    else
+                    {
+                        // No prefetch (always the case under loop:Track): leave _skip set so
+                        // StartNextAsync bypasses the track-loop and advances instead of replaying.
+                        _primary = await StartNextAsync(ct);
+                        if (_primary is null) break;
+                    }
                     continue;
                 }
 
@@ -492,6 +502,7 @@ public sealed class GuildPlayer : IGuildPlayer
             case PlayerControl.Loop: SetLoop(envelope.Arg); break;
             case PlayerControl.Shuffle: SetShuffle(!_shuffle); break;
             case PlayerControl.ToggleAura: _fx.AuraEnabled = !_fx.AuraEnabled; _pendingEffect = true; break;
+            case PlayerControl.ToggleAura360: _fx.Aura360Enabled = !_fx.Aura360Enabled; _pendingEffect = true; break;
             case PlayerControl.SetPreset:
                 if (!string.IsNullOrWhiteSpace(envelope.Arg)) { _fx.PresetName = envelope.Arg; _pendingEffect = true; }
                 break;
@@ -570,8 +581,9 @@ public sealed class GuildPlayer : IGuildPlayer
         lock (_sync) _queue.Clear(); // leaves the current track playing and history intact
     }
 
-    // Jump to a queued item: drop everything ahead of it, then skip so the pump advances
-    // straight into it (and the outgoing track lands in history via the normal skip path).
+    // Jump to a queued item: move it to the head (KEEPING the tracks it was ahead of, which stay
+    // queued after it), then skip so the pump advances straight into it. The outgoing track lands
+    // in history via the normal skip path. Non-destructive — nothing in the queue is discarded.
     private void JumpTo(string? id)
     {
         if (string.IsNullOrEmpty(id)) return;
@@ -580,7 +592,12 @@ public sealed class GuildPlayer : IGuildPlayer
         {
             var idx = _queue.FindIndex(t => t.Id == id);
             if (idx < 0) return;
-            if (idx > 0) _queue.RemoveRange(0, idx); // target is now the head
+            if (idx > 0)
+            {
+                var target = _queue[idx];
+                _queue.RemoveAt(idx);
+                _queue.Insert(0, target); // target is now the head; the skipped-over tracks remain
+            }
             primary = _primary;
             if (primary is null) StartPumpIfIdle(); // idle player: just start into the target
         }
@@ -664,7 +681,7 @@ public sealed class GuildPlayer : IGuildPlayer
         return new PlayerState(
             GuildId, _primary?.Track.Info, _primary?.PositionMs ?? 0,
             _primary is not null && !_pause.IsPaused, _fx.Volume, _loopMode, _shuffle, _autoplayEnabled,
-            _fx.AuraEnabled, _fx.PresetName, _fx.CrossfadeMs, entries, history, _epoch, DateTimeOffset.UtcNow);
+            _fx.AuraEnabled, _fx.Aura360Enabled, _fx.PresetName, _fx.CrossfadeMs, entries, history, _epoch, DateTimeOffset.UtcNow);
     }
 
     private async Task MirrorAsync()

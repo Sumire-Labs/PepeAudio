@@ -26,9 +26,13 @@ public sealed class EffectChainBuilder
             // (e.g. default "Aura" vs a differently-named .wav) still convolves instead of passing through.
             var preset = _presets.Get(fx.PresetName) ?? _presets.Default;
             if (preset is { IsSupported: true } && File.Exists(preset.Path))
-                return AuraConvolution.Build(preset, pre, OutFormat);
+                return AuraConvolution.Build(preset, pre, OutFormat, fx.Aura360Enabled);
         }
-        return $"{pre},{OutFormat}[out]";
+        // Standalone 360° (no BRIR): tone + Haas widen/depth, capped by the limiter because the
+        // bypass path has no makeup tail and the bass boost would otherwise clip a hot master.
+        return fx.Aura360Enabled
+            ? $"{pre},{AuraConvolution.Aura360Tone},{AuraConvolution.Aura360Widen},{AuraConvolution.Limiter},{OutFormat}[out]"
+            : $"{pre},{OutFormat}[out]";
     }
 
     // loudnorm runs at 192k internally (its in/out are forced there), so drop straight back to 48k

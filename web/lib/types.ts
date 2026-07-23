@@ -48,6 +48,7 @@ export interface PlayerSnapshot {
   autoplay: boolean;
   volume: number;
   auraEnabled: boolean;
+  aura360Enabled: boolean;
   presetName: string;
   presets: string[];
   crossfadeMs: number;

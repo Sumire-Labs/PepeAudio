@@ -30,6 +30,7 @@ public static class PlayerComponentFactory
 
         var actions = new ActionRowBuilder()
             .WithButton("AURA HRIR", PlayerCustomIds.For(PlayerControl.ToggleAura), s.AuraEnabled ? ButtonStyle.Success : ButtonStyle.Secondary)
+            .WithButton("AURA 360°", PlayerCustomIds.For(PlayerControl.ToggleAura360), s.Aura360Enabled ? ButtonStyle.Success : ButtonStyle.Secondary)
             .WithButton("➕ 曲を追加", PlayerCustomIds.AddTrack, ButtonStyle.Success);
 
         var children = new List<IMessageComponentBuilder> { new TextDisplayBuilder($"{title}\n{subtitle}") };

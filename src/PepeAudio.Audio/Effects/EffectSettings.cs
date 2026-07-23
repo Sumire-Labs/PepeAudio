@@ -8,6 +8,7 @@ namespace PepeAudio.Audio.Effects;
 public sealed class EffectSettings
 {
     public bool AuraEnabled { get; set; } = true;
+    public bool Aura360Enabled { get; set; }
     public string PresetName { get; set; } = "Aura";
     public int Volume { get; set; } = 50;
     public NormalizationMode Normalization { get; set; } = NormalizationMode.Off;
@@ -16,6 +17,7 @@ public sealed class EffectSettings
     public static EffectSettings From(GuildSettings g) => new()
     {
         AuraEnabled = g.AuraEnabled,
+        Aura360Enabled = g.Aura360Enabled,
         PresetName = g.PresetName,
         Volume = g.Volume,
         Normalization = g.Normalization,

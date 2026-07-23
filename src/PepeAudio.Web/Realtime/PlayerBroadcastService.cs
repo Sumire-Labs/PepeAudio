@@ -11,7 +11,9 @@ namespace PepeAudio.Web.Realtime;
 // push immediately from the hub; this covers passive progress updates).
 public sealed class PlayerBroadcastService : BackgroundService
 {
-    private static readonly TimeSpan Interval = TimeSpan.FromSeconds(2);
+    // 1s so a track change / position shows on the web quickly (control invokes still push
+    // immediately from the hub; this covers passive progress + track-advance updates).
+    private static readonly TimeSpan Interval = TimeSpan.FromSeconds(1);
 
     private readonly IHubContext<PlayerHub> _hub;
     private readonly IPlaybackService _playback;

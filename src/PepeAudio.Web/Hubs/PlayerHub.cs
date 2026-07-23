@@ -39,7 +39,8 @@ public sealed class PlayerHub : Hub
     private static readonly HashSet<PlayerControl> NoArgControls = new()
     {
         PlayerControl.PlayPause, PlayerControl.Skip, PlayerControl.Previous,
-        PlayerControl.Stop, PlayerControl.Shuffle, PlayerControl.ToggleAura, PlayerControl.ClearQueue,
+        PlayerControl.Stop, PlayerControl.Shuffle, PlayerControl.ToggleAura, PlayerControl.ToggleAura360,
+        PlayerControl.ClearQueue,
     };
 
     public async Task Subscribe(string guildId)

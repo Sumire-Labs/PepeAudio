@@ -31,7 +31,7 @@ public sealed class GuildSettingsRepository : IGuildSettingsRepository
         {
             await using var conn = await src.OpenConnectionAsync(ct);
             var row = await conn.QuerySingleOrDefaultAsync<Row>(new CommandDefinition(
-                "SELECT guild_id, aura_enabled, preset_name, volume, normalization, crossfade_ms, dj_role_id, autoplay, bound_text_channel_id, locale " +
+                "SELECT guild_id, aura_enabled, aura360_enabled, preset_name, volume, normalization, crossfade_ms, dj_role_id, autoplay, bound_text_channel_id, locale " +
                 "FROM guild_settings WHERE guild_id = @guildId",
                 new { guildId = (long)guildId }, cancellationToken: ct));
             return row is null ? GuildSettings.Default(guildId) : row.ToModel();
@@ -52,14 +52,15 @@ public sealed class GuildSettingsRepository : IGuildSettingsRepository
             await using var conn = await src.OpenConnectionAsync(ct);
             await conn.ExecuteAsync(new CommandDefinition(
             "INSERT INTO guilds(guild_id) VALUES (@gid) ON CONFLICT DO NOTHING;" +
-            "INSERT INTO guild_settings(guild_id, aura_enabled, preset_name, volume, normalization, crossfade_ms, dj_role_id, autoplay, bound_text_channel_id, locale, updated_at) " +
-            "VALUES (@gid, @aura, @preset, @vol, @norm, @cf, @dj, @autoplay, @bound, @locale, now()) " +
-            "ON CONFLICT (guild_id) DO UPDATE SET aura_enabled=@aura, preset_name=@preset, volume=@vol, normalization=@norm, " +
+            "INSERT INTO guild_settings(guild_id, aura_enabled, aura360_enabled, preset_name, volume, normalization, crossfade_ms, dj_role_id, autoplay, bound_text_channel_id, locale, updated_at) " +
+            "VALUES (@gid, @aura, @aura360, @preset, @vol, @norm, @cf, @dj, @autoplay, @bound, @locale, now()) " +
+            "ON CONFLICT (guild_id) DO UPDATE SET aura_enabled=@aura, aura360_enabled=@aura360, preset_name=@preset, volume=@vol, normalization=@norm, " +
             "crossfade_ms=@cf, dj_role_id=@dj, autoplay=@autoplay, bound_text_channel_id=@bound, locale=@locale, updated_at=now()",
             new
             {
                 gid = (long)s.GuildId,
                 aura = s.AuraEnabled,
+                aura360 = s.Aura360Enabled,
                 preset = s.PresetName,
                 vol = (short)s.Volume,
                 norm = s.Normalization.ToString(),
@@ -80,6 +81,7 @@ public sealed class GuildSettingsRepository : IGuildSettingsRepository
     {
         public long guild_id { get; set; }
         public bool aura_enabled { get; set; }
+        public bool aura360_enabled { get; set; }
         public string preset_name { get; set; } = "Aura";
         public short volume { get; set; }
         public string normalization { get; set; } = "Off";
@@ -93,6 +95,7 @@ public sealed class GuildSettingsRepository : IGuildSettingsRepository
         {
             GuildId = (ulong)guild_id,
             AuraEnabled = aura_enabled,
+            Aura360Enabled = aura360_enabled,
             PresetName = preset_name,
             Volume = volume,
             Normalization = Enum.TryParse<NormalizationMode>(normalization, out var n) ? n : NormalizationMode.Off,

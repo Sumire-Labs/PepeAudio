@@ -15,6 +15,7 @@ public sealed record PlayerState(
     bool Shuffle,
     bool Autoplay,
     bool AuraEnabled,
+    bool Aura360Enabled,
     string PresetName,
     int CrossfadeMs,
     IReadOnlyList<QueueEntry> Queue,
@@ -24,5 +25,5 @@ public sealed record PlayerState(
 {
     public static PlayerState Empty(ulong guildId) => new(
         guildId, null, 0, false, 10, LoopMode.Off, false, false,
-        true, "Aura", 0, Array.Empty<QueueEntry>(), Array.Empty<QueueEntry>(), 0, DateTimeOffset.UtcNow);
+        true, false, "Aura", 0, Array.Empty<QueueEntry>(), Array.Empty<QueueEntry>(), 0, DateTimeOffset.UtcNow);
 }

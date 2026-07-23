@@ -33,7 +33,7 @@ public interface IPlaybackService
 public sealed class PlaybackService : IPlaybackService
 {
     private static readonly PlayerControl[] Persisted =
-        { PlayerControl.VolumeUp, PlayerControl.VolumeDown, PlayerControl.SetVolume, PlayerControl.ToggleAura, PlayerControl.SetPreset };
+        { PlayerControl.VolumeUp, PlayerControl.VolumeDown, PlayerControl.SetVolume, PlayerControl.ToggleAura, PlayerControl.ToggleAura360, PlayerControl.SetPreset };
 
     private const int SearchResultCount = 8;
 
@@ -189,6 +189,7 @@ public sealed class PlaybackService : IPlaybackService
             var settings = await _settings.GetAsync(guildId, CancellationToken.None);
             var fx = player.CurrentSettings;
             settings.AuraEnabled = fx.AuraEnabled;
+            settings.Aura360Enabled = fx.Aura360Enabled;
             settings.PresetName = fx.PresetName;
             settings.Volume = fx.Volume;
             settings.Normalization = fx.Normalization;

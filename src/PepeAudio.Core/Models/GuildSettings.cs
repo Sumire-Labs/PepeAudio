@@ -7,6 +7,8 @@ public sealed class GuildSettings
 {
     public ulong GuildId { get; init; }
     public bool AuraEnabled { get; set; } = true;
+    // Mugic-style "360°" enhancer (widening + bass + depth), independent of the HRIR toggle.
+    public bool Aura360Enabled { get; set; }
     public string PresetName { get; set; } = "Aura";
     public int Volume { get; set; } = 50;
     public NormalizationMode Normalization { get; set; } = NormalizationMode.Off;
