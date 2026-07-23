@@ -6,10 +6,11 @@ namespace PepeAudio.Audio.Effects;
 // Composes the FFmpeg -filter_complex graph (ending in [out]) from the settings.
 public sealed class EffectChainBuilder
 {
-    // Convert to 48k with the high-quality soxr resampler (a no-op for already-48k sources, so
-    // effectively free), then dither the float->s16 handoff to Discord to cut quantization noise.
+    // Pin [out] to 48k via soxr (a no-op for already-48k graphs, so effectively free) and dither
+    // the float->s16 handoff to Discord. Naming the rate here keeps ffmpeg's default-quality
+    // auto-resampler out of the path when an upstream filter changed the rate.
     private const string OutFormat =
-        "aformat=channel_layouts=stereo,aresample=osf=s16:dither_method=triangular_hp";
+        "aformat=channel_layouts=stereo,aresample=48000:resampler=soxr:precision=28:osf=s16:dither_method=triangular_hp";
 
     private readonly IHeSuViPresetLibrary _presets;
 
@@ -30,9 +31,12 @@ public sealed class EffectChainBuilder
         return $"{pre},{OutFormat}[out]";
     }
 
+    // loudnorm runs at 192k internally (its in/out are forced there), so drop straight back to 48k
+    // with soxr — otherwise the whole convolution runs at 192k and the final rate conversion falls
+    // to the default swr the ffmpeg output stage auto-inserts.
     private static string Normalization(NormalizationMode mode) => mode switch
     {
-        NormalizationMode.LoudNorm => ",loudnorm=I=-14:TP=-1.5:LRA=11",
+        NormalizationMode.LoudNorm => ",loudnorm=I=-14:TP=-1.5:LRA=11," + AuraConvolution.SoxrResample,
         NormalizationMode.DynAudNorm => ",dynaudnorm=f=250:g=15",
         _ => "",
     };

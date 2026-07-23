@@ -34,6 +34,18 @@ public class WavHeaderTests
         finally { File.Delete(path); }
     }
 
+    [Fact]
+    public void Reads_channels_and_sample_rate()
+    {
+        var path = Path.GetTempFileName();
+        try
+        {
+            File.WriteAllBytes(path, BuildWav(14));
+            Assert.Equal((14, 48000), WavHeader.ReadFormat(path));
+        }
+        finally { File.Delete(path); }
+    }
+
     private static byte[] BuildWav(short channels)
     {
         var b = new byte[44];

@@ -21,7 +21,9 @@ public static class PcmMixer
             var n = Math.Min(inSamples.Length, outSamples.Length);
             for (var i = 0; i < n; i++)
             {
-                var mixed = outSamples[i] + (int)(inSamples[i] * g);
+                // Round, don't truncate: at fractional gains truncation-toward-zero adds a full
+                // LSB of asymmetric quantization noise on top of the upstream dither.
+                var mixed = outSamples[i] + (int)Math.Round(inSamples[i] * g);
                 outSamples[i] = (short)Math.Clamp(mixed, short.MinValue, short.MaxValue);
             }
         }

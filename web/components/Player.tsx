@@ -108,8 +108,9 @@ export function Player({ session, onSaveTrack }: { session: PlayerSession; onSav
         <Chip icon={Icons.Spatial} label="Aura" active={Boolean(snapshot?.auraEnabled)} onClick={() => cmd.toggleAura()} />
       </div>
 
-      {/* Aura (HRIR) preset selector — shown only while Aura is enabled */}
-      {snapshot?.auraEnabled && snapshot.presets.length > 0 ? (
+      {/* Aura (HRIR) preset selector — shown only while Aura is on AND presets are loaded.
+          If the backend loaded 0 presets (wrong PresetsDir), this stays hidden and Aura is pass-through. */}
+      {snapshot?.auraEnabled && snapshot.presets?.length ? (
         <div className="mt-3 flex w-full max-w-md items-center justify-center">
           <Dropdown
             value={snapshot.presetName}

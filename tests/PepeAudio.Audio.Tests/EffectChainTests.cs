@@ -49,7 +49,16 @@ public class EffectChainTests
     {
         var chain = new EffectChainBuilder(new StubLibrary(null));
         var graph = chain.Build(new EffectSettings { AuraEnabled = false, Normalization = NormalizationMode.LoudNorm });
-        Assert.Contains("loudnorm", graph);
+        // loudnorm forces 192k internally, so it must be followed immediately by the soxr return to 48k.
+        Assert.Contains("loudnorm=I=-14:TP=-1.5:LRA=11,aresample=48000:resampler=soxr", graph);
+    }
+
+    [Fact]
+    public void Output_stage_pins_48k_with_soxr_and_dither()
+    {
+        var chain = new EffectChainBuilder(new StubLibrary(null));
+        var graph = chain.Build(new EffectSettings { AuraEnabled = false });
+        Assert.Contains("aresample=48000:resampler=soxr:precision=28:osf=s16:dither_method=triangular_hp", graph);
     }
 
     [Fact]
@@ -59,8 +68,21 @@ public class EffectChainTests
         var graph = AuraConvolution.Build(preset, "aresample=48000", "aformat=x");
         Assert.Contains("pan=4C", graph);
         Assert.Contains("afir=", graph);
-        Assert.Contains("amovie=/presets/aura.wav", graph);
+        // IR branch pinned to 48k with soxr so a non-48k IR never falls to the default swr.
+        Assert.Contains("amovie=/presets/aura.wav,aresample=48000:resampler=soxr", graph);
+        // Canonical true-stereo sum (unit gains), not pan's renormalized '<'.
+        Assert.Contains("pan=stereo|FL=c0+c2|FR=c1+c3", graph);
         Assert.EndsWith("[out]", graph);
+    }
+
+    [Fact]
+    public void Makeup_tail_disables_alimiter_auto_level()
+    {
+        var preset = new HeSuViPreset("Stereo", "/presets/s.wav", 2, MakeupDb: 12.5);
+        var graph = AuraConvolution.Build(preset, "aresample=48000", "aformat=x");
+        Assert.Contains("volume=12.5dB", graph);
+        // Default alimiter auto-level rescales by 1/limit and would cancel the 0.95 headroom.
+        Assert.Contains("alimiter=limit=0.95:level=false:latency=1", graph);
     }
 
     [Fact]
