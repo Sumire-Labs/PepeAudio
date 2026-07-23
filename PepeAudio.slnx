@@ -1,0 +1,20 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/PepeAudio.Application/PepeAudio.Application.csproj" />
+    <Project Path="src/PepeAudio.Audio/PepeAudio.Audio.csproj" />
+    <Project Path="src/PepeAudio.Cache/PepeAudio.Cache.csproj" />
+    <Project Path="src/PepeAudio.Core/PepeAudio.Core.csproj" />
+    <Project Path="src/PepeAudio.Data/PepeAudio.Data.csproj" />
+    <Project Path="src/PepeAudio.Discord/PepeAudio.Discord.csproj" />
+    <Project Path="src/PepeAudio.Host/PepeAudio.Host.csproj" />
+    <Project Path="src/PepeAudio.Sources/PepeAudio.Sources.csproj" />
+    <Project Path="src/PepeAudio.Telemetry/PepeAudio.Telemetry.csproj" />
+    <Project Path="src/PepeAudio.Web/PepeAudio.Web.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/PepeAudio.Audio.Tests/PepeAudio.Audio.Tests.csproj" />
+    <Project Path="tests/PepeAudio.Core.Tests/PepeAudio.Core.Tests.csproj" />
+    <Project Path="tests/PepeAudio.Discord.Tests/PepeAudio.Discord.Tests.csproj" />
+    <Project Path="tests/PepeAudio.Sources.Tests/PepeAudio.Sources.Tests.csproj" />
+  </Folder>
+</Solution>

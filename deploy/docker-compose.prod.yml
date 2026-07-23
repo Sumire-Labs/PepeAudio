@@ -1,0 +1,59 @@
+# SPDX-License-Identifier: Apache-2.0
+# Production compose: pulls the published image instead of building.
+# On the server: place this file + a .env next to it, then the release workflow
+# (or a manual `IMAGE=ghcr.io/OWNER/PepeAudio:vX docker compose ... up -d`) runs it.
+
+services:
+  postgres:
+    image: postgres:18
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-pepeaudio}
+      POSTGRES_USER: ${POSTGRES_USER:-pepeaudio}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}
+    volumes:
+      - pgdata:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-pepeaudio}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  valkey:
+    image: valkey/valkey:8.1-alpine
+    command: ["valkey-server", "--save", "", "--appendonly", "no"]
+    healthcheck:
+      test: ["CMD", "valkey-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  bgutil-provider:
+    image: brainicism/bgutil-ytdlp-pot-provider:latest
+    restart: unless-stopped
+
+  bot-shard-0:
+    image: ${IMAGE:-ghcr.io/OWNER/PepeAudio:latest}
+    env_file:
+      - .env
+    environment:
+      DISCORD__TOTALSHARDS: "1"
+      DISCORD__SHARDIDS: "0"
+      PEPE__CONTAINERID: "shard-0"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      valkey:
+        condition: service_healthy
+    restart: unless-stopped
+    stop_grace_period: 30s   # allow graceful voice drain on SIGTERM
+    # Hardening: run unprivileged with a read-only rootfs + small writable tmpfs.
+    read_only: true
+    tmpfs:
+      - /tmp
+    security_opt:
+      - no-new-privileges:true
+
+volumes:
+  pgdata:

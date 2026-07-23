@@ -1,0 +1,189 @@
+/* SPDX-License-Identifier: Apache-2.0 */
+@import "tailwindcss";
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+/*
+ * PepeAudio dashboard — Apple Music-inspired acrylic design system.
+ * Dark is the primary look (artwork-bloom on near-black); light is fully
+ * supported. next-themes sets the html class to "light" or "dark"; dark is
+ * the default via :root.
+ */
+
+:root {
+  --accent-r: 250;
+  --accent-g: 45;
+  --accent-b: 85;
+  --accent: rgb(var(--accent-r) var(--accent-g) var(--accent-b));
+
+  /* dark theme (default) */
+  --bg: #08080b;
+  --text: #f5f5f7;
+  --text-dim: rgba(235, 235, 245, 0.6);
+  --text-faint: rgba(235, 235, 245, 0.32);
+  --surface: rgba(38, 38, 45, 0.55);
+  --surface-strong: rgba(44, 44, 52, 0.75);
+  --hairline: rgba(255, 255, 255, 0.09);
+  --hairline-strong: rgba(255, 255, 255, 0.14);
+  --shadow: rgba(0, 0, 0, 0.55);
+  --track-bg: rgba(255, 255, 255, 0.14);
+
+  /* migration alias tokens — map new app's old names onto the ported palette */
+  --color-bg: var(--bg);
+  --color-panel: var(--surface-strong);
+  --color-elevated: var(--track-bg);
+  --color-accent: var(--accent);
+  --color-muted: var(--text-dim);
+  --radius-card: 16px;
+}
+
+.light {
+  --bg: #ececef;
+  --text: #1c1c1e;
+  --text-dim: rgba(60, 60, 67, 0.6);
+  --text-faint: rgba(60, 60, 67, 0.3);
+  --surface: rgba(255, 255, 255, 0.6);
+  --surface-strong: rgba(255, 255, 255, 0.78);
+  --hairline: rgba(0, 0, 0, 0.08);
+  --hairline-strong: rgba(0, 0, 0, 0.12);
+  --shadow: rgba(0, 0, 0, 0.18);
+  --track-bg: rgba(0, 0, 0, 0.12);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: -apple-system, "SF Pro Display", "SF Pro Text", "Inter", "Hiragino Sans", "Noto Sans JP", system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+  overflow: hidden;
+}
+
+#root {
+  position: relative;
+  isolation: isolate;
+}
+
+/* --- acrylic surfaces --- */
+.glass {
+  background: var(--surface);
+  backdrop-filter: blur(34px) saturate(180%);
+  -webkit-backdrop-filter: blur(34px) saturate(180%);
+  border: 1px solid var(--hairline);
+}
+.glass-strong {
+  background: var(--surface-strong);
+  backdrop-filter: blur(44px) saturate(190%);
+  -webkit-backdrop-filter: blur(44px) saturate(190%);
+  border: 1px solid var(--hairline-strong);
+}
+
+/* --- helpers --- */
+.hairline {
+  border-color: var(--hairline);
+}
+.accent {
+  color: var(--accent);
+}
+.accent-bg {
+  background: var(--accent);
+}
+
+/*
+ * Collapsible sidebar. On mobile it's a full-width drawer; on desktop it's a narrow icon
+ * rail that expands to full width on hover. Plain CSS (not Tailwind width utilities) so the
+ * three width states resolve deterministically; the rail toggles .is-open via JS.
+ */
+.side-rail {
+  width: 15.5rem;
+}
+.side-spacer {
+  width: 0;
+}
+@media (min-width: 768px) {
+  .side-rail {
+    width: 4.5rem;
+  }
+  .side-rail.is-open {
+    width: 15.5rem;
+  }
+  .side-spacer {
+    width: 4.5rem;
+  }
+  .side-rail:not(.is-open) .rail-label {
+    display: none;
+  }
+  .side-rail:not(.is-open) .rail-center {
+    justify-content: center;
+  }
+  .side-rail.is-open .rail-collapsed-only {
+    display: none;
+  }
+}
+
+.no-scrollbar::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+}
+.no-scrollbar {
+  scrollbar-width: none;
+}
+
+.soft-scroll::-webkit-scrollbar {
+  width: 8px;
+}
+.soft-scroll::-webkit-scrollbar-thumb {
+  background: var(--hairline-strong);
+  border-radius: 8px;
+}
+
+button {
+  font-family: inherit;
+  color: inherit;
+  cursor: pointer;
+}
+input {
+  font-family: inherit;
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+.fade-in {
+  animation: fade-in 0.5s ease both;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+.spin {
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes equalize {
+  0%,
+  100% {
+    transform: scaleY(0.35);
+  }
+  50% {
+    transform: scaleY(1);
+  }
+}

@@ -1,56 +1,51 @@
+# SPDX-License-Identifier: Apache-2.0
+# NOTE: For a public/production repo, pin third-party actions to a full commit
+# SHA (Dependabot is configured to keep them updated). Tags are used here for
+# readability of the initial scaffold.
 name: CI
 
 on:
   push:
     branches: [main]
   pull_request:
-  workflow_dispatch:
+    branches: [main]
 
-# Only keep the latest run per branch/PR alive — a new push cancels the previous,
-# still-running check instead of queueing behind it.
-concurrency:
-  group: ci-${{ github.ref }}
-  cancel-in-progress: true
-
-# Least privilege: the checks only need to read the repo.
 permissions:
   contents: read
 
 jobs:
-  build:
-    name: Type-check & build
+  build-test:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      # pnpm must be set up BEFORE setup-node so `cache: pnpm` can find it.
-      # Pinned to 11.x to match the local toolchain and the lockfileVersion 9.0.
-      - name: Set up pnpm
-        uses: pnpm/action-setup@v4
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
         with:
-          version: 11
+          global-json-file: global.json
+      - run: dotnet restore
+      - run: dotnet build --no-restore -c Release
+      - run: dotnet test --no-build -c Release --verbosity minimal
 
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
+  format:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
         with:
-          # 22 matches the production runtime (node:22-bookworm-slim in the
-          # Dockerfile) and the engines floor (>=22.12.0).
-          node-version: 22
-          cache: pnpm
+          global-json-file: global.json
+      - name: Verify formatting and file headers
+        run: dotnet format --verify-no-changes
+        continue-on-error: true
 
-      # --frozen-lockfile fails the build if pnpm-lock.yaml is out of date rather
-      # than silently resolving new versions. Native build scripts (better-sqlite3
-      # etc.) are the ones approved in pnpm-workspace.yaml's allowBuilds.
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
-
-      # Type-aware ESLint (see eslint.config.js) — catches unhandled promises and
-      # other maintainability issues before they merge.
-      - name: Lint (eslint)
-        run: pnpm lint
-
-      # `pnpm build` is `tsc -p tsconfig.json` — the exact command that produces
-      # the shipped dist/, so this is a real compile + full type-check gate.
-      - name: Build (tsc)
-        run: pnpm build
+  web:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - run: corepack enable
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm build

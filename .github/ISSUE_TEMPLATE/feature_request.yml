@@ -1,0 +1,31 @@
+name: Feature request
+description: Suggest an idea for PepeAudio
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem / motivation
+      description: What are you trying to do that is hard today?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed solution
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+  - type: checkboxes
+    id: area
+    attributes:
+      label: Area
+      options:
+        - label: Audio / playback
+        - label: Sources (YouTube/Spotify/Apple/SoundCloud)
+        - label: Discord UI (ComponentsV2)
+        - label: WebGUI
+        - label: Ops / deployment

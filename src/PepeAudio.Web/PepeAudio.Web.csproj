@@ -1,0 +1,25 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <RootNamespace>PepeAudio.Web</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\PepeAudio.Core\PepeAudio.Core.csproj" />
+    <ProjectReference Include="..\PepeAudio.Application\PepeAudio.Application.csproj" />
+    <ProjectReference Include="..\PepeAudio.Data\PepeAudio.Data.csproj" />
+    <ProjectReference Include="..\PepeAudio.Discord\PepeAudio.Discord.csproj" />
+    <ProjectReference Include="..\PepeAudio.Cache\PepeAudio.Cache.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" />
+    <PackageReference Include="Microsoft.AspNetCore.SignalR.StackExchangeRedis" />
+    <PackageReference Include="System.IdentityModel.Tokens.Jwt" />
+  </ItemGroup>
+
+</Project>
