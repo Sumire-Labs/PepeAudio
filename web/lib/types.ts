@@ -7,14 +7,16 @@ export interface Me {
   avatar: string | null;
 }
 
+export type PlayerStatus = "idle" | "playing" | "paused";
+
 export interface Guild {
   id: string;
   name: string;
   icon: string | null;
   owner: boolean;
+  status: PlayerStatus;
+  currentTitle: string | null;
 }
-
-export type PlayerStatus = "idle" | "playing" | "paused";
 export type LoopMode = "off" | "track" | "queue";
 
 // SourceKind ordinal — index into sourceLabel (see lib/format).

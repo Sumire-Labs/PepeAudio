@@ -74,9 +74,9 @@ function Shell() {
 
   const loadToQueue = selectedGuildId
     ? async (sourceUrls: string[]): Promise<boolean> => {
+        // Success toast is left to the caller (it has the playlist name); we only surface errors.
         try {
           for (const url of sourceUrls) await session.cmd.play(url);
-          toast("キューに追加しました。");
           return true;
         } catch (e) {
           toast(e instanceof Error ? e.message : "追加に失敗しました。", "error");

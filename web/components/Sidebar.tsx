@@ -3,7 +3,7 @@
 /** Collapsible left rail: nav, guild list, and the user/theme footer. */
 import { useEffect, useState } from "react";
 import { useTheme } from "next-themes";
-import { cx, Icons, type Icon } from "@/components/ui";
+import { cx, EqualizerBars, Icons, type Icon } from "@/components/ui";
 import { guildIconUrl, userAvatarUrl } from "@/lib/format";
 import type { Guild, Me } from "@/lib/types";
 
@@ -107,7 +107,7 @@ export function Sidebar({
                   selected ? "" : "hover:bg-[var(--track-bg)]",
                 )}
               >
-                <div className="flex-none">
+                <div className="relative flex-none">
                   {iconUrl ? (
                     <img src={iconUrl} alt="" className="h-9 w-9 rounded-xl object-cover" />
                   ) : (
@@ -115,10 +115,26 @@ export function Sidebar({
                       {g.name.slice(0, 1).toUpperCase()}
                     </div>
                   )}
+                  {/* Status dot — visible only in the collapsed rail (where the label/subline is hidden). */}
+                  {g.status === "playing" ? (
+                    <span className="rail-collapsed-only absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full border-2 border-[var(--surface-strong)] accent-bg" />
+                  ) : null}
                 </div>
-                <span className={cx("rail-label min-w-0 flex-1 truncate text-sm font-medium", selected ? "accent" : "text-[var(--text)]")}>
-                  {g.name}
-                </span>
+                <div className="rail-label min-w-0 flex-1">
+                  <div className={cx("truncate text-sm font-medium", selected ? "accent" : "text-[var(--text)]")}>{g.name}</div>
+                  <div className="flex items-center gap-1 text-xs text-[var(--text-dim)]">
+                    {g.status === "playing" ? (
+                      <>
+                        <EqualizerBars className="h-2.5" />
+                        <span className="truncate">{g.currentTitle ?? "再生中"}</span>
+                      </>
+                    ) : g.status === "paused" ? (
+                      <span>一時停止中</span>
+                    ) : (
+                      <span className="text-[var(--text-faint)]">待機中</span>
+                    )}
+                  </div>
+                </div>
               </button>
             );
           })

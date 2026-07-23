@@ -7,5 +7,6 @@ export function useMe() {
 }
 
 export function useGuilds() {
-  return useQuery({ queryKey: ["guilds"], queryFn: api.guilds });
+  // Poll so the sidebar's per-guild play status stays live.
+  return useQuery({ queryKey: ["guilds"], queryFn: api.guilds, refetchInterval: 15_000 });
 }

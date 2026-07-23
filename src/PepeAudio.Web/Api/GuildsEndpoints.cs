@@ -15,13 +15,30 @@ public static class GuildsEndpoints
 {
     public static void MapGuildsEndpoints(this IEndpointRouteBuilder app)
     {
-        app.MapGet("/api/guilds", (HttpContext ctx, IMemoryCache cache, DiscordShardedClient client) =>
+        app.MapGet("/api/guilds", (HttpContext ctx, IMemoryCache cache, DiscordShardedClient client, IPlaybackService playback) =>
         {
             var userGuilds = GuildAccess.ManageableGuilds(ctx.User, cache);
             var botGuilds = client.Guilds.Select(g => g.Id.ToString()).ToHashSet();
+            // Play status is read from the local player (accurate in single-process; owner-shard
+            // only when sharded — the sidebar treats a non-owned guild as idle, which self-corrects
+            // once its player is opened and the owner starts broadcasting).
             var result = userGuilds
                 .Where(g => botGuilds.Contains(g.Id))
-                .Select(g => new { g.Id, g.Name, g.Icon, g.Owner });
+                .Select(g =>
+                {
+                    var status = "idle";
+                    string? currentTitle = null;
+                    if (ulong.TryParse(g.Id, out var gid))
+                    {
+                        var state = playback.GetState(gid);
+                        if (state.Current is not null)
+                        {
+                            status = state.IsPlaying ? "playing" : "paused";
+                            currentTitle = state.Current.Title;
+                        }
+                    }
+                    return new { g.Id, g.Name, g.Icon, g.Owner, Status = status, CurrentTitle = currentTitle };
+                });
             return Results.Ok(result);
         }).RequireAuthorization();
 
