@@ -345,6 +345,7 @@ public sealed class GuildPlayer : IGuildPlayer
             StartPumpIfIdle();
         }
         CancelIdleTimer();
+        _dropIncoming = true; // drop any prefetched next so the pump starts the prev we just re-headed
         _primary?.Cancel();
     }
 
