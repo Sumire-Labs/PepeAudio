@@ -30,7 +30,7 @@
     <PackageVersion Include="StackExchange.Redis" Version="2.13.1" />
 
     <!-- Web (ASP.NET Core hosted in the bot host) -->
-    <PackageVersion Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="10.0.0" />
+    <PackageVersion Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="10.0.10" />
     <PackageVersion Include="Microsoft.AspNetCore.SignalR.StackExchangeRedis" Version="10.0.0" />
     <PackageVersion Include="System.IdentityModel.Tokens.Jwt" Version="8.3.1" />
     <!-- Pin transitive MessagePack to the patched v2 branch (CVE-2026-48109, SignalR backplane dep) -->
