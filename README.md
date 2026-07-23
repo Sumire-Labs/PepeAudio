@@ -1,5 +1,10 @@
 # PepeAudio
 
+現在作業中の[C#ブランチ](https://github.com/Sumire-Labs/PepeAudio/tree/feat/backend-csharp)が完成次第Typescriptで書かれたmainブランチが置き換わります。
+
+
+---
+
 [![License: LGPL v3](https://img.shields.io/badge/license-LGPL--3.0-blue.svg)](LICENSE.md)
 [![Node.js](https://img.shields.io/badge/node-%3E%3D22.12.0-brightgreen.svg)](package.json)
 [![discord.js](https://img.shields.io/badge/discord.js-v14-5865F2.svg)](https://discord.js.org)
