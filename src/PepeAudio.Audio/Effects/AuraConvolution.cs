@@ -23,7 +23,7 @@ public static class AuraConvolution
     // per-channel echoes stayed ear-correlated and combed — then crossfeed pulls the lows back
     // to centre so bass stays solid and mono-safe despite the widening.
     internal const string Aura360Widen =
-        "stereowiden=delay=16:feedback=0.25:crossfeed=0.35:drygain=0.9,crossfeed=strength=0.4:range=0.5,volume=-0.5dB";
+        "stereowiden=delay=16:feedback=0.25:crossfeed=0.35:drymix=0.9,crossfeed=strength=0.4:range=0.5,volume=-0.5dB";
     // The measure graph (see BuildMeasureGraph) reuses SoxrResample with no normalization/makeup,
     // ending in an astats probe.
     private const string MeasureOut = "aformat=channel_layouts=stereo,astats=metadata=0";
