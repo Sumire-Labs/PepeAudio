@@ -4,7 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import { useMe } from "@/hooks/useAuth";
 import { LoginScreen } from "@/components/LoginScreen";
-import { Server, Headphones, Spatial, Play } from "@/components/icons";
+import { Icons } from "@/components/ui";
 
 export default function Admin() {
   const { data: me, isLoading, isError } = useMe();
@@ -19,10 +19,10 @@ export default function Admin() {
     <main className="mx-auto max-w-5xl px-6 py-12 fade-in">
       <h1 className="text-2xl font-semibold tracking-tight">管理ダッシュボード</h1>
       <div className="mt-6 grid grid-cols-2 gap-4 sm:grid-cols-4">
-        <Stat icon={Server} label="サーバー" value={o?.botGuilds} />
-        <Stat icon={Headphones} label="アクティブなボイス" value={o?.activeVoices} />
-        <Stat icon={Spatial} label="シャード" value={o?.shards} />
-        <Stat icon={Play} label="再生中" value={o?.players.filter((p) => p.playing).length} />
+        <Stat icon={Icons.Server} label="サーバー" value={o?.botGuilds} />
+        <Stat icon={Icons.Headphones} label="アクティブなボイス" value={o?.activeVoices} />
+        <Stat icon={Icons.Spatial} label="シャード" value={o?.shards} />
+        <Stat icon={Icons.Play} label="再生中" value={o?.players.filter((p) => p.playing).length} />
       </div>
 
       <h2 className="mt-10 mb-3 px-1 text-xs font-semibold uppercase tracking-wide text-[var(--text-faint)]">アクティブなプレイヤー</h2>

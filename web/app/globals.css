@@ -100,6 +100,38 @@ body {
   background: var(--accent);
 }
 
+/*
+ * Collapsible sidebar. On mobile it's a full-width drawer; on desktop it's a narrow icon
+ * rail that expands to full width on hover. Plain CSS (not Tailwind width utilities) so the
+ * three width states resolve deterministically; the rail toggles .is-open via JS.
+ */
+.side-rail {
+  width: 15.5rem;
+}
+.side-spacer {
+  width: 0;
+}
+@media (min-width: 768px) {
+  .side-rail {
+    width: 4.5rem;
+  }
+  .side-rail.is-open {
+    width: 15.5rem;
+  }
+  .side-spacer {
+    width: 4.5rem;
+  }
+  .side-rail:not(.is-open) .rail-label {
+    display: none;
+  }
+  .side-rail:not(.is-open) .rail-center {
+    justify-content: center;
+  }
+  .side-rail.is-open .rail-collapsed-only {
+    display: none;
+  }
+}
+
 .no-scrollbar::-webkit-scrollbar {
   width: 0;
   height: 0;

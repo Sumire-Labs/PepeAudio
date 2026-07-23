@@ -8,6 +8,7 @@ using PepeAudio.Application.Playback;
 using PepeAudio.Core.Contracts;
 using PepeAudio.Core.Enums;
 using PepeAudio.Web.Auth;
+using PepeAudio.Web.Realtime;
 
 namespace PepeAudio.Web.Hubs;
 
@@ -33,43 +34,63 @@ public sealed class PlayerHub : Hub
     public static IReadOnlyCollection<string> ActiveGuilds()
         => ConnectionGuilds.Values.SelectMany(s => s.Keys).Distinct().ToArray();
 
+    // No-arg controls the dashboard buttons map to. Arg'd controls (loop/volume/seek/queue
+    // mutations) have their own strongly-typed methods below.
+    private static readonly HashSet<PlayerControl> NoArgControls = new()
+    {
+        PlayerControl.PlayPause, PlayerControl.Skip, PlayerControl.Previous,
+        PlayerControl.Stop, PlayerControl.Shuffle, PlayerControl.ToggleAura, PlayerControl.ClearQueue,
+    };
+
     public async Task Subscribe(string guildId)
     {
         if (!CanManage(guildId) || !ulong.TryParse(guildId, out var id))
             throw new HubException("アクセスが拒否されました。");
         await Groups.AddToGroupAsync(Context.ConnectionId, Group(guildId));
         ConnectionGuilds.GetOrAdd(Context.ConnectionId, _ => new()).TryAdd(guildId, 0);
-        await Clients.Caller.SendAsync("PlayerState", _playback.GetState(id));
+        await Clients.Caller.SendAsync("PlayerState", Snap(id));
     }
 
-    public async Task Control(string guildId, string action)
+    public Task Control(string guildId, string action)
+        => Enum.TryParse<PlayerControl>(action, ignoreCase: true, out var control) && NoArgControls.Contains(control)
+            ? SendControl(guildId, control, null)
+            : Task.CompletedTask;
+
+    public Task SetLoop(string guildId, string mode) => SendControl(guildId, PlayerControl.Loop, mode);
+    public Task SetVolume(string guildId, int percent) => SendControl(guildId, PlayerControl.SetVolume, percent.ToString());
+    public Task Seek(string guildId, long positionMs) => SendControl(guildId, PlayerControl.Seek, positionMs.ToString());
+    public Task MoveTrack(string guildId, string id, int toIndex) => SendControl(guildId, PlayerControl.ReorderQueue, $"{id}:{toIndex}");
+    public Task RemoveTrack(string guildId, string id) => SendControl(guildId, PlayerControl.RemoveTrack, id);
+    public Task JumpTo(string guildId, string id) => SendControl(guildId, PlayerControl.JumpTo, id);
+
+    public async Task SetAutoplay(string guildId, bool enabled)
     {
-        if (!Enum.TryParse<PlayerControl>(action, ignoreCase: true, out var control)) return;
-        await SendControl(guildId, control, null);
+        if (!CanManage(guildId) || !ulong.TryParse(guildId, out var id)) return;
+        await _playback.SetAutoplayAsync(id, enabled);
+        await Clients.Group(Group(guildId)).SendAsync("PlayerState", Snap(id));
     }
-
-    public Task ReorderQueue(string guildId, int from, int to)
-        => SendControl(guildId, PlayerControl.ReorderQueue, $"{from}:{to}");
-
-    public Task RemoveTrack(string guildId, int index)
-        => SendControl(guildId, PlayerControl.RemoveTrack, index.ToString());
 
     private async Task SendControl(string guildId, PlayerControl control, string? arg)
     {
         if (!CanManage(guildId) || !ulong.TryParse(guildId, out var id)) return;
         await _playback.ControlAsync(new ControlEnvelope(id, control, arg, UserId(), 0, DateTimeOffset.UtcNow));
-        await Clients.Group(Group(guildId)).SendAsync("PlayerState", _playback.GetState(id));
+        await Clients.Group(Group(guildId)).SendAsync("PlayerState", Snap(id));
     }
 
-    public async Task Play(string guildId, string url)
+    // Enqueue a URL or search term. Requires the caller to be in a voice channel (that's the
+    // target the bot joins); resolution + capacity checks happen inside PlaybackService.
+    public async Task Play(string guildId, string query)
     {
         if (!CanManage(guildId) || !ulong.TryParse(guildId, out var id))
             throw new HubException("アクセスが拒否されました。");
+        if (string.IsNullOrWhiteSpace(query)) return;
         var voice = _client.GetGuild(id)?.GetUser(UserId())?.VoiceChannel
             ?? throw new HubException("先にボイスチャンネルに参加してください。");
-        await _playback.PlayAsync(new PlayRequest(id, voice.Id, 0, UserId(), url, null), Context.ConnectionAborted);
-        await Clients.Group(Group(guildId)).SendAsync("PlayerState", _playback.GetState(id));
+        await _playback.PlayAsync(new PlayRequest(id, voice.Id, 0, UserId(), query, null), Context.ConnectionAborted);
+        await Clients.Group(Group(guildId)).SendAsync("PlayerState", Snap(id));
     }
+
+    private PlayerSnapshotDto Snap(ulong id) => PlayerSnapshot.From(_playback.GetState(id), _client);
 
     public override Task OnDisconnectedAsync(Exception? exception)
     {

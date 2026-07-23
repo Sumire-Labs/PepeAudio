@@ -1,15 +1,16 @@
 // SPDX-License-Identifier: Apache-2.0
+"use client";
 import type { ComponentType } from "react";
 import Image from "next/image";
-import { Headphones, Radio, Spatial, Server, Discord } from "@/components/icons";
+import { Icons } from "@/components/ui";
 
 type Feature = [ComponentType<{ className?: string }>, string, string];
 
 const features: Feature[] = [
-  [Headphones, "ネイティブ高音質オーディオ", "Aura HeSuVi プリセットとギャップレスクロスフェードを備えたネイティブパイプライン。Lavalink 不要。"],
-  [Radio, "あらゆるプラットフォーム", "YouTube、SoundCloud、Spotify、Apple Music、直接リンク、ファイルアップロードに対応。"],
-  [Spatial, "美しい操作性", "Discord では Components V2、さらに Apple Music 風のウェブリモコン。"],
-  [Server, "スケールする設計", "初日からシャーディング、Valkey で連携 — 1,000 から 100,000 以上のサーバーまで。"],
+  [Icons.Headphones, "ネイティブ高音質オーディオ", "Aura HeSuVi プリセットとギャップレスクロスフェードを備えたネイティブパイプライン。Lavalink 不要。"],
+  [Icons.Radio, "あらゆるプラットフォーム", "YouTube、SoundCloud、Spotify、Apple Music、直接リンク、ファイルアップロードに対応。"],
+  [Icons.Spatial, "美しい操作性", "Discord では Components V2、さらに Apple Music 風のウェブリモコン。"],
+  [Icons.Server, "スケールする設計", "初日からシャーディング、Valkey で連携 — 1,000 から 100,000 以上のサーバーまで。"],
 ];
 
 export default function Landing() {
@@ -27,7 +28,7 @@ export default function Landing() {
           href="/api/auth/login"
           className="flex items-center gap-2 rounded-full accent-bg px-6 py-3 font-medium text-white transition-transform duration-150 hover:brightness-110 active:scale-[0.98]"
         >
-          <Discord className="h-5 w-5" />
+          <Icons.Discord className="h-5 w-5" />
           プレイヤーを開く
         </a>
         <a

@@ -16,6 +16,7 @@ public sealed class GuildPlayer : IGuildPlayer
     private const int EffectChangeFrames = 3; // ~60ms crossfade to hide a respawn seam
     private const int ReconnectAttempts = 5;
     private const int HistoryMax = 50;
+    private const int MaxQueueLength = 1000; // DoS cap: bound how many pending tracks a guild can hold
     private const int AutoplayBatch = 10;
     private const int MirrorIntervalFrames = 50;    // ~1s at 20ms/frame: mirror state + renew voice lock
     private const int CheckpointEveryMirrors = 15;  // ~15s between durable checkpoints
@@ -62,6 +63,9 @@ public sealed class GuildPlayer : IGuildPlayer
     private int _crossfadeElapsed;
     private bool _pendingEffect;
     private bool _skip;
+    private bool _dropIncoming;      // jump: discard the prefetched _incoming so the pump starts the jumped-to track
+    private bool _sameTrackRestart;  // effect-change / seek respawn the current track — don't log it to history
+    private long _seekTo = -1;       // pending seek target (ms), -1 = none; set on the control thread, read on the pump — Interlocked so the 64-bit value never tears
     private int _mirrorTick;
 
     private EffectSettings _fx = new();
@@ -131,10 +135,20 @@ public sealed class GuildPlayer : IGuildPlayer
         CancelIdleTimer();
         lock (_sync)
         {
-            _queue.Add(track);
+            if (_queue.Count >= MaxQueueLength) return;
+            var stamped = WithId(track);
+            // Shuffle keeps the displayed order == the play order, so newly added tracks
+            // are interleaved at a random slot rather than always appended.
+            if (_shuffle) _queue.Insert(Random.Shared.Next(_queue.Count + 1), stamped);
+            else _queue.Add(stamped);
             StartPumpIfIdle();
         }
     }
+
+    // Stamps a stable id the first time a ref enters this player's queue; idempotent so
+    // re-queues (previous/jump/loop) and restored checkpoints keep their existing id.
+    private static PlayableRef WithId(PlayableRef t) =>
+        string.IsNullOrEmpty(t.Id) ? t with { Id = Guid.NewGuid().ToString("N") } : t;
 
     // Check-and-start under _sync so concurrent Enqueue/Restore never launch two pumps.
     private void StartPumpIfIdle()
@@ -158,11 +172,20 @@ public sealed class GuildPlayer : IGuildPlayer
                 {
                     var finished = _primary.Track;
                     _primary.Dispose();
+                    // Jump discards the prefetched next (it's stale after the queue was re-headed),
+                    // so StartNextAsync below pulls the freshly-fronted jump target instead.
+                    if (_dropIncoming) { _incoming?.Dispose(); _incoming = null; }
+                    _dropIncoming = false;
                     _primary = _incoming;
                     _incoming = null;
                     _crossfading = false;
+                    var skipped = _skip;
                     _skip = false;
-                    if (_navBack) _navBack = false; else PushHistory(finished);
+                    var wasRestart = _sameTrackRestart;
+                    _sameTrackRestart = false;
+                    // Suppress the history push only for a genuine same-track restart ending on its
+                    // own; a skip/jump away (skipped) means `finished` is a real outgoing track.
+                    if (_navBack || (wasRestart && !skipped)) _navBack = false; else PushHistory(finished);
                     if (_primary is not null) _lastTrack = _primary.Track;
                     _primary ??= await StartNextAsync(ct);
                     if (_primary is null) break;
@@ -269,7 +292,14 @@ public sealed class GuildPlayer : IGuildPlayer
 
     private void Promote()
     {
-        if (_primary is not null) PushHistory(_primary.Track);
+        // A same-track restart (effect toggle / seek) crossfades the current track into a
+        // respawn of itself — promoting it must not push a duplicate into history.
+        if (_primary is not null && !_sameTrackRestart) PushHistory(_primary.Track);
+        _sameTrackRestart = false;
+        // A jump/skip that lands in the crossfade tail is consumed by this Promote; clear its
+        // flags here too so they don't leak into the next iteration and drop a valid track.
+        _dropIncoming = false;
+        _skip = false;
         _primary?.Dispose();
         _primary = _incoming;
         _incoming = null;
@@ -277,11 +307,14 @@ public sealed class GuildPlayer : IGuildPlayer
         if (_primary is not null) _lastTrack = _primary.Track;
     }
 
+    // History is display-only (never addressed by id; requeue uses the source URL), so each
+    // entry gets a fresh id — a loop:queue track replays with one shared queue id but must not
+    // collide as duplicate keys in the history snapshot.
     private void PushHistory(PlayableRef track)
     {
         lock (_sync)
         {
-            _history.Add(track);
+            _history.Add(track with { Id = Guid.NewGuid().ToString("N") });
             if (_history.Count > HistoryMax) _history.RemoveAt(0);
         }
     }
@@ -296,8 +329,8 @@ public sealed class GuildPlayer : IGuildPlayer
             var prev = _history[^1];
             _history.RemoveAt(_history.Count - 1);
             var current = _primary?.Track;
-            if (current is not null) { _queue.Insert(0, current); _navBack = true; }
-            _queue.Insert(0, prev);
+            if (current is not null) { _queue.Insert(0, WithId(current)); _navBack = true; }
+            _queue.Insert(0, WithId(prev));
             _lastTrack = null; // don't let LoopMode.Track re-pin the interrupted track
             StartPumpIfIdle();
         }
@@ -319,7 +352,7 @@ public sealed class GuildPlayer : IGuildPlayer
             {
                 var seen = _history.Select(h => h.Info.Url).ToHashSet(StringComparer.OrdinalIgnoreCase);
                 var fresh = related.Where(r => seen.Add(r.Info.Url)).ToList();
-                _queue.AddRange(fresh.Count > 0 ? fresh : related);
+                _queue.AddRange((fresh.Count > 0 ? fresh : related).Select(WithId));
             }
             _log.LogInformation("Autoplay queued related tracks in guild {Guild}", GuildId);
         }
@@ -329,6 +362,8 @@ public sealed class GuildPlayer : IGuildPlayer
 
     private async Task MaybeStartOverlapAsync(CancellationToken ct)
     {
+        var seekTarget = Interlocked.Exchange(ref _seekTo, -1);
+        if (seekTarget >= 0) { await StartSeekAsync(seekTarget, ct); return; }
         if (_pendingEffect) { await StartEffectChangeAsync(ct); return; }
         if (_loopMode == LoopMode.Track) return;
 
@@ -360,6 +395,23 @@ public sealed class GuildPlayer : IGuildPlayer
         if (_primary is null) return;
         var src = await TryStartAsync(_primary.Track, _primary.PositionMs, ct);
         if (src is null) return;
+        _sameTrackRestart = true;
+        _incoming = src;
+        _crossfadeFrames = EffectChangeFrames;
+        _crossfadeElapsed = 0;
+        _crossfading = true;
+    }
+
+    // Seek = respawn the current track at a new offset and short-crossfade into it.
+    // Non-seekable inputs (live streams) silently ignore the request.
+    private async Task StartSeekAsync(long targetMs, CancellationToken ct)
+    {
+        if (_primary is null || !_primary.Track.Seekable) return;
+        var dur = _primary.Track.Info.DurationMs;
+        var clamped = dur > 0 ? Math.Clamp(targetMs, 0, Math.Max(0, dur - 1000)) : Math.Max(0, targetMs);
+        var src = await TryStartAsync(_primary.Track, clamped, ct);
+        if (src is null) return;
+        _sameTrackRestart = true;
         _incoming = src;
         _crossfadeFrames = EffectChangeFrames;
         _crossfadeElapsed = 0;
@@ -416,9 +468,10 @@ public sealed class GuildPlayer : IGuildPlayer
         lock (_sync)
         {
             if (_queue.Count == 0) return null;
-            var i = _shuffle ? Random.Shared.Next(_queue.Count) : 0;
-            var track = _queue[i];
-            _queue.RemoveAt(i);
+            // Shuffle reorders the list in place (see SetShuffle), so the head is always
+            // the correct next track — displayed order == play order.
+            var track = _queue[0];
+            _queue.RemoveAt(0);
             if (_loopMode == LoopMode.Queue) _queue.Add(track);
             return track;
         }
@@ -436,40 +489,108 @@ public sealed class GuildPlayer : IGuildPlayer
             case PlayerControl.SetVolume:
                 if (int.TryParse(envelope.Arg, out var vol)) _fx.Volume = Math.Clamp(vol, 0, MaxVolume);
                 break;
-            case PlayerControl.Loop: _loopMode = (LoopMode)(((int)_loopMode + 1) % 3); break;
-            case PlayerControl.Shuffle: _shuffle = !_shuffle; break;
+            case PlayerControl.Loop: SetLoop(envelope.Arg); break;
+            case PlayerControl.Shuffle: SetShuffle(!_shuffle); break;
             case PlayerControl.ToggleAura: _fx.AuraEnabled = !_fx.AuraEnabled; _pendingEffect = true; break;
             case PlayerControl.SetPreset:
                 if (!string.IsNullOrWhiteSpace(envelope.Arg)) { _fx.PresetName = envelope.Arg; _pendingEffect = true; }
                 break;
             case PlayerControl.SetAutoplay: _autoplayEnabled = envelope.Arg == "1"; break;
-            case PlayerControl.ReorderQueue: Reorder(envelope.Arg); break;
-            case PlayerControl.RemoveTrack: RemoveAt(envelope.Arg); break;
+            case PlayerControl.ReorderQueue: MoveById(envelope.Arg); break;
+            case PlayerControl.RemoveTrack: RemoveById(envelope.Arg); break;
+            case PlayerControl.JumpTo: JumpTo(envelope.Arg); break;
+            case PlayerControl.ClearQueue: ClearQueue(); break;
+            case PlayerControl.Seek: if (long.TryParse(envelope.Arg, out var seekMs)) Interlocked.Exchange(ref _seekTo, Math.Max(0, seekMs)); break;
             case PlayerControl.Previous: Previous(); break;
             case PlayerControl.ShowQueue: break;
         }
         _ = MirrorAsync();
     }
 
-    private void Reorder(string? arg)
+    private void SetLoop(string? arg) =>
+        _loopMode = arg switch
+        {
+            "off" or "0" => LoopMode.Off,
+            "track" or "1" => LoopMode.Track,
+            "queue" or "2" => LoopMode.Queue,
+            _ => (LoopMode)(((int)_loopMode + 1) % 3), // no/unknown arg => cycle (Discord button)
+        };
+
+    private void SetShuffle(bool enabled)
     {
-        var parts = arg?.Split(':');
-        if (parts is not { Length: 2 } || !int.TryParse(parts[0], out var from) || !int.TryParse(parts[1], out var to))
-            return;
         lock (_sync)
         {
-            if (from < 0 || from >= _queue.Count || to < 0 || to >= _queue.Count) return;
+            // Enabling shuffles the pending queue in place so the shown order is the play order;
+            // disabling leaves the current order (the pre-shuffle order can't be recovered).
+            if (enabled && !_shuffle) ShuffleInPlace(_queue);
+            _shuffle = enabled;
+        }
+    }
+
+    private static void ShuffleInPlace(List<PlayableRef> list)
+    {
+        for (var i = list.Count - 1; i > 0; i--)
+        {
+            var j = Random.Shared.Next(i + 1);
+            (list[i], list[j]) = (list[j], list[i]);
+        }
+    }
+
+    // arg = "{id}:{toIndex}". Id-based so a move stays correct even if the queue shifted
+    // between the client's snapshot and this command landing.
+    private void MoveById(string? arg)
+    {
+        var sep = arg?.LastIndexOf(':') ?? -1;
+        if (arg is null || sep <= 0 || !int.TryParse(arg[(sep + 1)..], out var toIndex)) return;
+        var id = arg[..sep];
+        lock (_sync)
+        {
+            var from = _queue.FindIndex(t => t.Id == id);
+            if (from < 0) return;
+            var to = Math.Clamp(toIndex, 0, _queue.Count - 1);
+            if (from == to) return;
             var item = _queue[from];
             _queue.RemoveAt(from);
             _queue.Insert(to, item);
         }
     }
 
-    private void RemoveAt(string? arg)
+    private void RemoveById(string? id)
     {
-        if (!int.TryParse(arg, out var index)) return;
+        if (string.IsNullOrEmpty(id)) return;
         lock (_sync)
-            if (index >= 0 && index < _queue.Count) _queue.RemoveAt(index);
+        {
+            var i = _queue.FindIndex(t => t.Id == id);
+            if (i >= 0) _queue.RemoveAt(i);
+        }
+    }
+
+    private void ClearQueue()
+    {
+        lock (_sync) _queue.Clear(); // leaves the current track playing and history intact
+    }
+
+    // Jump to a queued item: drop everything ahead of it, then skip so the pump advances
+    // straight into it (and the outgoing track lands in history via the normal skip path).
+    private void JumpTo(string? id)
+    {
+        if (string.IsNullOrEmpty(id)) return;
+        AudioSource? primary;
+        lock (_sync)
+        {
+            var idx = _queue.FindIndex(t => t.Id == id);
+            if (idx < 0) return;
+            if (idx > 0) _queue.RemoveRange(0, idx); // target is now the head
+            primary = _primary;
+            if (primary is null) StartPumpIfIdle(); // idle player: just start into the target
+        }
+        CancelIdleTimer();
+        if (primary is not null)
+        {
+            _dropIncoming = true; // the prefetched next is stale now
+            _skip = true;
+            primary.Cancel();
+        }
     }
 
     // Restores queue + position from a durable checkpoint and reconnects voice.
@@ -481,8 +602,8 @@ public sealed class GuildPlayer : IGuildPlayer
         lock (_sync)
         {
             _queue.Clear();
-            if (checkpoint.Current is not null) _queue.Add(checkpoint.Current);
-            _queue.AddRange(checkpoint.Queue);
+            if (checkpoint.Current is not null) _queue.Add(WithId(checkpoint.Current));
+            _queue.AddRange(checkpoint.Queue.Select(WithId));
         }
         _resumeSeekMs = checkpoint.Current is not null ? checkpoint.PositionMs : 0;
         await EnsureConnectedAsync(checkpoint.VoiceChannelId, ct);
@@ -533,13 +654,17 @@ public sealed class GuildPlayer : IGuildPlayer
 
     public PlayerState Snapshot()
     {
-        List<QueueEntry> entries;
-        lock (_sync) entries = _queue.Select((t, i) => new QueueEntry(i, t.Info)).ToList();
+        List<QueueEntry> entries, history;
+        lock (_sync)
+        {
+            entries = _queue.Select(t => new QueueEntry(t.Id, t.Info)).ToList();
+            history = _history.Select(t => new QueueEntry(t.Id, t.Info)).ToList();
+        }
 
         return new PlayerState(
             GuildId, _primary?.Track.Info, _primary?.PositionMs ?? 0,
-            _primary is not null && !_pause.IsPaused, _fx.Volume, _loopMode, _shuffle,
-            _fx.AuraEnabled, _fx.PresetName, _fx.CrossfadeMs, entries, _epoch, DateTimeOffset.UtcNow);
+            _primary is not null && !_pause.IsPaused, _fx.Volume, _loopMode, _shuffle, _autoplayEnabled,
+            _fx.AuraEnabled, _fx.PresetName, _fx.CrossfadeMs, entries, history, _epoch, DateTimeOffset.UtcNow);
     }
 
     private async Task MirrorAsync()

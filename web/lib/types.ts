@@ -1,4 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
+// Mirrors the backend PlayerSnapshotDto (SignalR / REST, camelCase) and the playlist DTOs.
+
 export interface Me {
   id: string;
   username: string;
@@ -12,41 +14,71 @@ export interface Guild {
   owner: boolean;
 }
 
-export interface TrackInfo {
+export type PlayerStatus = "idle" | "playing" | "paused";
+export type LoopMode = "off" | "track" | "queue";
+
+// SourceKind ordinal — index into sourceLabel (see lib/format).
+export type SourceKind = number;
+
+export interface QueueItem {
+  id: string;
   title: string;
   artist: string;
-  source: number; // SourceKind
-  url: string;
   durationMs: number;
   thumbnailUrl: string | null;
+  source: SourceKind;
+  sourceUrl: string;
   isLive: boolean;
   requestedBy: string;
+  requesterName: string | null;
+  requesterAvatarUrl: string | null;
 }
 
-export interface QueueEntry {
-  position: number;
-  track: TrackInfo;
-}
-
-export interface PlayerState {
+export interface PlayerSnapshot {
   guildId: string;
-  current: TrackInfo | null;
+  status: PlayerStatus;
+  current: QueueItem | null;
   positionMs: number;
-  isPlaying: boolean;
-  volume: number;
-  loop: number; // 0 Off, 1 Track, 2 Queue
+  queue: QueueItem[];
+  history: QueueItem[];
+  loopMode: LoopMode;
   shuffle: boolean;
+  autoplay: boolean;
+  volume: number;
   auraEnabled: boolean;
   presetName: string;
   crossfadeMs: number;
-  queue: QueueEntry[];
   epoch: number;
   updatedAt: string;
 }
 
-export type Control =
-  | "PlayPause" | "Skip" | "Previous" | "Stop"
-  | "Loop" | "Shuffle" | "VolumeUp" | "VolumeDown" | "ToggleAura";
+// Playlists (REST)
+export interface PlaylistTrack {
+  sourceUrl: string;
+  title: string;
+  artist: string;
+  thumbnailUrl: string | null;
+  source: SourceKind;
+  durationMs: number | null;
+}
+
+export interface PlaylistSummary {
+  id: string;
+  name: string;
+  trackCount: number;
+  updatedAt: number;
+}
+
+export interface PlaylistDetail extends PlaylistSummary {
+  tracks: PlaylistTrack[];
+}
+
+export interface SearchCandidate {
+  title: string;
+  author: string;
+  url: string;
+  thumbnailUrl: string;
+}
 
 export interface AdminPlayer {
   id: string;

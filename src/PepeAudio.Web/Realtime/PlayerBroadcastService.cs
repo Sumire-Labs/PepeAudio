@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
+using Discord.WebSocket;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.Extensions.Hosting;
 using PepeAudio.Application.Playback;
@@ -14,11 +15,13 @@ public sealed class PlayerBroadcastService : BackgroundService
 
     private readonly IHubContext<PlayerHub> _hub;
     private readonly IPlaybackService _playback;
+    private readonly DiscordShardedClient _client;
 
-    public PlayerBroadcastService(IHubContext<PlayerHub> hub, IPlaybackService playback)
+    public PlayerBroadcastService(IHubContext<PlayerHub> hub, IPlaybackService playback, DiscordShardedClient client)
     {
         _hub = hub;
         _playback = playback;
+        _client = client;
     }
 
     protected override async Task ExecuteAsync(CancellationToken ct)
@@ -29,7 +32,8 @@ public sealed class PlayerBroadcastService : BackgroundService
             foreach (var guildId in PlayerHub.ActiveGuilds())
             {
                 if (!ulong.TryParse(guildId, out var id)) continue;
-                await _hub.Clients.Group(PlayerHub.Group(guildId)).SendAsync("PlayerState", _playback.GetState(id), ct);
+                var dto = PlayerSnapshot.From(_playback.GetState(id), _client);
+                await _hub.Clients.Group(PlayerHub.Group(guildId)).SendAsync("PlayerState", dto, ct);
             }
         }
     }

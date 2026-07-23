@@ -12,6 +12,7 @@ using PepeAudio.Core.Sharding;
 using PepeAudio.Data.Repositories;
 using PepeAudio.Sources;
 using PepeAudio.Sources.Models;
+using PepeAudio.Sources.YtDlp;
 
 namespace PepeAudio.Application.Playback;
 
@@ -22,6 +23,9 @@ public interface IPlaybackService
     Task ControlAsync(ControlEnvelope envelope);
     void ApplyLocal(ControlEnvelope envelope);
     Task<bool> ToggleAutoplayAsync(ulong guildId);
+    Task<bool> SetAutoplayAsync(ulong guildId, bool enabled);
+    Task<IReadOnlyList<SearchCandidate>> SearchAsync(string query, CancellationToken ct);
+    Task<IReadOnlyList<TrackInfo>> ResolveInfoAsync(string input, ulong requesterId, int max, CancellationToken ct);
     PlayerState GetState(ulong guildId);
     IReadOnlyList<string> PresetNames { get; }
 }
@@ -31,7 +35,10 @@ public sealed class PlaybackService : IPlaybackService
     private static readonly PlayerControl[] Persisted =
         { PlayerControl.VolumeUp, PlayerControl.VolumeDown, PlayerControl.SetVolume, PlayerControl.ToggleAura, PlayerControl.SetPreset };
 
+    private const int SearchResultCount = 8;
+
     private readonly IResolverRegistry _resolver;
+    private readonly IYtDlpClient _ytdlp;
     private readonly IPlayerManager _players;
     private readonly IGuildSettingsRepository _settings;
     private readonly IShardTopology _topology;
@@ -41,11 +48,12 @@ public sealed class PlaybackService : IPlaybackService
     private readonly IReadOnlyList<string> _presetNames;
     private readonly ILogger<PlaybackService> _log;
 
-    public PlaybackService(IResolverRegistry resolver, IPlayerManager players, IGuildSettingsRepository settings,
+    public PlaybackService(IResolverRegistry resolver, IYtDlpClient ytdlp, IPlayerManager players, IGuildSettingsRepository settings,
         IShardTopology topology, ICommandBus bus, ShutdownState shutdown, IOptions<AudioOptions> audio,
         IHeSuViPresetLibrary presets, ILogger<PlaybackService> log)
     {
         _resolver = resolver;
+        _ytdlp = ytdlp;
         _players = players;
         _settings = settings;
         _topology = topology;
@@ -54,6 +62,30 @@ public sealed class PlaybackService : IPlaybackService
         _maxVoices = audio.Value.MaxConcurrentVoices;
         _presetNames = presets.All.Select(p => p.Name).ToList();
         _log = log;
+    }
+
+    // yt-dlp search for the web "add track" panel. Candidates carry no thumbnail, so we
+    // synthesise the YouTube still from the video id (search is always ytsearch:).
+    public async Task<IReadOnlyList<SearchCandidate>> SearchAsync(string query, CancellationToken ct)
+    {
+        var results = await _ytdlp.SearchAsync(query, SearchResultCount, ct);
+        return results.Select(c => new SearchCandidate(
+            c.Title, c.Channel ?? string.Empty, c.WebpageUrl,
+            $"https://i.ytimg.com/vi/{c.Id}/mqdefault.jpg")).ToList();
+    }
+
+    // Resolves a URL/search term to track metadata without enqueueing — used by playlist import.
+    // Bounded by max so a huge collection URL can't balloon the response.
+    public async Task<IReadOnlyList<TrackInfo>> ResolveInfoAsync(string input, ulong requesterId, int max, CancellationToken ct)
+    {
+        var request = new ResolveRequest(input, null, requesterId);
+        var list = new List<TrackInfo>();
+        await foreach (var track in _resolver.ResolveAsync(request, ct))
+        {
+            list.Add(track.Info);
+            if (list.Count >= max) break;
+        }
+        return list;
     }
 
     public IReadOnlyList<string> PresetNames => _presetNames;
@@ -103,11 +135,18 @@ public sealed class PlaybackService : IPlaybackService
     public async Task<bool> ToggleAutoplayAsync(ulong guildId)
     {
         var settings = await _settings.GetAsync(guildId, CancellationToken.None);
-        settings.Autoplay = !settings.Autoplay;
+        return await SetAutoplayAsync(guildId, !settings.Autoplay);
+    }
+
+    // Sets autoplay to an explicit value (web toggle), persists it, and pushes to the live player.
+    public async Task<bool> SetAutoplayAsync(ulong guildId, bool enabled)
+    {
+        var settings = await _settings.GetAsync(guildId, CancellationToken.None);
+        settings.Autoplay = enabled;
         await _settings.UpsertAsync(settings, CancellationToken.None);
         await ControlAsync(new ControlEnvelope(guildId, PlayerControl.SetAutoplay,
-            settings.Autoplay ? "1" : "0", 0, 0, DateTimeOffset.UtcNow));
-        return settings.Autoplay;
+            enabled ? "1" : "0", 0, 0, DateTimeOffset.UtcNow));
+        return enabled;
     }
 
     // Routes control to the process that owns the guild's shard (unified chain).

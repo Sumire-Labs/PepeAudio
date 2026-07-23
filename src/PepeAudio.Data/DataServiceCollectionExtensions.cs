@@ -15,6 +15,7 @@ public static class DataServiceCollectionExtensions
         services.AddSingleton<MigrationRunner>();
         services.AddSingleton<IGuildSettingsRepository, GuildSettingsRepository>();
         services.AddSingleton<ICheckpointStore, PostgresCheckpointStore>();
+        services.AddSingleton<IPlaylistRepository, PlaylistRepository>();
         return services;
     }
 }

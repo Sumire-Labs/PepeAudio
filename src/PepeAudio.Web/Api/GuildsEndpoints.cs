@@ -6,6 +6,7 @@ using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.Caching.Memory;
 using PepeAudio.Application.Playback;
 using PepeAudio.Web.Auth;
+using PepeAudio.Web.Realtime;
 
 namespace PepeAudio.Web.Api;
 
@@ -25,11 +26,23 @@ public static class GuildsEndpoints
         }).RequireAuthorization();
 
         app.MapGet("/api/guilds/{guildId}/player", (HttpContext ctx, string guildId,
-            IMemoryCache cache, IPlaybackService playback) =>
+            IMemoryCache cache, IPlaybackService playback, DiscordShardedClient client) =>
         {
             if (!GuildAccess.CanManage(ctx.User, cache, guildId) || !ulong.TryParse(guildId, out var id))
                 return Results.Forbid();
-            return Results.Ok(playback.GetState(id));
+            return Results.Ok(PlayerSnapshot.From(playback.GetState(id), client));
+        }).RequireAuthorization();
+
+        // Search (add-track panel). Query-only; no guild scope, any authenticated user.
+        app.MapPost("/api/search", async (SearchBody body, IPlaybackService playback, CancellationToken ct) =>
+        {
+            var query = body?.Query?.Trim();
+            if (string.IsNullOrEmpty(query) || query.Length > 200)
+                return Results.BadRequest(new { error = "検索語を入力してください。" });
+            var candidates = await playback.SearchAsync(query, ct);
+            return Results.Ok(new { candidates });
         }).RequireAuthorization();
     }
+
+    private sealed record SearchBody(string? Query);
 }

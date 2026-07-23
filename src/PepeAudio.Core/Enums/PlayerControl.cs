@@ -17,5 +17,8 @@ public enum PlayerControl
     SetAutoplay,
     ShowQueue,
     ReorderQueue,
-    RemoveTrack
+    RemoveTrack,
+    JumpTo,
+    ClearQueue,
+    Seek
 }

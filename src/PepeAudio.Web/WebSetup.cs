@@ -74,6 +74,7 @@ public static class WebSetup
         app.UseAuthorization();
         app.MapAuthEndpoints();
         app.MapGuildsEndpoints();
+        app.MapPlaylistsEndpoints();
         app.MapAdminEndpoints();
         app.MapHub<PlayerHub>("/hubs/player");
         return app;
