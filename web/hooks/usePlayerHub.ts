@@ -14,6 +14,7 @@ export interface PlayerCommands {
   toggleAura(): void;
   clearQueue(): void;
   setLoop(mode: LoopMode): void;
+  setPreset(name: string): void;
   setVolume(percent: number): void;
   seek(positionMs: number): void;
   moveTrack(id: string, toIndex: number): void;
@@ -90,6 +91,7 @@ export function usePlayerHub(guildId: string | null): PlayerSession {
     toggleAura: () => invoke("Control", "ToggleAura"),
     clearQueue: () => invoke("Control", "ClearQueue"),
     setLoop: (mode) => invoke("SetLoop", mode),
+    setPreset: (name) => invoke("SetPreset", name),
     setVolume: (percent) => invoke("SetVolume", Math.round(percent)),
     seek: (positionMs) => invoke("Seek", Math.round(positionMs)),
     moveTrack: (id, toIndex) => invoke("MoveTrack", id, toIndex),

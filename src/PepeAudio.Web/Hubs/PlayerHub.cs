@@ -57,6 +57,7 @@ public sealed class PlayerHub : Hub
             : Task.CompletedTask;
 
     public Task SetLoop(string guildId, string mode) => SendControl(guildId, PlayerControl.Loop, mode);
+    public Task SetPreset(string guildId, string name) => SendControl(guildId, PlayerControl.SetPreset, name);
     public Task SetVolume(string guildId, int percent) => SendControl(guildId, PlayerControl.SetVolume, percent.ToString());
     public Task Seek(string guildId, long positionMs) => SendControl(guildId, PlayerControl.Seek, positionMs.ToString());
     public Task MoveTrack(string guildId, string id, int toIndex) => SendControl(guildId, PlayerControl.ReorderQueue, $"{id}:{toIndex}");
@@ -90,7 +91,7 @@ public sealed class PlayerHub : Hub
         await Clients.Group(Group(guildId)).SendAsync("PlayerState", Snap(id));
     }
 
-    private PlayerSnapshotDto Snap(ulong id) => PlayerSnapshot.From(_playback.GetState(id), _client);
+    private PlayerSnapshotDto Snap(ulong id) => PlayerSnapshot.From(_playback.GetState(id), _client, _playback.PresetNames);
 
     public override Task OnDisconnectedAsync(Exception? exception)
     {

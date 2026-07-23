@@ -32,7 +32,7 @@ public sealed class PlayerBroadcastService : BackgroundService
             foreach (var guildId in PlayerHub.ActiveGuilds())
             {
                 if (!ulong.TryParse(guildId, out var id)) continue;
-                var dto = PlayerSnapshot.From(_playback.GetState(id), _client);
+                var dto = PlayerSnapshot.From(_playback.GetState(id), _client, _playback.PresetNames);
                 await _hub.Clients.Group(PlayerHub.Group(guildId)).SendAsync("PlayerState", dto, ct);
             }
         }

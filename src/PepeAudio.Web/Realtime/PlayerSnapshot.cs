@@ -34,13 +34,14 @@ public sealed record PlayerSnapshotDto(
     int Volume,
     bool AuraEnabled,
     string PresetName,
+    IReadOnlyList<string> Presets,
     int CrossfadeMs,
     long Epoch,
     DateTimeOffset UpdatedAt);
 
 public static class PlayerSnapshot
 {
-    public static PlayerSnapshotDto From(PlayerState s, DiscordShardedClient client)
+    public static PlayerSnapshotDto From(PlayerState s, DiscordShardedClient client, IReadOnlyList<string> presets)
     {
         var guild = client.GetGuild(s.GuildId);
         var cache = new Dictionary<ulong, (string? Name, string? Avatar)>();
@@ -79,6 +80,6 @@ public static class PlayerSnapshot
             s.Queue.Select(q => Map(q.Id, q.Track)).ToList(),
             s.History.Select(q => Map(q.Id, q.Track)).ToList(),
             loop, s.Shuffle, s.Autoplay, s.Volume,
-            s.AuraEnabled, s.PresetName, s.CrossfadeMs, s.Epoch, s.UpdatedAt);
+            s.AuraEnabled, s.PresetName, presets, s.CrossfadeMs, s.Epoch, s.UpdatedAt);
     }
 }

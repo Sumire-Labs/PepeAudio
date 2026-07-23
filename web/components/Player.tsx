@@ -4,7 +4,7 @@ import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent, ty
 import type { LoopMode, QueueItem } from "@/lib/types";
 import type { PlayerSession } from "@/hooks/usePlayerHub";
 import { formatMs } from "@/lib/format";
-import { cx, EqualizerBars, Icons, IconButton, Menu } from "@/components/ui";
+import { cx, Dropdown, EqualizerBars, Icons, IconButton, Menu } from "@/components/ui";
 
 // 250ms ticker — re-renders while playing so the seek bar advances smoothly.
 function useTicker(active: boolean): number {
@@ -107,6 +107,18 @@ export function Player({ session, onSaveTrack }: { session: PlayerSession; onSav
         <Chip icon={Icons.Radio} label="オートプレイ" active={Boolean(snapshot?.autoplay)} onClick={() => cmd.setAutoplay(!snapshot?.autoplay)} />
         <Chip icon={Icons.Spatial} label="Aura" active={Boolean(snapshot?.auraEnabled)} onClick={() => cmd.toggleAura()} />
       </div>
+
+      {/* Aura (HRIR) preset selector — shown only while Aura is enabled */}
+      {snapshot?.auraEnabled && snapshot.presets.length > 0 ? (
+        <div className="mt-3 flex w-full max-w-md items-center justify-center">
+          <Dropdown
+            value={snapshot.presetName}
+            options={snapshot.presets.map((p) => ({ value: p, label: p }))}
+            icon={Icons.Spatial}
+            onChange={(name) => cmd.setPreset(name)}
+          />
+        </div>
+      ) : null}
     </div>
   );
 }

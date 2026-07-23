@@ -47,7 +47,7 @@ public static class GuildsEndpoints
         {
             if (!GuildAccess.CanManage(ctx.User, cache, guildId) || !ulong.TryParse(guildId, out var id))
                 return Results.Forbid();
-            return Results.Ok(PlayerSnapshot.From(playback.GetState(id), client));
+            return Results.Ok(PlayerSnapshot.From(playback.GetState(id), client, playback.PresetNames));
         }).RequireAuthorization();
 
         // Search (add-track panel). Query-only; no guild scope, any authenticated user.

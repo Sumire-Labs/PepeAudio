@@ -49,6 +49,7 @@ export interface PlayerSnapshot {
   volume: number;
   auraEnabled: boolean;
   presetName: string;
+  presets: string[];
   crossfadeMs: number;
   epoch: number;
   updatedAt: string;
