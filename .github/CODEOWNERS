@@ -1,0 +1,21 @@
+# Code owners — required reviewers per path.
+# Replace @OWNER with your GitHub username or team (e.g. @acme/maintainers)
+# before relying on branch protection. Unknown owners are ignored by GitHub.
+# Docs: https://docs.github.com/articles/about-code-owners
+
+# Default owner for everything
+*                           @OWNER
+
+# Supply-chain sensitive paths: always require an owner review.
+/.github/                   @OWNER
+/.github/workflows/         @OWNER
+/Directory.Packages.props   @OWNER
+/Directory.Build.props      @OWNER
+/nuget.config               @OWNER
+/global.json                @OWNER
+/docker/                    @OWNER
+/deploy/                    @OWNER
+
+# Audio engine and security-sensitive code
+/src/PepeAudio.Audio/       @OWNER
+/src/PepeAudio.Sources/Security/ @OWNER

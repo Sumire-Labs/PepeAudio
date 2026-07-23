@@ -1,0 +1,3 @@
+# next/image uses unoptimized:true, so sharp's native build is not needed.
+allowBuilds:
+  sharp: false

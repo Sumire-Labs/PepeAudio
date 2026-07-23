@@ -1,19 +1,43 @@
-node_modules/
-dist/
+# Build output
 bin/
-docs/
-.claude/
-.env
-# Docker/compose file-mounted secrets (see docker-compose.yml). Never commit.
-secrets/
-*.sqlite
-*.sqlite-journal
-*.sqlite-wal
-*.sqlite-shm
-*.log
+obj/
+[Dd]ebug/
+[Rr]elease/
+artifacts/
+*.user
 
-# Bring-your-own HRIR/BRIR files for the optional 3D-audio preset picker — see
-# assets/hrir_profiles/README.md. Never commit these (unclear redistribution
-# rights for anything captured from a commercial product).
-assets/hrir_profiles/*.wav
-assets/hrtf/*.sofa
+# .NET
+project.lock.json
+.vs/
+*.suo
+
+# Secrets — never commit real values (keep *.example)
+.env
+.env.*
+!.env.example
+appsettings.*.local.json
+config/secrets/*
+!config/secrets/.gitkeep
+secrets/
+*.pfx
+*.pem
+*.key
+*.p8
+**/UserSecrets
+
+# Node / Next.js
+node_modules/
+.next/
+out/
+web/.env*
+!web/.env.example
+
+# OS / editors
+.DS_Store
+Thumbs.db
+.idea/
+
+# Presets
+assets/audio/hesuvi/Aura_Halo_1.6.wav
+assets/audio/hesuvi/Aura_Halo_2.0.wav
+assets/audio/hesuvi/Aura_Home_2.1.wav

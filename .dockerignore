@@ -1,25 +1,19 @@
-# Keep secrets, local state, and host-specific artifacts out of the build
-# context entirely — defense in depth even though the Dockerfile only COPYs
-# specific paths today (a future `COPY . .` would otherwise leak these).
+**/bin/
+**/obj/
+**/.vs/
+**/node_modules/
+**/.next/
+.git/
+.github/
+docs/
+tests/
+# Secrets never enter the build context
 .env
 .env.*
-secrets
-node_modules
-.git
-.gitignore
-*.log
-
-# Local SQLite state (the container creates its own DB).
-*.sqlite
-*.sqlite-journal
-*.sqlite-wal
-*.sqlite-shm
-
-# Host-built ffmpeg / setup scratch (the image builds its own ffmpeg).
-bin
-.ffmpeg-setup-tmp
-
-# Dev-only
-.vscode
-.idea
-scratchpad
+!.env.example
+config/secrets/*
+secrets/
+*.pfx
+*.pem
+*.key
+*.p8

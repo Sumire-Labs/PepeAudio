@@ -1,153 +1,59 @@
 # PepeAudio
 
-[![License: LGPL v3](https://img.shields.io/badge/license-LGPL--3.0-blue.svg)](LICENSE.md)
-[![Node.js](https://img.shields.io/badge/node-%3E%3D22.12.0-brightgreen.svg)](package.json)
-[![discord.js](https://img.shields.io/badge/discord.js-v14-5865F2.svg)](https://discord.js.org)
-[![TypeScript](https://img.shields.io/badge/TypeScript-5.7-3178C6.svg)](https://www.typescriptlang.org/)
-[![pnpm](https://img.shields.io/badge/pnpm-managed-F69220.svg)](https://pnpm.io)
-[![Docker Ready](https://img.shields.io/badge/docker-ready-2496ED.svg)](docker-compose.yml)
+高音質・高速・大規模を目標とする、オープンソースの Discord 音楽 BOT（V2）。
+自前の HeSuVi プリセット **「Aura」** による疑似バイノーラル/サラウンドの聴感、
+**embed を使わない ComponentsV2 UI**、そして Apple Music 風の **WebGUI** を特徴とする。
 
-**Aura Sounds System** を核に据えた discord.js 製の音楽Bot。Components V2 の再生パネルから、
-頭外定位のバイノーラル3Dオーディオ（**Aura HRIR**）と、立体感・重低音のエンハンサー（**Aura 360°**）を
-切り替えられます。Spotify / Apple Music / SoundCloud / YouTube のリンク・検索に対応。
+> **ステータス: 設計中（Design phase）** — 現在はコード実装前。
+> 設計の全体は [`docs/blueprint/`](docs/blueprint/README.md) を参照。
 
----
+## 特徴（設計目標）
 
-## 主な機能
-
-### 再生
-- **対応ソース** — Spotify / Apple Music / SoundCloud / YouTube のリンク、または検索ワード（`/play`）
-- **キュー** — 最大500曲、プレイリスト取り込み（最大50曲）、履歴50曲、前の曲へ戻る
-- **ループ / シャッフル** — ループ（オフ・1曲・キュー全体）、シャッフル
-- **オートプレイ** — キューが尽きたら関連曲を自動で継続
-- **音量** — 0〜100%（5%刻み、デフォルト70%）
-- **24/7モード** — 無人・キューが空でも自動退出しない（`/stay`）
-- **操作パネル** — Components V2 のボタン＋セレクトメニュー。誰が操作できるかはサーバーごとに設定可能
-  （同じVCの全員／DJロール保持者のみ／曲をリクエストした人のみ）
-- 無人時60秒・キュー枯渇5分で自動退出
-- **Web操作パネル（任意）** — Discordログインでブラウザからも操作・キュー管理・保存プレイリスト。
-  Apple Music風のアクリルUI（[詳細](#web操作パネルダッシュボード)）
-
-### Aura Sound System（3Dオーディオ）
-パネルから独立してトグルできる2つのエフェクト＋プリセット選択を備えます。
-
-- **Aura HRIR**（デフォルト: オン） — BRIR畳み込み（ffmpeg `afir`）によるバイノーラル・バーチャルサラウンド。
-  フロント＋サイドの仮想スピーカー構成で音像を頭の外へ押し出し、プロファイルごとに自動でレベルマッチします。
-- **Aura 360°**（デフォルト: オフ） — 畳み込みとは別系統の、ステレオ幅拡大＋重低音＋初期反射による
-  遠近感エンハンサー（立体感・没入感）。
-- **Aura プリセット** — 複数のBRIR/HRIRプロファイルをパネルのセレクトメニューから切り替え（曲を止めずに反映）。
-
-> ### ⚠️ Aura Sound System について
-> コア機能である **Aura Sound System は Sumire Labs の独自開発による非公開システムです。**
-> その中核となるチューニングおよび Aura プリセット（測定済みのBRIR/HRIRプロファイル `.wav`）は、
-> 本リポジトリには**含まれておらず、配布もされません**。この公開リポジトリで提供されるのは、
-> Bot 本体（再生・操作パネル・各ソース連携）と、各自が用意した BRIR/HRIR ファイルを読み込むための
-> 仕組みのみです。
+- **ネイティブ音声パイプライン**（Lavalink 非依存）: yt-dlp + FFmpeg。Aura(HeSuVi) を畳み込み、高速スタートで差別化。
+- **多プラットフォーム**: YouTube / SoundCloud / 直 URL / 添付ファイル（直接再生）、Spotify / Apple Music（メタデータ解決 → 再生可能ソースへ照合）。
+- **キュー内蔵 / プレイリスト**。
+- **ComponentsV2 UI**（embed 不使用・デフォルト色）。
+- **WebGUI**（Next.js + Turbopack + Tailwind）でサーバー一覧・プレイヤー操作を Discord 同等以上に。
+- **初日からシャーディング**（1k → 100k+ サーバーを想定）。
+- **PostgreSQL + Valkey**、Docker Compose で Linux 本番を半永久稼働。
+- **Apache-2.0** / セキュリティ重視 / サプライチェーン対策。
 
 ## コマンド
 
 | コマンド | 説明 |
-| --- | --- |
-| `/play <query>` | リンクまたは検索ワードを再生（Spotify / Apple Music / SoundCloud / YouTube） |
-| `/skip` | 現在の曲をスキップ |
-| `/stop` | 再生を停止してVCから退出 |
-| `/quit` | VCから強制退出（24/7モード中でも退出） |
-| `/stay <enabled>` | 24/7モードの切り替え |
-| `/now show` | 再生パネルをこのチャンネルに表示 |
-| `/settings show` | 現在の操作権限設定を表示 |
-| `/settings permission <mode> [dj_role]` | 誰がBotを操作できるかを設定 |
-
-スラッシュコマンドはBot起動時に自動登録されます（`GUILD_ID` を設定するとギルド限定で即時反映、
-未設定ならグローバル登録）。
-
----
-
-## セットアップ
-
-1. `pnpm install`
-   （`better-sqlite3` はネイティブモジュールのため、環境によっては新しめの Node LTS が必要な場合があります）
-2. **（任意）** `pnpm run setup-ffmpeg` — フル機能の ffmpeg バイナリを `bin/` に配置します。
-   Aura Sound System は ffmpeg の `afir` フィルターで動作し、これは同梱の `ffmpeg-static` にも含まれるため、
-   このステップは**必須ではありません**（実行しない場合は `ffmpeg-static` を使用）。
-3. `.env.example` を `.env` にコピーし、`DISCORD_TOKEN` / `CLIENT_ID` を入力
-   （開発中は `GUILD_ID` も設定するとコマンドが即反映されます）。
-4. 起動：
-   - 開発： `pnpm run dev`（`tsx` でTypeScriptを直接実行）
-   - 本番： `pnpm run build && pnpm start`（コンパイル後に実行）
-
----
-
-## Docker（公開運用向け）
-
-同梱の `docker-compose.yml` は、非root実行・DBの永続化・トークンのファイルマウント
-（env変数に載せない）・再起動ポリシーをまとめて設定します。ffmpeg はイメージ内でソースからビルドされます。
-
-```sh
-mkdir -p secrets
-printf '%s' 'YOUR_BOT_TOKEN' > secrets/discord_token.txt   # secrets/ はgitignore対象
-chmod 600 secrets/discord_token.txt
-echo 'CLIENT_ID=あなたのアプリID' > .env                   # CLIENT_IDは公開値（秘密ではない）
-docker compose up -d --build
-```
-
-- **トークン**は `secrets/discord_token.txt` からファイルとして注入されます（`DISCORD_TOKEN_FILE`）。
-  env変数（`docker inspect` や `/proc` から覗ける）には載りません。
-- **ギルド設定（SQLite）** は名前付きボリューム `pepeaudio-data`（`/data`）に永続化され、
-  再デプロイしても消えません。
-
----
-
-## Web操作パネル（ダッシュボード）
-
-Discordログインで、ブラウザから再生をコントロールできる任意のWebパネルを同梱しています
-（Apple Music風のアクリルデザイン、React + Vite + Tailwind）。既定では**無効**
-（`WEB_DASHBOARD_ENABLED=false`）で、有効時のみ `src/web` とフロントエンドが読み込まれます。
-バックエンドは新規ランタイム依存ゼロ（Node標準の `http` / `crypto` / `fetch`、リアルタイムはSSE）。
-
-**できること** — サーバー選択 → 再生/一時停止/スキップ/前へ/停止・音量・ループ・シャッフル・
-オートプレイ・24/7・Aura 360°/HRIR＋プリセット、キューの表示/削除/並べ替え/URL・検索追加、
-ユーザー単位の保存プレイリスト（作成・編集・キューへ読込）。SSEでリアルタイム同期。
-
----
-
-## 環境変数
-
-| 変数 | 必須 | 説明 |
-| --- | --- | --- |
-| `DISCORD_TOKEN` | ● | Botトークン（本番は `DISCORD_TOKEN_FILE` でファイル注入を推奨） |
-| `CLIENT_ID` | ● | アプリケーションID（公開値） |
-| `GUILD_ID` | | 設定するとギルド限定でコマンドを即時登録（開発用） |
-| `LOG_LEVEL` | | ログレベル（既定 `info`） |
-| `DATA_DIR` | | SQLite DBの保存先（Dockerではマウントボリュームを指定） |
-| `FFMPEG_PATH` | | ffmpegバイナリのパス（未設定なら `bin/` → `ffmpeg-static` の順に解決） |
-| `HRIR_PROFILES_DIR` | | 自前のBRIR/HRIR `.wav` を置くフォルダ（既定 `assets/hrir_profiles/`） |
-| `WEB_DASHBOARD_ENABLED` | | Web操作パネルを有効化（既定 `false`） |
-| `WEB_PORT` | | ダッシュボードの待受ポート（既定 `8080`） |
-| `WEB_BIND_HOST` | | バインドアドレス（既定 `127.0.0.1`。公開はリバースプロキシ前提で `0.0.0.0`） |
-| `WEB_PUBLIC_URL` | ◐ | 公開URL（有効時は必須）。OAuth・CSRFのオリジン判定に使用 |
-| `OAUTH_REDIRECT_URI` | | OAuth2リダイレクトURI（既定 `<WEB_PUBLIC_URL>/auth/callback`） |
-| `DISCORD_CLIENT_SECRET` | ◐ | OAuth2クライアントシークレット（有効時は必須。`_FILE`可） |
-| `SESSION_SECRET` | ◐ | セッションCookie署名用の32文字以上のランダム値（有効時は必須。`_FILE`可） |
-
-（◐ = Web操作パネルを有効化した場合のみ必須）
-
----
+|---|---|
+| `/play <url or file>` | リンクまたは音源ファイルを再生 |
+| `/quit` | ボイスチャンネルから退出 |
+| `/now` | 音楽プレイヤー（ComponentsV2）を表示 |
 
 ## 技術スタック
 
-TypeScript 5.7 / discord.js v14 / @discordjs/voice / better-sqlite3（SQLite）/ ffmpeg（`afir`）/ pnpm
+.NET 10 / Discord.Net 3.20.1 / FFmpeg(LGPL, 別プロセス) / yt-dlp /
+PostgreSQL 18 (Npgsql + Dapper) / Valkey / ASP.NET Core + SignalR /
+Next.js 16 + React 19 + TypeScript + Tailwind CSS v4。
 
----
+詳細と選定理由は [`docs/blueprint/00-overview-and-decisions.md`](docs/blueprint/00-overview-and-decisions.md)。
 
-## クレジット
+## ドキュメント
 
-- **discord.js / @discordjs/voice** — Bot本体と音声再生の基盤
-- **ffmpeg** — `afir` 畳み込みをはじめ、音声処理全般を支える立役者
-- **HeSuVi / Equalizer APO コミュニティ** — 14ch BRIRフォーマットの参考
-- **Claude（Anthropic）** — Aura Sound System のDSP設計・実装のペアプロ相手
+- 設計ブループリント: [`docs/blueprint/`](docs/blueprint/README.md)
+- セルフホスト手順（実装後に整備）: `docs/self-hosting.md`
+- 第三者ライセンス: `docs/THIRD-PARTY-NOTICES.md`
+- FFmpeg ライセンス方針: `docs/licensing/FFMPEG.md`
 
----
+## 設定
+
+トークンや API キー（Discord / Turso→不使用 / Spotify / Apple Music など）は
+`config/` テンプレートを埋めて設定する（秘密情報はコミットしない）。
+本番は環境変数 + Docker secrets。詳細は [`docs/blueprint/07-security-config-ops.md`](docs/blueprint/07-security-config-ops.md)。
+
+> DISCORD トークン・CLIENT ID/SECRET・Spotify/Apple のキー等は利用者が後から設定する。
+
+## 免責
+
+本 BOT は各配信サイトの利用規約・著作権の遵守を利用者（運用者）の責任とする。
+詳細は `DISCLAIMER.md`（整備予定）。
 
 ## ライセンス
 
-[LICENSE.md（LGPL-3.0）](LICENSE.md) を参照してください。
+[Apache License 2.0](LICENSE.md)。

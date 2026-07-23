@@ -1,0 +1,91 @@
+# SPDX-License-Identifier: Apache-2.0
+# Usage: copy config/.env.example -> config/.env, fill DISCORD__TOKEN, then:
+#   docker compose -f deploy/docker-compose.yml up --build
+
+services:
+  postgres:
+    image: postgres:18
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-pepeaudio}
+      POSTGRES_USER: ${POSTGRES_USER:-pepeaudio}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-change-me}
+    volumes:
+      - pgdata:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-pepeaudio}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  valkey:
+    image: valkey/valkey:8.1-alpine
+    command: ["valkey-server", "--save", "", "--appendonly", "no"]
+    healthcheck:
+      test: ["CMD", "valkey-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  bgutil-provider:
+    image: brainicism/bgutil-ytdlp-pot-provider:latest
+    restart: unless-stopped
+
+  bot-shard-0:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    env_file:
+      - ../config/.env
+    volumes:
+      # HRIR presets auto-detected here — drop *.wav on the host, restart the bot (no rebuild).
+      - ../assets/audio/hesuvi:/app/assets/audio/hesuvi
+    environment:
+      DISCORD__TOTALSHARDS: "1"
+      DISCORD__SHARDIDS: "0"
+      PEPE__CONTAINERID: "shard-0"
+      # Serve the WebGUI backend (set WEBGUI__* in .env to enable OAuth).
+      ASPNETCORE_URLS: "http://0.0.0.0:5080"
+    ports:
+      # API + /healthz /readyz /metrics. Bound to loopback so it's reachable from a
+      # host-run cloudflared (http://127.0.0.1:5080) but never exposed on the server's
+      # public/LAN interface. Only needed for the optional /hubs,/api direct-split.
+      - "127.0.0.1:5080:5080"
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:5080/healthz"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 40s
+    depends_on:
+      postgres:
+        condition: service_healthy
+      valkey:
+        condition: service_healthy
+    restart: on-failure
+    stop_grace_period: 30s   # allow graceful voice drain on SIGTERM
+
+  # WebGUI frontend (proxies /api and /hubs to bot-shard-0:5080 internally). To publish it,
+  # run cloudflared as a HOST service and point its public hostnames at http://127.0.0.1:3000
+  # — see deploy/cloudflare-tunnel.md.
+  web:
+    build:
+      context: ../web
+      dockerfile: Dockerfile
+      args:
+        # Baked into Next's build-time rewrites (see web/Dockerfile) — runtime env alone is ignored.
+        BACKEND_ORIGIN: "http://bot-shard-0:5080"
+    environment:
+      BACKEND_ORIGIN: "http://bot-shard-0:5080"
+    ports:
+      # WebGUI dashboard. Loopback-bound: local dev opens http://localhost:3000, and a
+      # host-run cloudflared reaches http://127.0.0.1:3000 — but it's never exposed on the
+      # server's public IP (so the tunnel + Cloudflare Access stay the only way in).
+      - "127.0.0.1:3000:3000"
+    depends_on:
+      - bot-shard-0
+    restart: unless-stopped
+
+volumes:
+  pgdata:
