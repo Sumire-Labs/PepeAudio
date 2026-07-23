@@ -20,7 +20,9 @@ public sealed class GuildPlayer : IGuildPlayer
     private const int AutoplayBatch = 10;
     private const int MirrorIntervalFrames = 50;    // ~1s at 20ms/frame: mirror state + renew voice lock
     private const int CheckpointEveryMirrors = 15;  // ~15s between durable checkpoints
-    private const int MaxConsecutiveFailures = 5;   // stop after this many unplayable tracks in a row
+    private const int MaxConsecutiveFailures = 5;   // stop after this many tracks that fail to START in a row
+    private const int MaxConsecutiveEmpty = 3;      // stop after this many tracks that START but render ~no audio
+    private const int MinPlayedMs = 1000;           // a natural end under this = the track didn't really play
     private const int ReconnectDelayMs = 1000;
     private const int MaxVolume = 200;
     private const int VolumeStep = 10;
@@ -65,6 +67,7 @@ public sealed class GuildPlayer : IGuildPlayer
     private bool _skip;
     private bool _dropIncoming;      // jump: discard the prefetched _incoming so the pump starts the jumped-to track
     private bool _sameTrackRestart;  // effect-change / seek respawn the current track — don't log it to history
+    private int _consecutiveEmpty;   // back-to-back tracks that started but rendered ~no audio (runaway guard)
     private long _seekTo = -1;       // pending seek target (ms), -1 = none; set on the control thread, read on the pump — Interlocked so the 64-bit value never tears
     private int _mirrorTick;
 
@@ -171,6 +174,7 @@ public sealed class GuildPlayer : IGuildPlayer
                 if (pf is null)
                 {
                     var finished = _primary.Track;
+                    var producedMs = _primary.PositionMs - _primary.SeekMs; // audio actually rendered
                     _primary.Dispose();
                     // Jump discards the prefetched next (it's stale after the queue was re-headed),
                     // so StartNextAsync below pulls the freshly-fronted jump target instead.
@@ -185,6 +189,21 @@ public sealed class GuildPlayer : IGuildPlayer
                     // Suppress the history push only for a genuine same-track restart ending on its
                     // own; a skip/jump away (skipped) means `finished` is a real outgoing track.
                     if (_navBack || (wasRestart && !skipped)) _navBack = false; else PushHistory(finished);
+
+                    // Runaway guard: a track that ended on its own having rendered almost no audio
+                    // didn't really play (dead stream URL / broken effect filtergraph). Too many
+                    // back-to-back means a systemic fault — stop, so it can't spin the queue (and
+                    // autoplay refilling) endlessly at zero volume.
+                    if (skipped || wasRestart || producedMs >= MinPlayedMs)
+                        _consecutiveEmpty = 0;
+                    else if (++_consecutiveEmpty >= MaxConsecutiveEmpty)
+                    {
+                        _log.LogWarning("{Count} tracks in a row produced no audio in guild {Guild}; stopping to avoid a skip storm.", _consecutiveEmpty, GuildId);
+                        promoted?.Dispose();
+                        _primary = null;
+                        break;
+                    }
+
                     if (promoted is not null)
                     {
                         // A prefetched next satisfies the skip; consume the flag here.
