@@ -4,7 +4,7 @@ import Image from "next/image";
 import { useGuilds, useMe } from "@/hooks/useAuth";
 import { api } from "@/lib/api";
 import { guildIconUrl } from "@/lib/format";
-import { Headphones, Logout } from "@/components/icons";
+import { Logout } from "@/components/icons";
 
 export function Sidebar({ selected, onSelect }: { selected: string | null; onSelect: (id: string) => void }) {
   const { data: me } = useMe();
@@ -16,8 +16,8 @@ export function Sidebar({ selected, onSelect }: { selected: string | null; onSel
       style={{ boxShadow: "0 0 40px var(--shadow)" }}
     >
       <header className="mb-1 flex h-9 items-center gap-2.5 px-1">
-        <div className="grid h-9 w-9 flex-none place-items-center rounded-xl accent-bg text-white">
-          <Headphones className="h-5 w-5" />
+        <div className="h-9 w-9 flex-none overflow-hidden rounded-xl bg-white">
+          <Image src="/pepeaudio-icon.png" alt="PepeAudio" width={36} height={36} className="h-full w-full object-cover" priority />
         </div>
         <span className="whitespace-nowrap text-lg font-semibold tracking-tight">PepeAudio</span>
       </header>

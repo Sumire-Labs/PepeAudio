@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 import type { ComponentType } from "react";
+import Image from "next/image";
 import { Headphones, Radio, Spatial, Server, Discord } from "@/components/icons";
 
 type Feature = [ComponentType<{ className?: string }>, string, string];
@@ -14,8 +15,8 @@ const features: Feature[] = [
 export default function Landing() {
   return (
     <main className="mx-auto flex min-h-screen max-w-4xl flex-col items-center px-6 py-20 text-center fade-in">
-      <div className="grid h-20 w-20 place-items-center rounded-3xl accent-bg text-white shadow-lg">
-        <Headphones className="h-10 w-10" />
+      <div className="h-20 w-20 overflow-hidden rounded-3xl bg-white shadow-lg">
+        <Image src="/pepeaudio-icon.png" alt="PepeAudio" width={80} height={80} className="h-full w-full object-cover" priority />
       </div>
       <h1 className="mt-8 text-5xl font-semibold tracking-tight">PepeAudio</h1>
       <p className="mt-4 max-w-xl text-lg text-[var(--text-dim)]">
