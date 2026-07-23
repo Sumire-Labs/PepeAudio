@@ -22,23 +22,30 @@ public static class GuildsEndpoints
             // Play status is read from the local player (accurate in single-process; owner-shard
             // only when sharded — the sidebar treats a non-owned guild as idle, which self-corrects
             // once its player is opened and the owner starts broadcasting).
+            // Materialize eagerly with a per-guild guard so one guild's state read can never throw
+            // during response serialization and blank the whole list.
             var result = userGuilds
                 .Where(g => botGuilds.Contains(g.Id))
                 .Select(g =>
                 {
                     var status = "idle";
                     string? currentTitle = null;
-                    if (ulong.TryParse(g.Id, out var gid))
+                    try
                     {
-                        var state = playback.GetState(gid);
-                        if (state.Current is not null)
+                        if (ulong.TryParse(g.Id, out var gid))
                         {
-                            status = state.IsPlaying ? "playing" : "paused";
-                            currentTitle = state.Current.Title;
+                            var state = playback.GetState(gid);
+                            if (state.Current is not null)
+                            {
+                                status = state.IsPlaying ? "playing" : "paused";
+                                currentTitle = state.Current.Title;
+                            }
                         }
                     }
+                    catch { /* leave as idle */ }
                     return new { g.Id, g.Name, g.Icon, g.Owner, Status = status, CurrentTitle = currentTitle };
-                });
+                })
+                .ToList();
             return Results.Ok(result);
         }).RequireAuthorization();
 

@@ -52,12 +52,19 @@ public static class AuthEndpoints
             return Results.Redirect(o.BaseUrl);
         });
 
-        app.MapGet("/api/auth/me", (HttpContext ctx) => Results.Ok(new
+        app.MapGet("/api/auth/me", (HttpContext ctx, IMemoryCache cache) =>
         {
-            id = ctx.User.FindFirst("sub")?.Value,
-            username = ctx.User.FindFirst("name")?.Value,
-            avatar = ctx.User.FindFirst("avatar")?.Value,
-        })).RequireAuthorization();
+            // A valid JWT whose guild cache has expired/been-lost (restart, TTL) is unusable —
+            // report unauthenticated so the client re-runs OAuth and repopulates the cache,
+            // instead of landing on an empty "no servers" dashboard.
+            if (!GuildAccess.HasGuildCache(ctx.User, cache)) return Results.Unauthorized();
+            return Results.Ok(new
+            {
+                id = ctx.User.FindFirst("sub")?.Value,
+                username = ctx.User.FindFirst("name")?.Value,
+                avatar = ctx.User.FindFirst("avatar")?.Value,
+            });
+        }).RequireAuthorization();
 
         app.MapPost("/api/auth/logout", (HttpContext ctx, IMemoryCache cache, IOptions<WebOptions> opt) =>
         {
