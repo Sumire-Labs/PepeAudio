@@ -1,0 +1,101 @@
+# syntax=docker/dockerfile:1.12
+
+FROM rust:1.97.0-bookworm AS builder
+WORKDIR /build
+
+RUN apt-get update && \
+    apt-get install --yes --no-install-recommends cmake libssl-dev pkg-config && \
+    rm -rf /var/lib/apt/lists/*
+
+COPY Cargo.toml Cargo.lock rust-toolchain.toml ./
+COPY crates ./crates
+COPY vendor ./vendor
+COPY migrations ./migrations
+
+RUN --mount=type=cache,target=/usr/local/cargo/registry,sharing=locked \
+    --mount=type=cache,target=/build/target,sharing=locked \
+    cargo build --locked --release --bin pepeaudio-bot && \
+    install -Dm755 target/release/pepeaudio-bot /out/pepeaudio-service
+
+FROM debian:bookworm-slim AS media-tools
+
+ARG TARGETARCH
+ARG YTDLP_VERSION=2026.06.09
+ARG YTDLP_SHA256=e5d57466682cfa9d61e9cf7c8a4f09b00f4a62af37d3bbdc4bcffdf63615feac
+ARG YTDLP_LICENSE_SHA256=7e12e5df4bae12cb21581ba157ced20e1986a0508dd10d0e8a4ab9a4cf94e85c
+ARG YTDLP_NOTICES_SHA256=b085c65586a953cdb4b13c6390d63ec984d66912e4b6a19e66ba3582f2ed104b
+ARG DENO_VERSION=2.8.1
+ARG DENO_AMD64_SHA256=2d7bb6195226ac832e0bf7109a115f0af65ee69ac797a4bbde5b27a06cc242d9
+ARG DENO_ARM64_SHA256=67e9df91870fd0af700df924173e3009ea7ff6956e2c3c3bb86065d6070d0fd6
+ARG DENO_LICENSE_SHA256=f62497fffecc0852960c8d3e6934b9db86d16396e9b604072e923892cae3a588
+
+RUN apt-get update && \
+    apt-get install --yes --no-install-recommends ca-certificates curl unzip && \
+    rm -rf /var/lib/apt/lists/*
+
+RUN set -eux; \
+    install -d /out/bin /out/licenses/yt-dlp /out/licenses/deno; \
+    curl --fail --location --proto '=https' --tlsv1.2 \
+      "https://github.com/yt-dlp/yt-dlp/releases/download/${YTDLP_VERSION}/yt-dlp" \
+      --output /out/bin/yt-dlp; \
+    echo "${YTDLP_SHA256}  /out/bin/yt-dlp" | sha256sum --check --strict; \
+    chmod 0755 /out/bin/yt-dlp; \
+    curl --fail --location --proto '=https' --tlsv1.2 \
+      "https://raw.githubusercontent.com/yt-dlp/yt-dlp/${YTDLP_VERSION}/LICENSE" \
+      --output /out/licenses/yt-dlp/LICENSE; \
+    echo "${YTDLP_LICENSE_SHA256}  /out/licenses/yt-dlp/LICENSE" | sha256sum --check --strict; \
+    curl --fail --location --proto '=https' --tlsv1.2 \
+      "https://raw.githubusercontent.com/yt-dlp/yt-dlp/${YTDLP_VERSION}/THIRD_PARTY_LICENSES.txt" \
+      --output /out/licenses/yt-dlp/THIRD_PARTY_LICENSES.txt; \
+    echo "${YTDLP_NOTICES_SHA256}  /out/licenses/yt-dlp/THIRD_PARTY_LICENSES.txt" \
+      | sha256sum --check --strict
+
+RUN set -eux; \
+    case "${TARGETARCH}" in \
+      amd64) deno_arch=x86_64; deno_sha="${DENO_AMD64_SHA256}" ;; \
+      arm64) deno_arch=aarch64; deno_sha="${DENO_ARM64_SHA256}" ;; \
+      *) echo "unsupported TARGETARCH: ${TARGETARCH}" >&2; exit 1 ;; \
+    esac; \
+    deno_asset="deno-${deno_arch}-unknown-linux-gnu.zip"; \
+    curl --fail --location --proto '=https' --tlsv1.2 \
+      "https://github.com/denoland/deno/releases/download/v${DENO_VERSION}/${deno_asset}" \
+      --output /tmp/deno.zip; \
+    echo "${deno_sha}  /tmp/deno.zip" | sha256sum --check --strict; \
+    unzip -q /tmp/deno.zip -d /out/bin; \
+    chmod 0755 /out/bin/deno; \
+    rm /tmp/deno.zip; \
+    curl --fail --location --proto '=https' --tlsv1.2 \
+      "https://raw.githubusercontent.com/denoland/deno/v${DENO_VERSION}/LICENSE.md" \
+      --output /out/licenses/deno/LICENSE.md; \
+    echo "${DENO_LICENSE_SHA256}  /out/licenses/deno/LICENSE.md" | sha256sum --check --strict
+
+FROM debian:bookworm-slim AS runtime
+
+ARG YTDLP_VERSION=2026.06.09
+ARG DENO_VERSION=2.8.1
+
+RUN apt-get update && \
+    apt-get install --yes --no-install-recommends ca-certificates ffmpeg libssl3 python3 && \
+    rm -rf /var/lib/apt/lists/* && \
+    groupadd --system --gid 10001 pepeaudio && \
+    useradd --system --uid 10001 --gid pepeaudio --home-dir /app --shell /usr/sbin/nologin pepeaudio && \
+    install -d -o pepeaudio -g pepeaudio /app /app/storage/uploads /app/assets/hrir
+
+COPY --from=builder /out/pepeaudio-service /usr/local/bin/pepeaudio-service
+COPY --from=media-tools /out/bin/yt-dlp /usr/local/bin/yt-dlp
+COPY --from=media-tools /out/bin/deno /usr/local/bin/deno
+COPY --from=media-tools /out/licenses/yt-dlp /usr/share/licenses/yt-dlp
+COPY --from=media-tools /out/licenses/deno /usr/share/licenses/deno
+COPY LICENSE /usr/share/licenses/pepeaudio/LICENSE
+COPY docs/licenses/deno-2.8.1-NOTICE.md /usr/share/licenses/deno/PEPEAUDIO-NOTICE.md
+COPY docs/third-party.md /usr/share/doc/pepeaudio/THIRD-PARTY.md
+COPY vendor/hpke-rs-0.6.1-security-patch/LICENSE-MPL-2.0 /usr/share/licenses/hpke-rs/LICENSE-MPL-2.0
+COPY vendor/hpke-rs-0.6.1-security-patch /usr/share/src/pepeaudio/hpke-rs-0.6.1-security-patch
+
+RUN test "$(yt-dlp --version)" = "${YTDLP_VERSION}" && \
+    deno_version="$(deno --version | sed -n '1p')" && \
+    case "${deno_version}" in "deno ${DENO_VERSION} "*) ;; *) exit 1 ;; esac
+
+WORKDIR /app
+USER 10001:10001
+ENTRYPOINT ["/usr/local/bin/pepeaudio-service"]

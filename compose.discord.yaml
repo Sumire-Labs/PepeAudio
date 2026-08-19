@@ -1,0 +1,74 @@
+services:
+  bot:
+    profiles: ["discord"]
+    image: ${PEPEAUDIO_BOT_IMAGE:-pepeaudio-bot:local}
+    build:
+      context: .
+      dockerfile: deploy/rust/Dockerfile.bot
+    restart: unless-stopped
+    environment:
+      PEPEAUDIO_DISCORD_TOKEN_FILE: /run/secrets/discord_token
+      PEPEAUDIO_SHARD_TOTAL: ${PEPEAUDIO_SHARD_TOTAL:-1}
+      PEPEAUDIO_SHARD_START: ${PEPEAUDIO_SHARD_START:-0}
+      PEPEAUDIO_COMPONENT_SIGNING_KEY_FILE: /run/secrets/component_signing_key
+      PEPEAUDIO_INSTANCE_ID: ${PEPEAUDIO_INSTANCE_ID:-bot-0}
+      PEPEAUDIO_DATABASE_URL_FILE: /run/secrets/database_runtime_url
+      PEPEAUDIO_VALKEY_URL_FILE: /run/secrets/valkey_url
+      PEPEAUDIO_VALKEY_KEYSPACE: ${PEPEAUDIO_VALKEY_KEYSPACE:-pepeaudio-dev}
+      PEPEAUDIO_IDLE_DISCONNECT_SECONDS: ${PEPEAUDIO_IDLE_DISCONNECT_SECONDS:-300}
+      PEPEAUDIO_DEFAULT_VOLUME_PERCENT: ${PEPEAUDIO_DEFAULT_VOLUME_PERCENT:-75}
+      PEPEAUDIO_MAX_QUEUE_ITEMS: ${PEPEAUDIO_MAX_QUEUE_ITEMS:-100}
+      PEPEAUDIO_MAX_TRACK_DURATION_SECONDS: ${PEPEAUDIO_MAX_TRACK_DURATION_SECONDS:-21600}
+      PEPEAUDIO_MAX_UPLOAD_BYTES: ${PEPEAUDIO_MAX_UPLOAD_BYTES:-10485760}
+      PEPEAUDIO_MAX_MANAGED_MEDIA_BYTES: ${PEPEAUDIO_MAX_MANAGED_MEDIA_BYTES:-10737418240}
+      PEPEAUDIO_FFMPEG_PATH: ffmpeg
+      PEPEAUDIO_FFPROBE_PATH: ffprobe
+      PEPEAUDIO_HRIR_DIRECTORY: /app/assets/hrir
+      PEPEAUDIO_UPLOAD_DIRECTORY: /app/storage/uploads
+      PEPEAUDIO_ENABLE_SITE_EXTRACTORS: ${PEPEAUDIO_ENABLE_SITE_EXTRACTORS:-false}
+      PEPEAUDIO_MAX_SITE_MEDIA_BYTES: ${PEPEAUDIO_MAX_SITE_MEDIA_BYTES:-104857600}
+      PEPEAUDIO_MAX_PLAYLIST_ITEMS: ${PEPEAUDIO_MAX_PLAYLIST_ITEMS:-25}
+      PEPEAUDIO_YTDLP_PATH: /usr/local/bin/yt-dlp
+      PEPEAUDIO_DENO_PATH: /usr/local/bin/deno
+      PEPEAUDIO_DENO_DIR: /tmp/pepeaudio-deno
+      PEPEAUDIO_ENABLE_CROSS_SERVICE_MATCHING: ${PEPEAUDIO_ENABLE_CROSS_SERVICE_MATCHING:-false}
+      PEPEAUDIO_CATALOG_MAX_ITEMS: ${PEPEAUDIO_CATALOG_MAX_ITEMS:-25}
+      RUST_LOG: ${PEPEAUDIO_BOT_LOG:-info}
+    secrets:
+      - discord_token
+      - component_signing_key
+      - database_runtime_url
+      - valkey_url
+    group_add:
+      - ${PEPEAUDIO_RUNTIME_GID:-10001}
+    networks:
+      - edge
+      - data
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      valkey:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "kill -0 1"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+      start_period: 10s
+    volumes:
+      - uploads:/app/storage/uploads
+      - hrir_data:/app/assets/hrir:ro
+    tmpfs:
+      - /tmp:size=256m,mode=1777
+    read_only: true
+    cap_drop: ["ALL"]
+    security_opt:
+      - no-new-privileges:true
+    pids_limit: 512
+    stop_grace_period: 45s
+
+secrets:
+  discord_token:
+    file: ${PEPEAUDIO_DISCORD_TOKEN_SOURCE:-./secrets/discord_token.txt}
+  component_signing_key:
+    file: ${PEPEAUDIO_COMPONENT_SIGNING_KEY_SOURCE:-./secrets/component_signing_key.txt}

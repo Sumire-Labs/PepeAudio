@@ -1,0 +1,53 @@
+[workspace]
+resolver = "3"
+members = [
+    "crates/pepeaudio-api",
+    "crates/pepeaudio-audio",
+    "crates/pepeaudio-auth",
+    "crates/pepeaudio-bot",
+    "crates/pepeaudio-catalog",
+    "crates/pepeaudio-components-v2",
+    "crates/pepeaudio-config",
+    "crates/pepeaudio-core",
+    "crates/pepeaudio-hrir",
+    "crates/pepeaudio-media",
+    "crates/pepeaudio-player",
+    "crates/pepeaudio-pipeline",
+    "crates/pepeaudio-presets",
+    "crates/pepeaudio-runtime",
+    "crates/pepeaudio-server",
+    "crates/pepeaudio-storage",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.97"
+license = "MIT"
+
+[workspace.dependencies]
+hound = "=3.5.1"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+thiserror = "2"
+uuid = { version = "1", features = ["serde", "v4"] }
+
+[patch.crates-io]
+# hpke-rs 0.6.1 pins vulnerable libcrux primitives. Keep the stable API while
+# the upstream dependency update is pending; see the patch provenance file.
+hpke-rs = { path = "vendor/hpke-rs-0.6.1-security-patch" }
+
+[workspace.lints.rust]
+unsafe_code = "forbid"
+rust_2018_idioms = { level = "warn", priority = -1 }
+unused_lifetimes = "warn"
+unreachable_pub = "warn"
+
+[workspace.lints.clippy]
+all = { level = "warn", priority = -1 }
+pedantic = { level = "warn", priority = -1 }
+module_name_repetitions = "allow"
+
+[profile.release]
+lto = "thin"
+codegen-units = 1

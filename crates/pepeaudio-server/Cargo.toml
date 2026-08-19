@@ -1,0 +1,28 @@
+[package]
+name = "pepeaudio-server"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish = false
+
+[[bin]]
+name = "pepeaudio-api"
+path = "src/main.rs"
+
+[dependencies]
+axum = { version = "=0.8.9", features = ["http1", "tokio"] }
+pepeaudio-api = { path = "../pepeaudio-api" }
+pepeaudio-auth = { path = "../pepeaudio-auth" }
+pepeaudio-config = { path = "../pepeaudio-config" }
+pepeaudio-core = { path = "../pepeaudio-core" }
+pepeaudio-runtime = { path = "../pepeaudio-runtime" }
+pepeaudio-storage = { path = "../pepeaudio-storage" }
+thiserror.workspace = true
+tokio = { version = "=1.53.1", features = ["macros", "net", "rt-multi-thread", "signal", "sync", "time"] }
+
+[dev-dependencies]
+tokio = { version = "=1.53.1", features = ["test-util"] }
+
+[lints]
+workspace = true

@@ -1,0 +1,214 @@
+name: pepeaudio
+
+services:
+  postgres:
+    image: postgres:18.4-bookworm
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: pepeaudio
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD_FILE: /run/secrets/postgres_superuser_password
+      PEPEAUDIO_RUNTIME_DB_PASSWORD_FILE: /run/secrets/postgres_runtime_password
+      PEPEAUDIO_MIGRATOR_DB_PASSWORD_FILE: /run/secrets/postgres_migrator_password
+      PEPEAUDIO_RUNTIME_GID: ${PEPEAUDIO_RUNTIME_GID:-10001}
+      PEPEAUDIO_SECRET_CONSUMER_USER: postgres
+      PEPEAUDIO_SECRET_CONSUMER_ENTRYPOINT: /usr/local/bin/docker-entrypoint.sh
+    entrypoint: ["/bin/sh", "/usr/local/bin/pepeaudio-secret-group-entrypoint"]
+    command: ["postgres"]
+    group_add:
+      - ${PEPEAUDIO_RUNTIME_GID:-10001}
+    secrets:
+      - postgres_superuser_password
+      - postgres_runtime_password
+      - postgres_migrator_password
+    volumes:
+      - postgres_data:/var/lib/postgresql
+      - ./deploy/postgres/init/00-roles.sh:/docker-entrypoint-initdb.d/00-roles.sh:ro
+      - ./scripts/container-secret-group-entrypoint.sh:/usr/local/bin/pepeaudio-secret-group-entrypoint:ro
+    networks:
+      - data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+      start_period: 15s
+    security_opt:
+      - no-new-privileges:true
+    pids_limit: 256
+    stop_grace_period: 60s
+
+  valkey:
+    image: valkey/valkey:9.1.1-alpine
+    restart: unless-stopped
+    entrypoint: ["/bin/sh", "/usr/local/bin/pepeaudio-secret-group-entrypoint"]
+    command: ["/usr/local/bin/pepeaudio-valkey-entrypoint"]
+    environment:
+      VALKEY_PASSWORD_FILE: /run/secrets/valkey_password
+      PEPEAUDIO_RUNTIME_GID: ${PEPEAUDIO_RUNTIME_GID:-10001}
+      PEPEAUDIO_SECRET_CONSUMER_USER: valkey
+      PEPEAUDIO_SECRET_CONSUMER_ENTRYPOINT: /bin/sh
+      PEPEAUDIO_SECRET_DROP_USER: valkey
+      PEPEAUDIO_SECRET_CHOWN_DIRECTORY: /data
+    group_add:
+      - ${PEPEAUDIO_RUNTIME_GID:-10001}
+    secrets:
+      - valkey_password
+    volumes:
+      - valkey_data:/data
+      - ./deploy/valkey/entrypoint.sh:/usr/local/bin/pepeaudio-valkey-entrypoint:ro
+      - ./scripts/container-secret-group-entrypoint.sh:/usr/local/bin/pepeaudio-secret-group-entrypoint:ro
+    tmpfs:
+      - /run:size=4m,mode=0710,uid=999,gid=${PEPEAUDIO_RUNTIME_GID:-10001}
+      - /tmp:size=16m,mode=1777
+    networks:
+      - data
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "VALKEYCLI_AUTH=$$(cat /run/secrets/valkey_password) valkey-cli ping | grep -q PONG",
+        ]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+      start_period: 5s
+    read_only: true
+    cap_drop: ["ALL"]
+    # The root wrapper owns the persistent data directory and immediately
+    # drops to UID 999. no-new-privileges prevents the Valkey process from
+    # regaining these setup capabilities.
+    cap_add: ["CHOWN", "SETGID", "SETUID"]
+    security_opt:
+      - no-new-privileges:true
+    pids_limit: 128
+    stop_grace_period: 30s
+
+  migrate:
+    image: ${PEPEAUDIO_MIGRATE_IMAGE:-pepeaudio-migrate:local}
+    build:
+      context: .
+      dockerfile: deploy/rust/Dockerfile
+      args:
+        PEPEAUDIO_BINARY: pepeaudio-migrate
+    environment:
+      PEPEAUDIO_DATABASE_URL_FILE: /run/secrets/database_migrator_url
+    secrets:
+      - database_migrator_url
+    group_add:
+      - ${PEPEAUDIO_RUNTIME_GID:-10001}
+    networks:
+      - data
+    depends_on:
+      postgres:
+        condition: service_healthy
+    read_only: true
+    cap_drop: ["ALL"]
+    security_opt:
+      - no-new-privileges:true
+    pids_limit: 64
+    restart: "no"
+
+  api:
+    profiles: ["development-api"]
+    image: ${PEPEAUDIO_API_IMAGE:-pepeaudio-api:local}
+    build:
+      context: .
+      dockerfile: deploy/rust/Dockerfile
+      args:
+        PEPEAUDIO_BINARY: pepeaudio-api
+    restart: unless-stopped
+    environment:
+      PEPEAUDIO_API_BIND: 0.0.0.0:3000
+      PEPEAUDIO_PUBLIC_ORIGIN: ${PEPEAUDIO_PUBLIC_ORIGIN:-http://localhost:8080}
+      PEPEAUDIO_API_AUTH_MODE: development
+      PEPEAUDIO_DEV_USER_ID: ${PEPEAUDIO_DEV_USER_ID:-100000000000000001}
+      PEPEAUDIO_DEV_GUILD_ID: ${PEPEAUDIO_DEV_GUILD_ID:-100000000000000002}
+      PEPEAUDIO_DEV_CSRF_TOKEN: ${PEPEAUDIO_DEV_CSRF_TOKEN:-local-development-only-change-me}
+      RUST_LOG: ${PEPEAUDIO_API_LOG:-info}
+    networks:
+      - edge
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "--silent", "http://127.0.0.1:3000/health/ready"]
+      interval: 10s
+      timeout: 3s
+      retries: 12
+      start_period: 10s
+    tmpfs:
+      - /tmp:size=128m,mode=1777
+    read_only: true
+    cap_drop: ["ALL"]
+    security_opt:
+      - no-new-privileges:true
+    pids_limit: 256
+    # Exceeds the API's 25-second HTTP, runtime, and database shutdown budget.
+    stop_grace_period: 30s
+
+  caddy:
+    profiles: ["development-api"]
+    image: ${PEPEAUDIO_CADDY_IMAGE:-pepeaudio-caddy:local}
+    build:
+      context: .
+      dockerfile: deploy/caddy/Dockerfile
+      args:
+        VITE_PEPEAUDIO_DEMO_MODE: "false"
+        VITE_PEPEAUDIO_GUILD_ID: ${PEPEAUDIO_DEV_GUILD_ID:-100000000000000002}
+        VITE_PEPEAUDIO_DEV_USER_ID: ${PEPEAUDIO_DEV_USER_ID:-100000000000000001}
+        PEPEAUDIO_WEB_DEV_BOOTSTRAP: ${PEPEAUDIO_DEV_CSRF_TOKEN:-local-development-only-change-me}
+    restart: unless-stopped
+    environment:
+      PEPEAUDIO_DOMAIN: ${PEPEAUDIO_DOMAIN:-localhost}
+    ports:
+      - ${PEPEAUDIO_DEV_HTTP_BIND:-127.0.0.1:8080}:8080
+    volumes:
+      - caddy_data:/data
+      - caddy_config:/config
+    tmpfs:
+      - /tmp:size=32m,mode=1777
+    networks:
+      - edge
+    depends_on:
+      api:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--spider", "http://127.0.0.1:8080/"]
+      interval: 10s
+      timeout: 3s
+      retries: 12
+      start_period: 5s
+    read_only: true
+    cap_drop: ["ALL"]
+    cap_add: ["NET_BIND_SERVICE"]
+    security_opt:
+      - no-new-privileges:true
+    pids_limit: 128
+    stop_grace_period: 15s
+
+networks:
+  edge:
+  data:
+    internal: true
+
+volumes:
+  postgres_data:
+  valkey_data:
+  uploads:
+  hrir_data:
+  caddy_data:
+  caddy_config:
+
+secrets:
+  postgres_superuser_password:
+    file: ${PEPEAUDIO_POSTGRES_SUPERUSER_PASSWORD_SOURCE:-./secrets/postgres_superuser_password.txt}
+  postgres_runtime_password:
+    file: ${PEPEAUDIO_POSTGRES_RUNTIME_PASSWORD_SOURCE:-./secrets/postgres_runtime_password.txt}
+  postgres_migrator_password:
+    file: ${PEPEAUDIO_POSTGRES_MIGRATOR_PASSWORD_SOURCE:-./secrets/postgres_migrator_password.txt}
+  database_migrator_url:
+    file: ${PEPEAUDIO_DATABASE_MIGRATOR_URL_SOURCE:-./secrets/database_migrator_url.txt}
+  database_runtime_url:
+    file: ${PEPEAUDIO_DATABASE_RUNTIME_URL_SOURCE:-./secrets/database_runtime_url.txt}
+  valkey_password:
+    file: ${PEPEAUDIO_VALKEY_PASSWORD_SOURCE:-./secrets/valkey_password.txt}
+  valkey_url:
+    file: ${PEPEAUDIO_VALKEY_URL_SOURCE:-./secrets/valkey_url.txt}

@@ -1,51 +1,455 @@
-# SPDX-License-Identifier: Apache-2.0
-# NOTE: For a public/production repo, pin third-party actions to a full commit
-# SHA (Dependabot is configured to keep them updated). Tags are used here for
-# readability of the initial scaffold.
 name: CI
 
 on:
   push:
-    branches: [main]
   pull_request:
-    branches: [main]
+  workflow_dispatch:
 
 permissions:
   contents: read
 
-jobs:
-  build-test:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-dotnet@v4
-        with:
-          global-json-file: global.json
-      - run: dotnet restore
-      - run: dotnet build --no-restore -c Release
-      - run: dotnet test --no-build -c Release --verbosity minimal
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
-  format:
-    runs-on: ubuntu-latest
+env:
+  CARGO_INCREMENTAL: "0"
+  CARGO_TERM_COLOR: always
+
+jobs:
+  workflows:
+    name: GitHub workflow and release contracts
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-dotnet@v4
+      - name: Check out source
+        uses: actions/checkout@v6
+
+      - name: Install Node.js 24.19.0
+        uses: actions/setup-node@v6
         with:
-          global-json-file: global.json
-      - name: Verify formatting and file headers
-        run: dotnet format --verify-no-changes
-        continue-on-error: true
+          node-version: 24.19.0
+
+      - name: Test release version validation
+        run: |
+          node --test scripts/verify-release-tag.test.mjs
+          node scripts/verify-release-tag.mjs
+
+      - name: Install verified actionlint 1.7.12
+        shell: bash
+        run: |
+          set -euo pipefail
+          archive=actionlint_1.7.12_linux_amd64.tar.gz
+          curl --fail --location --silent --show-error \
+            --output "$archive" \
+            "https://github.com/rhysd/actionlint/releases/download/v1.7.12/$archive"
+          printf '%s  %s\n' \
+            '8aca8db96f1b94770f1b0d72b6dddcb1ebb8123cb3712530b08cc387b349a3d8' \
+            "$archive" | sha256sum --check --strict
+          tar --extract --gzip --file "$archive" actionlint
+          ./actionlint -version
+
+      - name: Lint GitHub workflows
+        run: ./actionlint
+
+  license:
+    name: Project and distributed dependency licenses
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v6
+
+      - name: Install Rust 1.97.0
+        run: |
+          rustup toolchain install 1.97.0 --profile minimal
+          rustup default 1.97.0
+
+      - name: Install pnpm 11.3.0
+        uses: pnpm/action-setup@v6
+        with:
+          version: 11.3.0
+          run_install: false
+
+      - name: Install Node.js 24.19.0
+        uses: actions/setup-node@v6
+        with:
+          node-version: 24.19.0
+          cache: pnpm
+          cache-dependency-path: web/pnpm-lock.yaml
+
+      - name: Install frozen Web dependencies
+        working-directory: web
+        run: pnpm install --frozen-lockfile
+
+      - name: Reject license metadata and distribution drift
+        run: sh scripts/verify-licenses.sh
+
+  security:
+    name: Rust dependency advisories
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v6
+
+      - name: Install Rust 1.97.0
+        run: |
+          rustup toolchain install 1.97.0 --profile minimal
+          rustup default 1.97.0
+
+      - name: Install cargo-audit 0.22.2
+        run: cargo install cargo-audit --version 0.22.2 --locked
+
+      - name: Reject known vulnerabilities
+        run: cargo audit
+
+  rust:
+    name: Rust (1.97.0 / ${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - ubuntu-24.04
+          - windows-2025
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v6
+
+      - name: Install Rust 1.97.0
+        run: |
+          rustup toolchain install 1.97.0 --profile minimal --component rustfmt --component clippy
+          rustup default 1.97.0
+          rustc --version
+          cargo --version
+
+      - name: Restore Cargo cache
+        uses: actions/cache@v5
+        with:
+          path: |
+            ~/.cargo/registry/index
+            ~/.cargo/registry/cache
+            ~/.cargo/git/db
+            target
+          key: ${{ runner.os }}-rust-1.97.0-${{ hashFiles('Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-rust-1.97.0-
+
+      - name: Check formatting
+        run: cargo fmt --all -- --check
+
+      - name: Run tests
+        run: cargo test --workspace --all-targets --locked
+
+      - name: Run Clippy
+        run: cargo clippy --workspace --all-targets --all-features --locked -- -D warnings
+
+      - name: Exercise real FFmpeg adapters
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install --yes ffmpeg
+          cargo test -p pepeaudio-media --test ffmpeg_smoke --locked \
+            probes_and_decodes_a_generated_audio_fixture -- \
+            --ignored --exact
+          cargo test -p pepeaudio-pipeline --lib --locked \
+            decoder::tests::installed_ffmpeg_decodes_f32_pcm_and_reaps -- \
+            --ignored --exact
 
   web:
-    runs-on: ubuntu-latest
+    name: Web
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
     defaults:
       run:
         working-directory: web
+
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - name: Check out source
+        uses: actions/checkout@v6
+
+      - name: Install pnpm 11.3.0
+        uses: pnpm/action-setup@v6
         with:
-          node-version: 24
-      - run: corepack enable
-      - run: pnpm install --frozen-lockfile
-      - run: pnpm build
+          version: 11.3.0
+          run_install: false
+
+      - name: Install Node.js 24.19.0
+        uses: actions/setup-node@v6
+        with:
+          node-version: 24.19.0
+          cache: pnpm
+          cache-dependency-path: web/pnpm-lock.yaml
+
+      - name: Install frozen dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Reject high-severity production dependency advisories
+        run: pnpm audit --prod --audit-level high
+
+      - name: Type-check
+        run: pnpm check
+
+      - name: Test
+        run: pnpm test
+
+      - name: Build
+        run: pnpm build
+
+  docker:
+    name: Docker production model and dependency integration
+    needs:
+      - license
+      - security
+      - rust
+      - web
+    runs-on: ubuntu-24.04
+    timeout-minutes: 75
+    env:
+      COMPOSE_PROJECT_NAME: pepeaudio-ci
+      PEPEAUDIO_DISCORD_CLIENT_ID: "100000000000000002"
+      PEPEAUDIO_DOMAIN: audio.example.test
+      PEPEAUDIO_VALKEY_KEYSPACE: pepeaudio-production
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v6
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+
+      - name: Restore live-test Cargo cache
+        uses: actions/cache@v5
+        with:
+          path: |
+            .ci-cache/cargo-registry
+            .ci-cache/cargo-git
+            .ci-target
+          key: linux-container-rust-1.97.0-${{ hashFiles('Cargo.lock') }}
+          restore-keys: |
+            linux-container-rust-1.97.0-
+
+      - name: Generate disposable test credentials
+        shell: bash
+        run: |
+          set -euo pipefail
+          umask 077
+          mkdir -p secrets
+          postgres_superuser="$(openssl rand -hex 32)"
+          postgres_migrator="$(openssl rand -hex 32)"
+          postgres_runtime="$(openssl rand -hex 32)"
+          valkey_password="$(openssl rand -hex 32)"
+          printf '%s' "$postgres_superuser" > secrets/postgres_superuser_password.txt
+          printf '%s' "$postgres_migrator" > secrets/postgres_migrator_password.txt
+          printf '%s' "$postgres_runtime" > secrets/postgres_runtime_password.txt
+          printf '%s' "$valkey_password" > secrets/valkey_password.txt
+          openssl rand -hex 32 > secrets/component_signing_key.txt
+          openssl rand -hex 32 > secrets/discord_client_secret.txt
+          printf 'postgres://pepeaudio_migrator:%s@postgres:5432/pepeaudio' \
+            "$postgres_migrator" > secrets/database_migrator_url.txt
+          printf 'postgres://pepeaudio_runtime:%s@postgres:5432/pepeaudio' \
+            "$postgres_runtime" > secrets/database_runtime_url.txt
+          printf 'redis://default:%s@valkey:6379/0' \
+            "$valkey_password" > secrets/valkey_url.txt
+          printf '%s' 'ci-placeholder-never-used-to-connect-to-discord' \
+            > secrets/discord_token.txt
+          unset postgres_superuser postgres_migrator postgres_runtime valkey_password
+
+      - name: Validate Compose models
+        shell: bash
+        run: sh scripts/verify-compose.sh
+
+      - name: Prepare and validate production secret ownership
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo env PEPEAUDIO_RUNTIME_GID=10001 \
+            sh scripts/prepare-production-secrets.sh
+          sudo env PEPEAUDIO_RUNTIME_GID=10001 \
+            sh scripts/prepare-production-secrets.sh --check
+
+      - name: Build migration image
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: deploy/rust/Dockerfile
+          build-args: PEPEAUDIO_BINARY=pepeaudio-migrate
+          load: true
+          tags: pepeaudio-migrate:local
+          cache-from: type=gha,scope=rust-migrate
+          cache-to: type=gha,mode=max,scope=rust-migrate
+
+      - name: Build API image
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: deploy/rust/Dockerfile
+          build-args: PEPEAUDIO_BINARY=pepeaudio-api
+          load: true
+          tags: pepeaudio-api:local
+          cache-from: type=gha,scope=rust-api
+          cache-to: type=gha,mode=max,scope=rust-api
+
+      - name: Build bot image without starting Discord
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: deploy/rust/Dockerfile.bot
+          load: true
+          tags: pepeaudio-bot:local
+          cache-from: type=gha,scope=rust-bot
+          cache-to: type=gha,mode=max,scope=rust-bot
+
+      - name: Build bot image for ARM64
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: deploy/rust/Dockerfile.bot
+          platforms: linux/arm64
+          push: false
+          cache-from: type=gha,scope=rust-bot-arm64
+          cache-to: type=gha,mode=max,scope=rust-bot-arm64
+
+      - name: Build Caddy and web image
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: deploy/caddy/Dockerfile
+          build-args: |
+            VITE_PEPEAUDIO_DEMO_MODE=false
+            VITE_PEPEAUDIO_GUILD_ID=
+            VITE_PEPEAUDIO_DEV_USER_ID=
+            PEPEAUDIO_WEB_DEV_BOOTSTRAP=
+          load: true
+          tags: pepeaudio-caddy:local
+          cache-from: type=gha,scope=caddy-web
+          cache-to: type=gha,mode=max,scope=caddy-web
+
+      - name: Smoke production secret consumers and isolation
+        shell: bash
+        run: |
+          set -euo pipefail
+          PEPEAUDIO_RUNTIME_GID=10001 \
+            sh scripts/smoke-production-secret-read.sh
+
+      - name: Smoke Caddy static distribution
+        shell: bash
+        run: sh scripts/smoke-caddy-static.sh
+
+      - name: Check production media executables
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker run --rm --entrypoint sh pepeaudio-bot:local -euc \
+            'test "$(id -u)" = 10001
+             test "$(yt-dlp --version)" = 2026.06.09
+             deno --version | sed -n "1p" | grep -Eq "^deno 2[.]8[.]1 "
+             python3 --version
+             ffmpeg -version >/dev/null
+             ffprobe -version >/dev/null
+             test -s /usr/share/licenses/yt-dlp/LICENSE
+             test -s /usr/share/licenses/yt-dlp/THIRD_PARTY_LICENSES.txt
+             test -s /usr/share/licenses/deno/LICENSE.md
+             test -s /usr/share/licenses/deno/PEPEAUDIO-NOTICE.md'
+
+      - name: Start disposable PostgreSQL and Valkey
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker compose --project-name "$COMPOSE_PROJECT_NAME" \
+            up --detach --wait postgres valkey
+
+      - name: Apply migrations
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker compose --project-name "$COMPOSE_PROJECT_NAME" \
+            run --rm --no-deps migrate
+
+      - name: Fetch live-test dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p .ci-cache/cargo-registry .ci-cache/cargo-git .ci-target
+          docker run --rm \
+            --env RUSTUP_TOOLCHAIN=1.97.0 \
+            --mount "type=bind,source=$GITHUB_WORKSPACE,target=/workspace,readonly" \
+            --mount "type=bind,source=$GITHUB_WORKSPACE/.ci-cache/cargo-registry,target=/usr/local/cargo/registry" \
+            --mount "type=bind,source=$GITHUB_WORKSPACE/.ci-cache/cargo-git,target=/usr/local/cargo/git" \
+            --workdir /workspace \
+            rust:1.97.0-bookworm \
+            cargo fetch --locked
+
+      - name: Run ignored PostgreSQL and Valkey tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker run --rm --interactive \
+            --network "$COMPOSE_PROJECT_NAME"_data \
+            --security-opt no-new-privileges --cap-drop ALL --pids-limit 512 \
+            --mount "type=bind,source=$GITHUB_WORKSPACE,target=/workspace,readonly" \
+            --mount "type=bind,source=$GITHUB_WORKSPACE/secrets,target=/run/pepeaudio-secrets,readonly" \
+            --mount "type=bind,source=$GITHUB_WORKSPACE/.ci-cache/cargo-registry,target=/usr/local/cargo/registry" \
+            --mount "type=bind,source=$GITHUB_WORKSPACE/.ci-cache/cargo-git,target=/usr/local/cargo/git" \
+            --mount "type=bind,source=$GITHUB_WORKSPACE/.ci-target,target=/target" \
+            --env CARGO_TARGET_DIR=/target --env CARGO_TERM_COLOR=always \
+            --env RUSTUP_TOOLCHAIN=1.97.0 \
+            --workdir /workspace rust:1.97.0-bookworm sh -s <<'SCRIPT'
+          set -eu
+          sh scripts/run-live-dependency-tests.sh
+          SCRIPT
+
+      - name: Start and smoke production OAuth API
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker compose --project-name "$COMPOSE_PROJECT_NAME" \
+            -f compose.yaml -f compose.discord.yaml -f compose.production.yaml \
+            --profile production up --detach --wait --no-build --no-deps api
+          docker compose --project-name "$COMPOSE_PROJECT_NAME" \
+            -f compose.yaml -f compose.discord.yaml -f compose.production.yaml \
+            --profile production exec -T api sh -s < scripts/smoke-production-api.sh
+
+      - name: Exercise PostgreSQL backup and restore
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker compose --project-name "$COMPOSE_PROJECT_NAME" \
+            exec -T postgres sh -s <<'SCRIPT'
+          set -eu
+          export PGPASSWORD="$(cat /run/secrets/postgres_superuser_password)"
+          restore_db=pepeaudio_restore_ci
+          dump_file=/tmp/pepeaudio-ci.dump
+          cleanup() {
+            dropdb -U postgres --if-exists "$restore_db" >/dev/null 2>&1 || true
+            rm -f "$dump_file"
+          }
+          trap cleanup 0 1 2 15
+          pg_dump -U postgres -d pepeaudio --format=custom --file="$dump_file"
+          dropdb -U postgres --if-exists "$restore_db"
+          createdb -U postgres --template=template0 "$restore_db"
+          pg_restore -U postgres -d "$restore_db" \
+            --exit-on-error --no-owner --no-privileges "$dump_file"
+          test "$(psql -U postgres -d "$restore_db" -Atc \
+            "SELECT to_regclass('public.guild_settings') IS NOT NULL")" = t
+          SCRIPT
+
+      - name: Remove disposable services and volumes
+        if: always()
+        shell: bash
+        run: |
+          docker compose --project-name "$COMPOSE_PROJECT_NAME" \
+            -f compose.yaml -f compose.discord.yaml -f compose.production.yaml \
+            --profile production \
+            down --volumes --remove-orphans || true

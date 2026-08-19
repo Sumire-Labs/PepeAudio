@@ -1,0 +1,79 @@
+name: Public provider smoke
+
+on:
+  workflow_dispatch:
+    inputs:
+      rights_and_terms_confirmed:
+        description: I confirm both URLs may be accessed and tested under the applicable rights and service terms
+        required: true
+        type: boolean
+      youtube_url:
+        description: Explicit YouTube video URL authorized for this smoke run
+        required: true
+        type: string
+      soundcloud_url:
+        description: Explicit public two-segment SoundCloud track URL authorized for this smoke run
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: public-provider-smoke
+  cancel-in-progress: true
+
+jobs:
+  youtube-soundcloud:
+    name: YouTube and SoundCloud managed ingest
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+
+    steps:
+      - name: Require explicit rights and terms confirmation
+        env:
+          RIGHTS_AND_TERMS_CONFIRMED: ${{ inputs.rights_and_terms_confirmed }}
+        run: test "$RIGHTS_AND_TERMS_CONFIRMED" = true
+
+      - name: Check out source
+        uses: actions/checkout@v6
+
+      - name: Install Rust 1.97.0
+        run: |
+          rustup toolchain install 1.97.0 --profile minimal
+          rustup default 1.97.0
+
+      - name: Install ffprobe and pinned provider tools
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install --yes --no-install-recommends ffmpeg python3 unzip
+          tool_dir="$RUNNER_TEMP/pepeaudio-provider-tools"
+          install -d "$tool_dir" "$RUNNER_TEMP/pepeaudio-deno"
+          curl --fail --location --proto '=https' --tlsv1.2 \
+            https://github.com/yt-dlp/yt-dlp/releases/download/2026.06.09/yt-dlp \
+            --output "$tool_dir/yt-dlp"
+          echo 'e5d57466682cfa9d61e9cf7c8a4f09b00f4a62af37d3bbdc4bcffdf63615feac  '"$tool_dir/yt-dlp" \
+            | sha256sum --check --strict
+          chmod 0755 "$tool_dir/yt-dlp"
+          curl --fail --location --proto '=https' --tlsv1.2 \
+            https://github.com/denoland/deno/releases/download/v2.8.1/deno-x86_64-unknown-linux-gnu.zip \
+            --output "$RUNNER_TEMP/deno.zip"
+          echo '2d7bb6195226ac832e0bf7109a115f0af65ee69ac797a4bbde5b27a06cc242d9  '"$RUNNER_TEMP/deno.zip" \
+            | sha256sum --check --strict
+          unzip -q "$RUNNER_TEMP/deno.zip" -d "$tool_dir"
+          chmod 0755 "$tool_dir/deno"
+          test "$("$tool_dir/yt-dlp" --version)" = 2026.06.09
+          "$tool_dir/deno" --version | sed -n '1p' | grep -Eq '^deno 2[.]8[.]1 '
+          echo "PEPEAUDIO_YTDLP_PATH=$tool_dir/yt-dlp" >> "$GITHUB_ENV"
+          echo "PEPEAUDIO_DENO_PATH=$tool_dir/deno" >> "$GITHUB_ENV"
+          echo "PEPEAUDIO_DENO_DIR=$RUNNER_TEMP/pepeaudio-deno" >> "$GITHUB_ENV"
+
+      - name: Exercise managed provider ingestion
+        env:
+          PEPEAUDIO_YOUTUBE_SMOKE_URL: ${{ inputs.youtube_url }}
+          PEPEAUDIO_SOUNDCLOUD_SMOKE_URL: ${{ inputs.soundcloud_url }}
+        run: |
+          cargo test -p pepeaudio-media --test ytdlp_live --locked -- \
+            --ignored --nocapture --test-threads=1

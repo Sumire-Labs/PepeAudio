@@ -1,0 +1,57 @@
+services:
+  api:
+    profiles: !override ["production"]
+    environment: !override
+      PEPEAUDIO_API_BIND: 0.0.0.0:3000
+      PEPEAUDIO_API_AUTH_MODE: production
+      PEPEAUDIO_PUBLIC_BASE_URL: https://${PEPEAUDIO_DOMAIN:?set PEPEAUDIO_DOMAIN}
+      PEPEAUDIO_DATABASE_URL_FILE: /run/secrets/database_runtime_url
+      PEPEAUDIO_VALKEY_URL_FILE: /run/secrets/valkey_url
+      PEPEAUDIO_DISCORD_CLIENT_ID: ${PEPEAUDIO_DISCORD_CLIENT_ID:?set PEPEAUDIO_DISCORD_CLIENT_ID}
+      PEPEAUDIO_DISCORD_CLIENT_SECRET_FILE: /run/secrets/discord_client_secret
+      PEPEAUDIO_DISCORD_OAUTH_REDIRECT_URL: https://${PEPEAUDIO_DOMAIN:?set PEPEAUDIO_DOMAIN}/auth/callback
+      PEPEAUDIO_VALKEY_KEYSPACE: ${PEPEAUDIO_VALKEY_KEYSPACE:-pepeaudio-production}
+      PEPEAUDIO_SHARD_TOTAL: ${PEPEAUDIO_SHARD_TOTAL:-1}
+      PEPEAUDIO_AUTH_SUCCESS_PATH: /
+      # Guild membership is an OAuth-time projection. The API rejects values
+      # above 1800 until a live membership-refresh boundary exists.
+      PEPEAUDIO_SESSION_ABSOLUTE_SECONDS: ${PEPEAUDIO_SESSION_ABSOLUTE_SECONDS:-1800}
+      PEPEAUDIO_SESSION_IDLE_SECONDS: ${PEPEAUDIO_SESSION_IDLE_SECONDS:-1800}
+      PEPEAUDIO_OAUTH_STATE_SECONDS: ${PEPEAUDIO_OAUTH_STATE_SECONDS:-300}
+      RUST_LOG: ${PEPEAUDIO_API_LOG:-info}
+    secrets: !override
+      - database_runtime_url
+      - valkey_url
+      - discord_client_secret
+    group_add:
+      - ${PEPEAUDIO_RUNTIME_GID:-10001}
+    networks:
+      - edge
+      - data
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      valkey:
+        condition: service_healthy
+
+  caddy:
+    profiles: !override ["production"]
+    build:
+      args:
+        VITE_PEPEAUDIO_DEMO_MODE: "false"
+        VITE_PEPEAUDIO_GUILD_ID: ""
+        VITE_PEPEAUDIO_DEV_USER_ID: ""
+        PEPEAUDIO_WEB_DEV_BOOTSTRAP: ""
+    ports: !override
+      - ${PEPEAUDIO_HTTP_BIND:-80}:80
+      - ${PEPEAUDIO_HTTPS_BIND:-443}:443
+      - ${PEPEAUDIO_HTTPS_UDP_BIND:-443}:443/udp
+
+  bot:
+    profiles: !override ["production"]
+    environment:
+      PEPEAUDIO_VALKEY_KEYSPACE: ${PEPEAUDIO_VALKEY_KEYSPACE:-pepeaudio-production}
+
+secrets:
+  discord_client_secret:
+    file: ${PEPEAUDIO_DISCORD_CLIENT_SECRET_SOURCE:-./secrets/discord_client_secret.txt}

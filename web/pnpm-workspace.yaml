@@ -1,3 +1,5 @@
-# next/image uses unoptimized:true, so sharp's native build is not needed.
 allowBuilds:
-  sharp: false
+  '@astryxdesign/cli': false
+  '@astryxdesign/core': false
+minimumReleaseAgeExclude:
+  - '@testing-library/user-event@14.6.4'

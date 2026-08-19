@@ -1,0 +1,14 @@
+services:
+  bot:
+    environment:
+      PEPEAUDIO_ENABLE_SITE_EXTRACTORS: "true"
+      PEPEAUDIO_ENABLE_CROSS_SERVICE_MATCHING: "true"
+      PEPEAUDIO_SPOTIFY_CLIENT_ID: ${PEPEAUDIO_SPOTIFY_CLIENT_ID:?set the Spotify client ID}
+      PEPEAUDIO_SPOTIFY_CLIENT_SECRET_FILE: /run/secrets/spotify_client_secret
+      PEPEAUDIO_SPOTIFY_MARKET: ${PEPEAUDIO_SPOTIFY_MARKET:-JP}
+    secrets:
+      - spotify_client_secret
+
+secrets:
+  spotify_client_secret:
+    file: ${PEPEAUDIO_SPOTIFY_CLIENT_SECRET_SOURCE:-./secrets/spotify_client_secret.txt}

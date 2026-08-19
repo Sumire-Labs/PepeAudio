@@ -1,0 +1,28 @@
+[package]
+name = "pepeaudio-media"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish = false
+
+[dependencies]
+async-trait = "0.1"
+bytes = "1"
+futures-util = "0.3"
+reqwest = { version = "=0.12.28", default-features = false, features = ["rustls-tls", "stream"] }
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+tokio = { version = "1", features = ["fs", "io-util", "net", "process", "rt", "sync", "time"] }
+url = "2"
+uuid.workspace = true
+
+[target.'cfg(unix)'.dependencies]
+nix = { version = "0.30", default-features = false, features = ["process", "signal"] }
+
+[dev-dependencies]
+tokio = { version = "1", features = ["macros", "rt-multi-thread", "test-util"] }
+
+[lints]
+workspace = true

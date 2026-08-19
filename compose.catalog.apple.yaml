@@ -1,0 +1,14 @@
+services:
+  bot:
+    environment:
+      PEPEAUDIO_ENABLE_SITE_EXTRACTORS: "true"
+      PEPEAUDIO_ENABLE_CROSS_SERVICE_MATCHING: "true"
+      PEPEAUDIO_APPLE_MUSIC_TEAM_ID: ${PEPEAUDIO_APPLE_MUSIC_TEAM_ID:?set the Apple Music team ID}
+      PEPEAUDIO_APPLE_MUSIC_KEY_ID: ${PEPEAUDIO_APPLE_MUSIC_KEY_ID:?set the Apple Music key ID}
+      PEPEAUDIO_APPLE_MUSIC_PRIVATE_KEY_FILE: /run/secrets/apple_music_private_key
+    secrets:
+      - apple_music_private_key
+
+secrets:
+  apple_music_private_key:
+    file: ${PEPEAUDIO_APPLE_MUSIC_PRIVATE_KEY_SOURCE:-./secrets/apple_music_private_key.p8}

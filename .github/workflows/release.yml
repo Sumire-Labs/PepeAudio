@@ -1,75 +1,352 @@
-# SPDX-License-Identifier: Apache-2.0
-# Push a tag like v1.2.3 to build & publish the image and (optionally) deploy.
-# Deploy runs only when the repo variable DEPLOY_ENABLED == 'true' and the
-# DEPLOY_* secrets are set. Pin actions to commit SHAs before going public.
 name: Release
 
 on:
   push:
-    tags: ["v*"]
+    tags:
+      - "v[0-9]*.[0-9]*.[0-9]*"
 
 permissions:
   contents: read
-  packages: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
 
 env:
-  IMAGE: ghcr.io/${{ github.repository }}
+  CARGO_INCREMENTAL: "0"
+  CARGO_TERM_COLOR: always
+  REGISTRY: ghcr.io
 
 jobs:
-  image:
-    runs-on: ubuntu-latest
+  quality:
+    name: Verify release source
+    runs-on: ubuntu-24.04
+    timeout-minutes: 50
+
     steps:
-      - uses: actions/checkout@v4
-      - uses: docker/setup-buildx-action@v3
-      - uses: docker/login-action@v3
+      - name: Check out the tagged source
+        uses: actions/checkout@v6
+
+      - name: Install Rust 1.97.0
+        run: |
+          rustup toolchain install 1.97.0 --profile minimal --component rustfmt --component clippy
+          rustup default 1.97.0
+
+      - name: Install pnpm 11.3.0
+        uses: pnpm/action-setup@v6
         with:
-          registry: ghcr.io
+          version: 11.3.0
+          run_install: false
+
+      - name: Install Node.js 24.19.0
+        uses: actions/setup-node@v6
+        with:
+          node-version: 24.19.0
+          cache: pnpm
+          cache-dependency-path: web/pnpm-lock.yaml
+
+      - name: Restore Cargo cache
+        uses: actions/cache@v5
+        with:
+          path: |
+            ~/.cargo/registry/index
+            ~/.cargo/registry/cache
+            ~/.cargo/git/db
+            target
+          key: release-rust-1.97.0-${{ hashFiles('Cargo.lock') }}
+          restore-keys: release-rust-1.97.0-
+
+      - name: Install frozen Web dependencies
+        working-directory: web
+        run: pnpm install --frozen-lockfile
+
+      - name: Match the tag to Cargo and Web versions
+        run: node scripts/verify-release-tag.mjs "$GITHUB_REF_NAME"
+
+      - name: Check Rust formatting
+        run: cargo fmt --all -- --check
+
+      - name: Test the Rust workspace
+        run: cargo test --workspace --all-targets --locked
+
+      - name: Lint the Rust workspace
+        run: cargo clippy --workspace --all-targets --all-features --locked -- -D warnings
+
+      - name: Check and test the dashboard
+        working-directory: web
+        run: |
+          pnpm audit --prod --audit-level high
+          pnpm check
+          pnpm test
+          pnpm build
+
+      - name: Verify distributed licenses
+        run: sh scripts/verify-licenses.sh
+
+      - name: Install cargo-audit 0.22.2
+        run: cargo install cargo-audit --version 0.22.2 --locked
+
+      - name: Reject known Rust dependency vulnerabilities
+        run: cargo audit
+
+  rust-images:
+    name: Publish ${{ matrix.image }}
+    needs: quality
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    permissions:
+      contents: read
+      packages: write
+      attestations: write
+      id-token: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - image: pepeaudio-bot
+            binary: pepeaudio-bot
+            dockerfile: deploy/rust/Dockerfile.bot
+            build_args: ""
+          - image: pepeaudio-api
+            binary: pepeaudio-api
+            dockerfile: deploy/rust/Dockerfile
+            build_args: PEPEAUDIO_BINARY=pepeaudio-api
+          - image: pepeaudio-migrate
+            binary: pepeaudio-migrate
+            dockerfile: deploy/rust/Dockerfile
+            build_args: PEPEAUDIO_BINARY=pepeaudio-migrate
+
+    steps:
+      - name: Check out the tagged source
+        uses: actions/checkout@v6
+
+      - name: Normalize the GHCR image name
+        id: image
+        shell: bash
+        run: echo "name=${REGISTRY}/${GITHUB_REPOSITORY_OWNER,,}/${{ matrix.image }}" >> "$GITHUB_OUTPUT"
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+
+      - name: Sign in to GHCR
+        uses: docker/login-action@v4
+        with:
+          registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-      - id: meta
-        uses: docker/metadata-action@v5
+
+      - name: Generate image tags and OCI metadata
+        id: meta
+        uses: docker/metadata-action@v6
         with:
-          images: ${{ env.IMAGE }}
+          images: ${{ steps.image.outputs.name }}
+          flavor: latest=false
           tags: |
+            type=raw,value=${{ github.ref_name }}
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
-            type=raw,value=latest
-      - uses: docker/build-push-action@v6
+            type=semver,pattern={{major}},enable=${{ !startsWith(github.ref_name, 'v0.') }}
+            type=raw,value=latest,enable=${{ !contains(github.ref_name, '-') }}
+            type=sha,format=long
+          labels: |
+            org.opencontainers.image.title=${{ matrix.image }}
+            org.opencontainers.image.description=PepeAudio ${{ matrix.image }} service
+            org.opencontainers.image.licenses=MIT
+
+      - name: Build and publish the image
+        id: build
+        uses: docker/build-push-action@v7
         with:
           context: .
-          file: docker/Dockerfile
+          file: ${{ matrix.dockerfile }}
+          build-args: ${{ matrix.build_args }}
+          platforms: linux/amd64,linux/arm64
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-      - name: Generate SBOM
-        uses: anchore/sbom-action@v0
-        with:
-          image: ${{ env.IMAGE }}:${{ github.ref_name }}
-          format: cyclonedx-json
-          artifact-name: sbom-${{ github.ref_name }}.cdx.json
-      - name: Scan image
-        uses: anchore/scan-action@v6
-        with:
-          image: ${{ env.IMAGE }}:${{ github.ref_name }}
-          severity-cutoff: high
-          fail-build: false
+          annotations: ${{ steps.meta.outputs.annotations }}
+          cache-from: type=gha,scope=release-${{ matrix.image }}
+          cache-to: type=gha,mode=max,scope=release-${{ matrix.image }}
+          provenance: mode=max
+          sbom: true
 
-  deploy:
-    needs: image
-    runs-on: ubuntu-latest
-    if: ${{ vars.DEPLOY_ENABLED == 'true' }}
-    steps:
-      - name: Deploy to Linux host over SSH
-        uses: appleboy/ssh-action@v1
+      - name: Attest the published image
+        uses: actions/attest@v4
         with:
-          host: ${{ secrets.DEPLOY_HOST }}
-          username: ${{ secrets.DEPLOY_USER }}
-          key: ${{ secrets.DEPLOY_SSH_KEY }}
-          script: |
-            set -e
-            cd ${{ secrets.DEPLOY_PATH }}
-            echo "${{ secrets.GHCR_TOKEN }}" | docker login ghcr.io -u ${{ secrets.GHCR_USER }} --password-stdin
-            export IMAGE=${{ env.IMAGE }}:${{ github.ref_name }}
-            docker compose -f docker-compose.prod.yml pull
-            docker compose -f docker-compose.prod.yml up -d
-            docker image prune -f
+          subject-name: ${{ steps.image.outputs.name }}
+          subject-digest: ${{ steps.build.outputs.digest }}
+          push-to-registry: true
+
+      - name: Record pull and digest references
+        shell: bash
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          {
+            printf 'docker pull %s:%s\n' '${{ steps.image.outputs.name }}' "$version"
+            printf 'immutable: %s@%s\n' '${{ steps.image.outputs.name }}' '${{ steps.build.outputs.digest }}'
+          } > '${{ matrix.image }}.txt'
+
+      - name: Upload the release manifest fragment
+        uses: actions/upload-artifact@v7
+        with:
+          name: release-image-${{ matrix.image }}
+          path: ${{ matrix.image }}.txt
+          if-no-files-found: error
+          retention-days: 1
+
+  web-image:
+    name: Publish pepeaudio-caddy
+    needs: quality
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    permissions:
+      contents: read
+      packages: write
+      attestations: write
+      id-token: write
+
+    steps:
+      - name: Check out the tagged source
+        uses: actions/checkout@v6
+
+      - name: Normalize the GHCR image name
+        id: image
+        shell: bash
+        run: echo "name=${REGISTRY}/${GITHUB_REPOSITORY_OWNER,,}/pepeaudio-caddy" >> "$GITHUB_OUTPUT"
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+
+      - name: Sign in to GHCR
+        uses: docker/login-action@v4
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Generate image tags and OCI metadata
+        id: meta
+        uses: docker/metadata-action@v6
+        with:
+          images: ${{ steps.image.outputs.name }}
+          flavor: latest=false
+          tags: |
+            type=raw,value=${{ github.ref_name }}
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=semver,pattern={{major}},enable=${{ !startsWith(github.ref_name, 'v0.') }}
+            type=raw,value=latest,enable=${{ !contains(github.ref_name, '-') }}
+            type=sha,format=long
+          labels: |
+            org.opencontainers.image.title=pepeaudio-caddy
+            org.opencontainers.image.description=PepeAudio dashboard and TLS edge
+            org.opencontainers.image.licenses=MIT
+
+      - name: Build and publish the image
+        id: build
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: deploy/caddy/Dockerfile
+          build-args: |
+            VITE_PEPEAUDIO_DEMO_MODE=false
+            VITE_API_BASE_URL=/api/v1
+            VITE_PEPEAUDIO_GUILD_ID=
+            VITE_PEPEAUDIO_DEV_USER_ID=
+            PEPEAUDIO_WEB_DEV_BOOTSTRAP=
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          annotations: ${{ steps.meta.outputs.annotations }}
+          cache-from: type=gha,scope=release-pepeaudio-caddy
+          cache-to: type=gha,mode=max,scope=release-pepeaudio-caddy
+          provenance: mode=max
+          sbom: true
+
+      - name: Attest the published image
+        uses: actions/attest@v4
+        with:
+          subject-name: ${{ steps.image.outputs.name }}
+          subject-digest: ${{ steps.build.outputs.digest }}
+          push-to-registry: true
+
+      - name: Record pull and digest references
+        shell: bash
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          {
+            printf 'docker pull %s:%s\n' '${{ steps.image.outputs.name }}' "$version"
+            printf 'immutable: %s@%s\n' '${{ steps.image.outputs.name }}' '${{ steps.build.outputs.digest }}'
+          } > pepeaudio-caddy.txt
+
+      - name: Upload the release manifest fragment
+        uses: actions/upload-artifact@v7
+        with:
+          name: release-image-pepeaudio-caddy
+          path: pepeaudio-caddy.txt
+          if-no-files-found: error
+          retention-days: 1
+
+  github-release:
+    name: Publish GitHub Release
+    needs:
+      - rust-images
+      - web-image
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: write
+
+    steps:
+      - name: Download image digest fragments
+        uses: actions/download-artifact@v7
+        with:
+          pattern: release-image-*
+          path: release-images
+          merge-multiple: true
+
+      - name: Build the container image manifest
+        shell: bash
+        run: |
+          set -euo pipefail
+          {
+            printf '# PepeAudio %s container images\n\n' "$GITHUB_REF_NAME"
+            find release-images -type f -name '*.txt' -print0 \
+              | sort -z \
+              | xargs -0 cat
+          } > container-images.txt
+          test "$(grep -c '^docker pull ' container-images.txt)" -eq 4
+          test "$(grep -c '^immutable: ' container-images.txt)" -eq 4
+
+      - name: Create the GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
+            echo "::notice::Release $GITHUB_REF_NAME already exists; leaving it unchanged."
+            exit 0
+          fi
+
+          args=(
+            "$GITHUB_REF_NAME"
+            "container-images.txt#Container image pull and digest references"
+            --verify-tag
+            --generate-notes
+            --title "PepeAudio $GITHUB_REF_NAME"
+          )
+          if [[ "$GITHUB_REF_NAME" == *-* ]]; then
+            args+=(--prerelease --latest=false)
+          else
+            args+=(--latest)
+          fi
+          gh release create "${args[@]}"

@@ -1,7 +1,0 @@
-# Normalize line endings
-* text=auto eol=lf
-*.sln text eol=crlf
-*.png binary
-*.jpg binary
-*.wav binary
-*.p8 binary

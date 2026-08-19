@@ -1,0 +1,21 @@
+[package]
+name = "pepeaudio-presets"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish = false
+
+[dependencies]
+pepeaudio-audio = { path = "../pepeaudio-audio" }
+pepeaudio-core = { path = "../pepeaudio-core" }
+pepeaudio-hrir = { path = "../pepeaudio-hrir" }
+sha2 = "0.10"
+thiserror.workspace = true
+
+[dev-dependencies]
+hound.workspace = true
+tempfile = "3"
+
+[lints]
+workspace = true
