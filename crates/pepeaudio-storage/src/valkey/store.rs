@@ -1,6 +1,10 @@
-use std::fmt;
+use std::{collections::HashMap, fmt, sync::Arc};
 
-use redis::{Client, aio::ConnectionManager};
+use redis::{
+    Client,
+    aio::{ConnectionManager, ConnectionManagerConfig},
+};
+use tokio::sync::Mutex;
 
 use super::Keyspace;
 use crate::StorageResult;
@@ -10,6 +14,7 @@ use crate::StorageResult;
 pub struct ValkeyStore {
     pub(super) client: Client,
     pub(super) connection: ConnectionManager,
+    blocking_connections: Arc<Mutex<HashMap<u32, ConnectionManager>>>,
     pub(super) keyspace: Keyspace,
 }
 
@@ -25,12 +30,13 @@ impl ValkeyStore {
         Ok(Self {
             client,
             connection,
+            blocking_connections: Arc::new(Mutex::new(HashMap::new())),
             keyspace,
         })
     }
 
     #[must_use]
-    pub const fn from_connection(
+    pub fn from_connection(
         client: Client,
         connection: ConnectionManager,
         keyspace: Keyspace,
@@ -38,8 +44,29 @@ impl ValkeyStore {
         Self {
             client,
             connection,
+            blocking_connections: Arc::new(Mutex::new(HashMap::new())),
             keyspace,
         }
+    }
+
+    pub(super) async fn blocking_connection(
+        &self,
+        shard_id: u32,
+    ) -> StorageResult<ConnectionManager> {
+        if let Some(connection) = self.blocking_connections.lock().await.get(&shard_id) {
+            return Ok(connection.clone());
+        }
+
+        // A server-bounded XREADGROUP may legitimately exceed redis-rs's
+        // 500 ms default response timeout. Isolate it so it cannot block or
+        // reconnect the connection used by snapshots, results, and presence.
+        let config = ConnectionManagerConfig::new().set_response_timeout(None);
+        let candidate = self
+            .client
+            .get_connection_manager_with_config(config)
+            .await?;
+        let mut connections = self.blocking_connections.lock().await;
+        Ok(connections.entry(shard_id).or_insert(candidate).clone())
     }
 
     /// Sends a lightweight health probe.

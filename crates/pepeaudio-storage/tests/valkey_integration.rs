@@ -214,6 +214,11 @@ async fn test_command_stream(
         .ensure_command_group(0, "integration")
         .await
         .expect("create command group");
+    let empty = storage
+        .read_commands(0, "integration", "worker-1", 10, Duration::from_millis(750))
+        .await
+        .expect("an idle blocking read outlives the default connection timeout");
+    assert!(empty.is_empty());
     let mut raw = redis::Client::open(valkey_url)
         .expect("test Valkey URL")
         .get_connection_manager()

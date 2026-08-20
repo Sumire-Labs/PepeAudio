@@ -104,7 +104,7 @@ impl CommandConsumer for ValkeyStore {
             .count(count)
             .block(block_ms);
         let stream = self.keyspace.command_stream(shard_id);
-        let mut connection = self.connection.clone();
+        let mut connection = self.blocking_connection(shard_id).await?;
         let reply: Option<redis::streams::StreamReadReply> = connection
             .xread_options(&[stream.as_str()], &[">"], &options)
             .await?;

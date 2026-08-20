@@ -7,6 +7,7 @@ use songbird::{SerenityInit as _, Songbird};
 use crate::{
     BotConfig, BotError, CommandError, ComponentIdCodec, ComponentsV2Responder,
     GuildLifecycleHandle, GuildPolicyProvider, HrirOption, MediaResolver, PlayerRegistry,
+    ShardConfig,
     commands::{leave, now, play, stop},
     component_dispatch,
     discord_status::{DiscordStatusRuntime, initial_activity},
@@ -111,9 +112,18 @@ pub(crate) async fn start_client(
     config: &BotConfig,
 ) -> Result<(), BotError> {
     client
-        .start_shard_range(config.shards().range(), config.shards().total())
+        .start_shard_range(
+            serenity_shard_range(config.shards()),
+            config.shards().total(),
+        )
         .await
         .map_err(|error| BotError::Gateway(Box::new(error)))
+}
+
+fn serenity_shard_range(shards: &ShardConfig) -> std::ops::Range<u32> {
+    // Serenity 0.12 interprets Range::end as an inclusive shard ID even though
+    // the standard Range type is half-open. Keep that adapter quirk here.
+    shards.start..(shards.end_exclusive - 1)
 }
 
 impl BotData {
@@ -127,5 +137,25 @@ impl BotData {
             guild_policy: self.guild_policy.clone(),
             guild_lifecycle: self.guild_lifecycle.clone(),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::serenity_shard_range;
+    use crate::ShardConfig;
+
+    #[test]
+    fn converts_one_shard_to_serenitys_inclusive_end_contract() {
+        let shards = ShardConfig::new(1, 0, 1).expect("valid shard topology");
+
+        assert_eq!(serenity_shard_range(&shards), 0..0);
+    }
+
+    #[test]
+    fn converts_partitioned_shards_to_serenitys_inclusive_end_contract() {
+        let shards = ShardConfig::new(8, 2, 5).expect("valid shard topology");
+
+        assert_eq!(serenity_shard_range(&shards), 2..4);
     }
 }
