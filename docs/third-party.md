@@ -125,6 +125,18 @@ the release workflow emits an image SBOM.
 - [Deno 2.8.1 release](https://github.com/denoland/deno/releases/tag/v2.8.1)
 - [Deno 2.8.1 license](https://github.com/denoland/deno/blob/v2.8.1/LICENSE.md)
 
+## Cloudflare Tunnel connector
+
+The optional `compose.cloudflare-tunnel.yaml` deployment expects a separately
+installed, systemd-managed `cloudflared` connector on the Ubuntu host.
+`cloudflared` is licensed under Apache-2.0 and is not copied into, distributed
+with, or relicensed by PepeAudio's MIT images. The host operator is responsible
+for installing and updating it and for complying with the terms of the
+Cloudflare service used by the connector.
+
+- [cloudflared source and license](https://github.com/cloudflare/cloudflared)
+- [Cloudflare Tunnel documentation](https://developers.cloudflare.com/tunnel/)
+
 ## Dependency audit policy
 
 CI installs the pinned `cargo-audit` 0.22.2 release and rejects known

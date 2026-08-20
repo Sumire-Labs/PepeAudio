@@ -279,6 +279,10 @@ jobs:
           sudo env PEPEAUDIO_RUNTIME_GID=10001 \
             sh scripts/prepare-production-secrets.sh --check
 
+      - name: Test production secret preparation failures
+        shell: bash
+        run: sh scripts/test-production-secret-contract.sh
+
       - name: Build migration image
         uses: docker/build-push-action@v7
         with:

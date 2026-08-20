@@ -1,0 +1,14 @@
+{
+	admin off
+}
+
+import /etc/caddy/PepeAudio.caddy
+
+:8080 {
+	route {
+		@unexpected_host not host {$PEPEAUDIO_DOMAIN} 127.0.0.1 localhost
+		respond @unexpected_host 421
+
+		import pepeaudio_site
+	}
+}

@@ -15,6 +15,7 @@ target/
 !config/.env.example
 /secrets/*
 !/secrets/*.example
+!/secrets/README.md
 *.pem
 *.key
 

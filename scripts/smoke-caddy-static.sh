@@ -15,6 +15,13 @@ trap 'exit 129' HUP
 trap 'exit 130' INT
 trap 'exit 143' TERM
 
+for config in /etc/caddy/Caddyfile /etc/caddy/Caddyfile.tunnel; do
+    docker run --rm --network none --entrypoint caddy "$image" \
+        validate --config "$config" --adapter caddyfile >/dev/null
+done
+docker run --rm --network none --entrypoint sh "$image" \
+    -euc 'test -z "$(getcap /usr/bin/caddy)"'
+
 docker run --detach --name "$container_name" \
     --publish 127.0.0.1::8080 "$image" >/dev/null
 
@@ -57,4 +64,37 @@ if docker exec "$container_name" sh -c \
     exit 1
 fi
 
-printf '%s\n' 'Caddy app shell, immutable assets, security headers, and notices passed.'
+docker rm --force "$container_name" >/dev/null
+
+docker run --detach --name "$container_name" \
+    --env PEPEAUDIO_DOMAIN=audio.example.test \
+    --publish 127.0.0.1::8080 \
+    --user 10001:10001 \
+    --read-only \
+    --cap-drop ALL \
+    --security-opt no-new-privileges \
+    --pids-limit 64 \
+    --entrypoint caddy \
+    "$image" run --config /etc/caddy/Caddyfile.tunnel \
+        --adapter caddyfile >/dev/null
+
+port=$(docker port "$container_name" 8080/tcp | sed -n 's/.*://p' | head -n 1)
+test -n "$port"
+base_url="http://127.0.0.1:$port"
+
+attempt=0
+until curl --silent --show-error --fail \
+    --header 'Host: audio.example.test' \
+    --output /dev/null "$base_url/"; do
+    attempt=$((attempt + 1))
+    test "$attempt" -lt 20
+    sleep 1
+done
+
+unexpected_host_status=$(curl --silent --show-error \
+    --header 'Host: unexpected.example.test' \
+    --output /dev/null --write-out '%{http_code}' "$base_url/")
+test "$unexpected_host_status" = 421
+
+printf '%s\n' \
+    'Caddy app shell, tunnel host isolation, security headers, and notices passed.'

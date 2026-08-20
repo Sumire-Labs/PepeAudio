@@ -1,0 +1,16 @@
+services:
+  caddy:
+    command:
+      - caddy
+      - run
+      - --config
+      - /etc/caddy/Caddyfile.tunnel
+      - --adapter
+      - caddyfile
+    ports: !override
+      - ${PEPEAUDIO_TUNNEL_HTTP_BIND:-127.0.0.1:18080}:8080
+    volumes: !reset []
+    user: "10001:10001"
+    networks: !override
+      - edge
+    cap_add: !reset []

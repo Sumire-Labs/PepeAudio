@@ -16,6 +16,10 @@ Rustで動き、DiscordのコマンドとWebダッシュボードのどちらか
 - PostgreSQLへの設定保存、Valkeyを使ったsession・command配送
 - Discord Gateway shardingとDocker Compose運用
 
+## 導入
+
+Cloudflare Tunnelで公開する場合は、[専用の導入手順](docs/cloudflare-tunnel.md)を使ってください。
+
 ## ライセンス
 
 PepeAudioの独自コードと文書は[MIT License](LICENSE)です。依存ライブラリ、FFmpeg、HRIR、再生するメディアには、それぞれのライセンスと利用条件が適用されます。

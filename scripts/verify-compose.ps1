@@ -13,6 +13,11 @@ $overrides = @{
     PEPEAUDIO_SHARD_TOTAL = '4'
     PEPEAUDIO_RUNTIME_GID = '10001'
     PEPEAUDIO_DISCORD_CLIENT_SECRET_SOURCE = Join-Path $repositoryRoot 'secrets\discord_client_secret.txt.example'
+    PEPEAUDIO_TUNNEL_HTTP_BIND = '127.0.0.1:18080'
+    PEPEAUDIO_ENABLE_SITE_EXTRACTORS = 'false'
+    PEPEAUDIO_ENABLE_CROSS_SERVICE_MATCHING = 'false'
+    PEPEAUDIO_ENABLE_SPOTIFY_PUBLIC_METADATA = 'false'
+    PEPEAUDIO_ENABLE_APPLE_MUSIC_PUBLIC_METADATA = 'false'
     PEPEAUDIO_SPOTIFY_CLIENT_ID = 'compose-contract-client-id'
     PEPEAUDIO_SPOTIFY_CLIENT_SECRET_SOURCE = Join-Path $repositoryRoot 'secrets\spotify_client_secret.txt.example'
     PEPEAUDIO_SPOTIFY_MARKET = 'JP'
@@ -84,6 +89,24 @@ try {
         [System.Text.UTF8Encoding]::new($false)
     )
     Invoke-Checked node @('scripts/assert-compose-model.mjs', $modelPath)
+
+    $model = & docker compose `
+        -f compose.yaml `
+        -f compose.discord.yaml `
+        -f compose.catalog.public-metadata.yaml `
+        -f compose.production.yaml `
+        -f compose.cloudflare-tunnel.yaml `
+        --profile production `
+        config --format json
+    if ($LASTEXITCODE -ne 0) {
+        throw "Cloudflare Tunnel docker compose config exited with code $LASTEXITCODE"
+    }
+    [System.IO.File]::WriteAllLines(
+        $modelPath,
+        [string[]]$model,
+        [System.Text.UTF8Encoding]::new($false)
+    )
+    Invoke-Checked node @('scripts/assert-cloudflare-compose-model.mjs', $modelPath)
 
     $model = & docker compose `
         -f compose.yaml `

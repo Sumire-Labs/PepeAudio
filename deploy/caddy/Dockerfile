@@ -23,7 +23,10 @@ RUN VITE_PEPEAUDIO_DEMO_MODE="${VITE_PEPEAUDIO_DEMO_MODE}" \
     pnpm build
 
 FROM caddy:2.10.2-alpine
+RUN setcap -r /usr/bin/caddy && test -z "$(getcap /usr/bin/caddy)"
 COPY deploy/caddy/Caddyfile /etc/caddy/Caddyfile
+COPY deploy/caddy/Caddyfile.tunnel /etc/caddy/Caddyfile.tunnel
+COPY deploy/caddy/PepeAudio.caddy /etc/caddy/PepeAudio.caddy
 COPY --from=web-builder /web/dist /srv
 COPY LICENSE /usr/share/licenses/pepeaudio/LICENSE
 COPY docs/third-party.md /usr/share/doc/pepeaudio/THIRD-PARTY.md

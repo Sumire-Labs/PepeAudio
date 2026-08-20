@@ -15,6 +15,10 @@ trap 'exit 143' TERM
 
 cd "$repository_root"
 export PEPEAUDIO_RUNTIME_GID=10001
+export PEPEAUDIO_ENABLE_SITE_EXTRACTORS=false
+export PEPEAUDIO_ENABLE_CROSS_SERVICE_MATCHING=false
+export PEPEAUDIO_ENABLE_SPOTIFY_PUBLIC_METADATA=false
+export PEPEAUDIO_ENABLE_APPLE_MUSIC_PUBLIC_METADATA=false
 docker compose version
 docker compose \
     -f compose.yaml \
@@ -79,6 +83,23 @@ PEPEAUDIO_DISCORD_CLIENT_SECRET_SOURCE=./secrets/discord_client_secret.txt.examp
         config --format json > "$model_path"
 
 node scripts/assert-compose-model.mjs "$model_path"
+
+PEPEAUDIO_DOMAIN=audio.example.test \
+PEPEAUDIO_DISCORD_CLIENT_ID=100000000000000002 \
+PEPEAUDIO_VALKEY_KEYSPACE=pepeaudio-production \
+PEPEAUDIO_SHARD_TOTAL=4 \
+PEPEAUDIO_DISCORD_CLIENT_SECRET_SOURCE=./secrets/discord_client_secret.txt.example \
+PEPEAUDIO_TUNNEL_HTTP_BIND=127.0.0.1:18080 \
+    docker compose \
+        -f compose.yaml \
+        -f compose.discord.yaml \
+        -f compose.catalog.public-metadata.yaml \
+        -f compose.production.yaml \
+        -f compose.cloudflare-tunnel.yaml \
+        --profile production \
+        config --format json > "$model_path"
+
+node scripts/assert-cloudflare-compose-model.mjs "$model_path"
 
 PEPEAUDIO_DOMAIN=audio.example.test \
 PEPEAUDIO_DISCORD_CLIENT_ID=100000000000000002 \
