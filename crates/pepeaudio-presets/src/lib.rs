@@ -9,6 +9,7 @@
 mod catalog;
 mod error;
 mod limits;
+mod metadata;
 
 pub use catalog::{HrirCatalog, HrirDescriptor};
 pub use error::{CatalogError, CatalogResult};

@@ -1,7 +1,7 @@
 import { Icon } from "@astryxdesign/core/Icon";
 import { Item } from "@astryxdesign/core/Item";
 import { Link } from "@astryxdesign/core/Link";
-import { Selector } from "@astryxdesign/core/Selector";
+import { Selector, SelectorOption } from "@astryxdesign/core/Selector";
 import { HStack, VStack } from "@astryxdesign/core/Stack";
 import { Switch } from "@astryxdesign/core/Switch";
 import { Heading, Text } from "@astryxdesign/core/Text";
@@ -79,6 +79,13 @@ export function SpatialPanel({
         placeholder={catalogOption(catalogStatus, presets.length)}
         hasSearch={presets.length > 8}
         searchPlaceholder="HRIRプリセットを検索…"
+        renderOption={(option) => (
+          <SelectorOption
+            icon={option.icon}
+            label={option.label ?? option.value}
+            description={presets.find((preset) => preset.id === option.value)?.description}
+          />
+        )}
         width="100%"
         isDisabled={controlsUnavailable || unavailable}
         disabledMessage={selectorDisabledMessage(
@@ -92,9 +99,16 @@ export function SpatialPanel({
         }}
       />
 
-      <Text type="supporting" color="secondary">
-        {catalogMessage}
-      </Text>
+      {selected?.description ? (
+        <Text type="body" color="primary">
+          {selected.description}
+        </Text>
+      ) : null}
+      {catalogMessage ? (
+        <Text type="supporting" color="secondary">
+          {catalogMessage}
+        </Text>
+      ) : null}
       {selected?.source.sourceUrl ? (
         <Link
           href={selected.source.sourceUrl}
@@ -147,11 +161,11 @@ function describeCatalog(
   status: HrirCatalogStatus,
   count: number,
   selected: HrirPreset | undefined
-): string {
+): string | null {
   if (status === "loading") return "HRIRプリセットを読み込んでいます。";
   if (status === "unavailable") return "HRIRカタログを取得できませんでした。";
   if (count === 0) return "このサーバーで利用可能なプリセットはありません。";
   if (!selected) return "現在のプリセットはカタログにありません。";
   const details = [selected.source.attribution, selected.source.licenseName].filter(Boolean);
-  return details.length > 0 ? details.join(" · ") : "公開されたソース情報はありません。";
+  return details.length > 0 ? details.join(" · ") : null;
 }

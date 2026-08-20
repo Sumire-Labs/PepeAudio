@@ -10,6 +10,7 @@ mod source_links;
 pub struct HrirOption {
     pub id: String,
     pub label: String,
+    pub description: Option<String>,
 }
 
 /// Builds a component-only `/now` response without content or embeds.
@@ -179,8 +180,14 @@ fn hrir_selector(
     let options = visible_hrir_options(hrir_options, selected)
         .into_iter()
         .map(|option| {
-            SelectOption::new(option.label.clone(), option.id.clone())
-                .selected(selected == Some(option.id.as_str()))
+            let item = SelectOption::new(option.label.clone(), option.id.clone());
+            let item = option
+                .description
+                .as_deref()
+                .map_or(item.clone(), |description| {
+                    item.description(discord_option_description(description))
+                });
+            item.selected(selected == Some(option.id.as_str()))
         })
         .collect();
     Component::select(StringSelectComponent::single(
@@ -189,6 +196,19 @@ fn hrir_selector(
         Some("HRIRプリセット".into()),
     )?)
     .map(Some)
+}
+
+fn discord_option_description(value: &str) -> String {
+    const MAXIMUM: usize = 100;
+    if value.chars().count() <= MAXIMUM {
+        return value.to_owned();
+    }
+    let mut shortened = value.chars().take(MAXIMUM - 1).collect::<String>();
+    if let Some(word_boundary) = shortened.rfind(char::is_whitespace) {
+        shortened.truncate(word_boundary);
+    }
+    shortened.push('…');
+    shortened
 }
 
 fn visible_hrir_options<'a>(

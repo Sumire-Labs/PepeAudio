@@ -59,6 +59,7 @@ export interface QueueItem {
 export interface HrirPreset {
   readonly id: string;
   readonly name: string;
+  readonly description: string | null;
   readonly source: HrirPresetSource;
 }
 

@@ -52,6 +52,7 @@ describe("SpatialPanel catalog states", () => {
         presets={[{
           id: "neutral",
           name: "Neutral",
+          description: "Balanced spatial response",
           source: {
             licenseName: "CC0-1.0",
             sourceUrl: "https://example.test/source",
@@ -61,6 +62,7 @@ describe("SpatialPanel catalog states", () => {
       />
     );
 
+    expect(screen.getAllByText("Balanced spatial response").length).toBeGreaterThan(0);
     expect(screen.getByText("Fixture author · CC0-1.0")).toBeTruthy();
     expect(screen.getByRole("link").getAttribute("href")).toBe(
       "https://example.test/source"
@@ -106,6 +108,7 @@ describe("SpatialPanel catalog states", () => {
         presets={[{
           id: "neutral",
           name: "Neutral",
+          description: null,
           source: { licenseName: null, sourceUrl: null, attribution: null }
         }]}
         onToggle={onToggle}

@@ -5,9 +5,10 @@ use pepeaudio_core::HrirPresetId;
 use pepeaudio_hrir::{HesuviSampleRate, LoadLimits, SourceLayout};
 use sha2::{Digest as _, Sha256};
 
-use crate::{CatalogError, CatalogLimits, CatalogResult};
-
-const MAX_DISCORD_OPTION_CHARS: usize = 100;
+use crate::{
+    CatalogError, CatalogLimits, CatalogResult,
+    metadata::{MAX_DISPLAY_NAME_CHARS, PresetPresentation},
+};
 
 /// Public metadata for one prepared operator-installed preset.
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -15,6 +16,8 @@ pub struct HrirDescriptor {
     /// Stable ID derived from the direct WAV filename stem.
     pub id: HrirPresetId,
     pub display_name: String,
+    /// Optional secondary text supplied by the operator's `info.csv`.
+    pub description: Option<String>,
     pub source_sample_rate_hz: u32,
     pub source_layout: SourceLayout,
     pub prepared_frames: usize,
@@ -56,9 +59,10 @@ impl HrirCatalog {
             return Err(CatalogError::InvalidRoot);
         }
 
+        let presentations = crate::metadata::load(&root)?;
         let mut entries = BTreeMap::new();
         for candidate in discover_candidates(&root, limits)? {
-            let entry = load_entry(&root, &candidate, limits)?;
+            let entry = load_entry(&root, &candidate, limits, &presentations)?;
             let id = entry.descriptor.id.clone();
             if entries.insert(id.clone(), entry).is_some() {
                 return Err(CatalogError::DuplicateId {
@@ -125,6 +129,7 @@ fn load_entry(
     root: &Path,
     candidate: &std::fs::DirEntry,
     limits: CatalogLimits,
+    presentations: &BTreeMap<HrirPresetId, PresetPresentation>,
 ) -> CatalogResult<CatalogEntry> {
     let file_name = candidate.file_name().to_string_lossy().into_owned();
     let file_type = candidate.file_type().map_err(CatalogError::Filesystem)?;
@@ -145,11 +150,14 @@ fn load_entry(
             maximum: limits.max_file_bytes(),
         });
     }
-    let display_name = display_name(candidate)?;
     let id =
-        HrirPresetId::new(display_name.clone()).map_err(|_| CatalogError::InvalidIdentifier {
+        HrirPresetId::new(file_stem(candidate)?).map_err(|_| CatalogError::InvalidIdentifier {
             reason: "filename stem violates the canonical preset ID rules",
         })?;
+    let presentation = presentations.get(&id);
+    let display_name =
+        presentation.map_or_else(|| id.to_string(), |metadata| metadata.display_name.clone());
+    let description = presentation.and_then(|metadata| metadata.description.clone());
     let source_bytes = std::fs::read(&canonical).map_err(CatalogError::Filesystem)?;
     let file_size_bytes =
         u64::try_from(source_bytes.len()).map_err(|_| CatalogError::FileTooLarge {
@@ -186,6 +194,7 @@ fn load_entry(
         descriptor: HrirDescriptor {
             id,
             display_name,
+            description,
             source_sample_rate_hz: sample_rate_hz(hesuvi.sample_rate()),
             source_layout: hesuvi.source_layout(),
             prepared_frames: prepared.frame_count(),
@@ -197,8 +206,8 @@ fn load_entry(
     })
 }
 
-fn display_name(candidate: &std::fs::DirEntry) -> CatalogResult<String> {
-    let name = candidate
+fn file_stem(candidate: &std::fs::DirEntry) -> CatalogResult<String> {
+    let stem = candidate
         .path()
         .file_stem()
         .and_then(|value| value.to_str())
@@ -206,12 +215,12 @@ fn display_name(candidate: &std::fs::DirEntry) -> CatalogResult<String> {
             reason: "filename stem must be valid UTF-8",
         })?
         .to_owned();
-    if name.chars().count() > MAX_DISCORD_OPTION_CHARS {
+    if stem.chars().count() > MAX_DISPLAY_NAME_CHARS {
         Err(CatalogError::InvalidIdentifier {
             reason: "filename stem must fit a 100-character Discord option",
         })
     } else {
-        Ok(name)
+        Ok(stem)
     }
 }
 

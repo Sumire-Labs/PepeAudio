@@ -103,6 +103,7 @@ async fn synchronizes_global_hrir_catalog(storage: &PostgresStorage, guild_id: G
         preset_id: id,
         owner_guild_id: None,
         display_name: format!("Storage smoke {marker}"),
+        description: Some(format!("Storage smoke description {marker}")),
         storage_key: format!("storage-smoke-{suffix}-{marker}.wav"),
         sha256_hex: marker.to_string().repeat(64),
         sample_rate: 48_000,
@@ -128,6 +129,10 @@ async fn synchronizes_global_hrir_catalog(storage: &PostgresStorage, guild_id: G
         .await
         .expect("list synchronized presets");
     assert!(listed.iter().any(|preset| preset.preset_id == first_id));
+    assert!(listed.iter().any(|preset| {
+        preset.preset_id == first_id
+            && preset.description.as_deref() == Some("Storage smoke description a")
+    }));
     assert!(!listed.iter().any(|preset| preset.preset_id == second_id));
     sqlx::query("DELETE FROM hrir_presets WHERE preset_id = $1")
         .bind(first_id.as_str())

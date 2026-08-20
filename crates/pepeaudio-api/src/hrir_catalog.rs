@@ -15,6 +15,9 @@ pub struct HrirPresetSummary {
     /// Stable identifier accepted by `set_hrir` commands.
     pub id: HrirPresetId,
     pub display_name: String,
+    /// Optional short explanation displayed with the selector option.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub description: Option<String>,
     /// Optional attribution and licensing data safe for public display.
     pub source: HrirSourceMetadata,
 }

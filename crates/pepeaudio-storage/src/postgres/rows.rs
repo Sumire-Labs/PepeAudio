@@ -63,6 +63,7 @@ pub(super) struct HrirPresetRow {
     preset_id: String,
     owner_guild_id: Option<String>,
     display_name: String,
+    description: Option<String>,
     storage_key: String,
     sha256_hex: String,
     sample_rate: i32,
@@ -86,6 +87,7 @@ impl TryFrom<HrirPresetRow> for HrirPresetMetadata {
                 .map(|value| parse_id(&value, "hrir_preset", "owner_guild_id"))
                 .transpose()?,
             display_name: row.display_name,
+            description: row.description,
             storage_key: row.storage_key,
             sha256_hex: row.sha256_hex,
             sample_rate: u32::try_from(row.sample_rate)

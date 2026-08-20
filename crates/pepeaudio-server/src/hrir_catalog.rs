@@ -40,6 +40,7 @@ impl HrirPresetCatalogSource for PostgresHrirPresetCatalog {
                     id: record.preset_id,
                     display_name: public_text(Some(record.display_name), 120)?
                         .ok_or(PortError::Internal)?,
+                    description: public_text(record.description, 240)?,
                     source: public_source(
                         record.license_name,
                         record.license_url,
@@ -99,12 +100,15 @@ fn public_url(value: Option<String>) -> Result<Option<String>, PortError> {
 
 #[cfg(test)]
 mod tests {
-    use super::{public_source, public_url};
+    use super::{public_source, public_text, public_url};
 
     #[test]
     fn public_source_metadata_rejects_unsafe_urls_and_unbounded_text() {
         assert!(public_url(Some("https://example.test/source".into())).is_ok());
         assert!(public_url(Some("javascript://alert".into())).is_err());
         assert!(public_source(Some("x".repeat(257)), None, None).is_err());
+        assert!(public_text(Some("x".repeat(240)), 240).is_ok());
+        assert!(public_text(Some("x".repeat(241)), 240).is_err());
+        assert!(public_text(Some("line one\nline two".into()), 240).is_err());
     }
 }

@@ -302,6 +302,7 @@ fn hrir_options(catalog: &HrirCatalog) -> Arc<[HrirOption]> {
         .map(|descriptor| HrirOption {
             id: descriptor.id.to_string(),
             label: descriptor.display_name,
+            description: descriptor.description,
         })
         .collect::<Vec<_>>()
         .into()
@@ -318,6 +319,7 @@ async fn synchronize_catalog(
             preset_id: descriptor.id,
             owner_guild_id: None,
             display_name: descriptor.display_name,
+            description: descriptor.description,
             storage_key: descriptor.storage_key,
             sha256_hex: descriptor.sha256_hex,
             sample_rate: descriptor.source_sample_rate_hz,

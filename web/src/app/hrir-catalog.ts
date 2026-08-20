@@ -21,6 +21,11 @@ export function parseHrirPresetCatalog(
     return {
       id,
       name: canonicalText(preset.display_name, `HRIR preset ${index} name`, 120),
+      description: optionalText(
+        preset.description,
+        `HRIR preset ${index} description`,
+        240
+      ),
       source: {
         licenseName: optionalText(source.license_name, "license name", 256),
         sourceUrl: optionalHttpUrl(source.source_url),

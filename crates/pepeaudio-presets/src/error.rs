@@ -10,6 +10,14 @@ pub enum CatalogError {
     InvalidRoot,
     #[error("HRIR catalog filesystem operation failed")]
     Filesystem(#[source] std::io::Error),
+    #[error("HRIR catalog metadata is not a direct regular file")]
+    UnsafeMetadata,
+    #[error("HRIR catalog metadata exceeds the {maximum}-byte limit")]
+    MetadataTooLarge { maximum: u64 },
+    #[error("HRIR catalog metadata line {line} is invalid: {reason}")]
+    InvalidMetadata { line: usize, reason: &'static str },
+    #[error("HRIR catalog metadata contains duplicate preset ID {preset_id}")]
+    DuplicateMetadata { preset_id: String },
     #[error("HRIR catalog contains more than {maximum} WAV presets")]
     TooManyPresets { maximum: usize },
     #[error("HRIR preset {file_name:?} is not a direct regular file")]

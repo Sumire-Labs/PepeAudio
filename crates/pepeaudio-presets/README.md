@@ -4,7 +4,10 @@ Startup-time catalog for operator-supplied HeSuVi HRIR WAV files.
 
 - Put direct `.wav` files in `PEPEAUDIO_HRIR_DIRECTORY`; subdirectories and
   non-WAV attribution documents are ignored.
-- Each filename stem becomes the stable preset ID and visible selector label.
+- Each filename stem remains the stable preset ID.
+- An optional direct `info.csv` in HeSuVi's `id;description` format supplies
+  human-readable selector names. Additional `/n/n` paragraphs become the
+  secondary description; missing entries fall back to the filename stem.
 - WAV symlinks, unsafe paths, over-limit assets, invalid 7/14-channel layouts,
   invalid samples, and unsafe DSP coefficients are rejected before Discord
   gateway startup.
@@ -12,6 +15,10 @@ Startup-time catalog for operator-supplied HeSuVi HRIR WAV files.
   immutable in-memory coefficients and never read the filesystem.
 - Third-party presets are not bundled. Operators remain responsible for source,
   license, attribution, and redistribution terms.
+
+`info.csv` is read only during startup and is bounded like the WAV catalog. Do
+not commit third-party HRIRs or their metadata to the PepeAudio source tree;
+mount them as operator-managed runtime data.
 
 Validate one file without starting the Bot:
 

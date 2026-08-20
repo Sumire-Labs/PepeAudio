@@ -49,6 +49,7 @@ export const demoPresets: readonly HrirPreset[] = [
   {
     id: "studio-neutral",
     name: "Studio Neutral",
+    description: "定位を自然に保つ、残響の少ない基準プリセット。",
     source: {
       licenseName: "Demo data",
       sourceUrl: null,
@@ -58,6 +59,7 @@ export const demoPresets: readonly HrirPreset[] = [
   {
     id: "wide-hall",
     name: "Wide Hall",
+    description: "広い音場と長めの残響を加えるデモプリセット。",
     source: {
       licenseName: "Demo data",
       sourceUrl: null,
@@ -67,6 +69,7 @@ export const demoPresets: readonly HrirPreset[] = [
   {
     id: "close-field",
     name: "Close Field",
+    description: "近い定位と控えめな空間感を重視したデモプリセット。",
     source: {
       licenseName: "Demo data",
       sourceUrl: null,

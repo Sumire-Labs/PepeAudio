@@ -13,5 +13,5 @@ tmp
 .env.*
 !config/.env.example
 secrets
-assets/hrir/imported
+assets/hrir
 assets/uploads

@@ -39,6 +39,7 @@ pub(crate) fn fixture_for_guild(event_capacity: usize, guild_id: GuildId) -> Fix
     let catalog = Arc::new(StaticHrirPresetCatalog::new([HrirPresetSummary {
         id: HrirPresetId::new("fixture-neutral").expect("preset ID"),
         display_name: "Fixture Neutral".into(),
+        description: Some("Compact API test HRIR".into()),
         source: HrirSourceMetadata {
             license_name: Some("CC0-1.0".into()),
             source_url: Some("https://example.test/hrir-source".into()),

@@ -141,6 +141,7 @@ fn selected_hrir_remains_visible_beyond_discords_option_limit() {
         .map(|index| HrirOption {
             id: format!("preset-{index}"),
             label: format!("Preset {index}"),
+            description: None,
         })
         .collect::<Vec<_>>();
 
@@ -151,4 +152,22 @@ fn selected_hrir_remains_visible_beyond_discords_option_limit() {
         visible.last().map(|option| option.id.as_str()),
         Some("preset-29")
     );
+}
+
+#[test]
+fn hrir_selector_exposes_a_bounded_secondary_description() {
+    let codec = ComponentIdCodec::new([1; 32]).expect("codec");
+    let description = "A detailed spatial preset description ".repeat(4);
+    let options = [HrirOption {
+        id: "dht".into(),
+        label: "Dolby Home Theater v4".into(),
+        description: Some(description),
+    }];
+    let message = build_now_panel(&snapshot(), &codec, &options).expect("valid panel");
+    let json = serde_json::to_value(message).expect("serialize");
+    let serialized = json.to_string();
+
+    assert!(serialized.contains("Dolby Home Theater v4"));
+    assert!(serialized.contains("A detailed spatial preset description"));
+    assert!(!serialized.contains(&"description ".repeat(4)));
 }

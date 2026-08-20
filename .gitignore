@@ -23,8 +23,10 @@ target/
 /tmp/
 *.log
 
-# Imported media and HRIR presets are runtime data. Keep only documentation
-# and intentionally licensed built-in assets under version control.
+# Imported media and HRIR presets are runtime data. Keep only the placeholder;
+# third-party WAVs and metadata must not be committed with the MIT source.
+/assets/hrir/*
+!/assets/hrir/imported/
 /assets/hrir/imported/*
 !/assets/hrir/imported/.gitkeep
 /assets/uploads/*

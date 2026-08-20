@@ -81,6 +81,7 @@ fn development_preset(id: &str, display_name: &str) -> HrirPresetSummary {
     HrirPresetSummary {
         id: HrirPresetId::new(id).expect("hard-coded development preset ID is valid"),
         display_name: display_name.into(),
+        description: Some("Development-only HRIR preset".into()),
         source: HrirSourceMetadata {
             license_name: Some("Development fixture".into()),
             source_url: None,

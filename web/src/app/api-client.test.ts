@@ -176,6 +176,7 @@ describe("parseHrirPresetCatalog", () => {
       presets: [{
         id: "studio-neutral",
         display_name: "Studio Neutral",
+        description: "Balanced room response",
         source: {
           license_name: "CC0-1.0",
           source_url: "https://example.test/source",
@@ -185,6 +186,7 @@ describe("parseHrirPresetCatalog", () => {
     }, guildId)).toEqual([{
       id: "studio-neutral",
       name: "Studio Neutral",
+      description: "Balanced room response",
       source: {
         licenseName: "CC0-1.0",
         sourceUrl: "https://example.test/source",
@@ -217,6 +219,23 @@ describe("parseHrirPresetCatalog", () => {
         source: { source_url: "javascript:alert(1)" }
       }]
     }, guildId)).toThrow("source URL is invalid");
+
+    expect(() => parseHrirPresetCatalog({
+      guild_id: guildId,
+      presets: [{
+        id: "unsafe-description",
+        display_name: "Unsafe",
+        description: "line one\nline two",
+        source: {}
+      }]
+    }, guildId)).toThrow("description is invalid");
+  });
+
+  it("accepts a missing optional description", () => {
+    expect(parseHrirPresetCatalog({
+      guild_id: guildId,
+      presets: [{ id: "plain", display_name: "Plain", source: {} }]
+    }, guildId)[0]?.description).toBeNull();
   });
 });
 

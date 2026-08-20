@@ -109,6 +109,8 @@ pub struct HrirPresetMetadata {
     /// Owning guild, or `None` for an operator-installed global preset.
     pub owner_guild_id: Option<GuildId>,
     pub display_name: String,
+    /// Optional short explanation shown below the preset name.
+    pub description: Option<String>,
     /// Opaque path or object key, never the binary data itself.
     pub storage_key: String,
     /// Lower-case hexadecimal SHA-256 of the immutable source file.

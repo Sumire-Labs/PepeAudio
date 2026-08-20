@@ -33,12 +33,13 @@ impl PostgresStorage {
             let result = sqlx::query(
                 r"
                 INSERT INTO hrir_presets (
-                    preset_id, owner_guild_id, display_name, storage_key, sha256_hex,
+                    preset_id, owner_guild_id, display_name, description, storage_key, sha256_hex,
                     sample_rate, channel_layout, file_size_bytes, license_name,
                     license_url, attribution
-                ) VALUES ($1, NULL, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+                ) VALUES ($1, NULL, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
                 ON CONFLICT (preset_id) DO UPDATE SET
                     display_name = EXCLUDED.display_name,
+                    description = EXCLUDED.description,
                     storage_key = EXCLUDED.storage_key,
                     sha256_hex = EXCLUDED.sha256_hex,
                     sample_rate = EXCLUDED.sample_rate,
@@ -49,6 +50,7 @@ impl PostgresStorage {
             )
             .bind(preset.preset_id.as_str())
             .bind(&preset.display_name)
+            .bind(&preset.description)
             .bind(&preset.storage_key)
             .bind(&preset.sha256_hex)
             .bind(i32::try_from(preset.sample_rate).map_err(|_| {
@@ -92,7 +94,7 @@ impl HrirPresetRepository for PostgresStorage {
     ) -> StorageResult<Option<HrirPresetMetadata>> {
         let row = sqlx::query_as::<_, HrirPresetRow>(
             r"
-            SELECT preset_id, owner_guild_id, display_name, storage_key, sha256_hex,
+            SELECT preset_id, owner_guild_id, display_name, description, storage_key, sha256_hex,
                    sample_rate, channel_layout, file_size_bytes, license_name,
                    license_url, attribution, created_at
             FROM hrir_presets WHERE preset_id = $1
@@ -107,7 +109,7 @@ impl HrirPresetRepository for PostgresStorage {
     async fn list_hrir_presets(&self, guild_id: GuildId) -> StorageResult<Vec<HrirPresetMetadata>> {
         let rows = sqlx::query_as::<_, HrirPresetRow>(
             r#"
-            SELECT preset_id, owner_guild_id, display_name, storage_key, sha256_hex,
+            SELECT preset_id, owner_guild_id, display_name, description, storage_key, sha256_hex,
                    sample_rate, channel_layout, file_size_bytes, license_name,
                    license_url, attribution, created_at
             FROM hrir_presets
@@ -129,11 +131,11 @@ impl HrirPresetRepository for PostgresStorage {
         let row = sqlx::query_as::<_, HrirPresetRow>(
             r"
             INSERT INTO hrir_presets (
-                preset_id, owner_guild_id, display_name, storage_key, sha256_hex,
+                preset_id, owner_guild_id, display_name, description, storage_key, sha256_hex,
                 sample_rate, channel_layout, file_size_bytes, license_name,
                 license_url, attribution
-            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
-            RETURNING preset_id, owner_guild_id, display_name, storage_key, sha256_hex,
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+            RETURNING preset_id, owner_guild_id, display_name, description, storage_key, sha256_hex,
                       sample_rate, channel_layout, file_size_bytes, license_name,
                       license_url, attribution, created_at
             ",
@@ -141,6 +143,7 @@ impl HrirPresetRepository for PostgresStorage {
         .bind(preset.preset_id.as_str())
         .bind(preset.owner_guild_id.map(|id| id.to_string()))
         .bind(&preset.display_name)
+        .bind(&preset.description)
         .bind(&preset.storage_key)
         .bind(&preset.sha256_hex)
         .bind(

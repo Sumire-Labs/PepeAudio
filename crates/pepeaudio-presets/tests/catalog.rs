@@ -31,6 +31,50 @@ fn loads_and_prepares_direct_hesuvi_wav_files_in_stable_order() {
 }
 
 #[test]
+fn applies_hesuvi_info_without_changing_the_stable_filename_id() {
+    let directory = tempfile::tempdir().expect("temp directory");
+    write_hesuvi(directory.path().join("dht.wav").as_path(), 48_000, 14);
+    std::fs::write(
+        directory.path().join("info.csv"),
+        "dht;Dolby Home Theater v4 Headphone Surround Virtualizer\n",
+    )
+    .expect("metadata fixture");
+
+    let catalog = HrirCatalog::load(directory.path(), CatalogLimits::default()).expect("catalog");
+    let descriptor = catalog.descriptors().pop().expect("descriptor");
+    assert_eq!(descriptor.id.as_str(), "dht");
+    assert_eq!(descriptor.display_name, "Dolby Home Theater v4");
+    assert_eq!(
+        descriptor.description.as_deref(),
+        Some("Headphone Surround Virtualizer.")
+    );
+    assert!(
+        catalog
+            .get(&HrirPresetId::new("dht").expect("ID"))
+            .is_some()
+    );
+}
+
+#[test]
+fn exposes_additional_hesuvi_paragraphs_as_a_description() {
+    let directory = tempfile::tempdir().expect("temp directory");
+    write_hesuvi(directory.path().join("ssc_ny.wav").as_path(), 48_000, 14);
+    std::fs::write(
+        directory.path().join("info.csv"),
+        "ssc_ny;Spatial Sound Card — New York/n/nDo not apply an additional upmix.\n",
+    )
+    .expect("metadata fixture");
+
+    let catalog = HrirCatalog::load(directory.path(), CatalogLimits::default()).expect("catalog");
+    let descriptor = catalog.descriptors().pop().expect("descriptor");
+    assert_eq!(descriptor.display_name, "Spatial Sound Card — New York");
+    assert_eq!(
+        descriptor.description.as_deref(),
+        Some("Short room envelope. Do not use any upmix.")
+    );
+}
+
+#[test]
 fn rejects_wav_assets_before_reading_when_size_limit_is_exceeded() {
     let directory = tempfile::tempdir().expect("temp directory");
     write_hesuvi(directory.path().join("Large.wav").as_path(), 48_000, 14);

@@ -68,6 +68,7 @@ async fn catalog_exposes_only_public_metadata_and_string_snowflakes() {
             "presets": [{
                 "id": "fixture-neutral",
                 "display_name": "Fixture Neutral",
+                "description": "Compact API test HRIR",
                 "source": {
                     "license_name": "CC0-1.0",
                     "source_url": "https://example.test/hrir-source",
