@@ -29,6 +29,7 @@ docker compose \
 
 PEPEAUDIO_SPOTIFY_CLIENT_ID=compose-contract-client-id \
 PEPEAUDIO_SPOTIFY_CLIENT_SECRET_SOURCE=./secrets/spotify_client_secret.txt.example \
+PEPEAUDIO_SPOTIFY_MARKET=JP \
     docker compose \
         -f compose.yaml \
         -f compose.discord.yaml \
@@ -45,6 +46,13 @@ PEPEAUDIO_APPLE_MUSIC_PRIVATE_KEY_SOURCE=./secrets/apple_music_private_key.p8.ex
         -f compose.catalog.apple.yaml \
         --profile discord \
         config --quiet
+
+docker compose \
+    -f compose.yaml \
+    -f compose.discord.yaml \
+    -f compose.catalog.public-metadata.yaml \
+    --profile discord \
+    config --quiet
 
 PEPEAUDIO_DOMAIN=audio.example.test \
 PEPEAUDIO_DISCORD_CLIENT_ID=100000000000000002 \
@@ -71,3 +79,40 @@ PEPEAUDIO_DISCORD_CLIENT_SECRET_SOURCE=./secrets/discord_client_secret.txt.examp
         config --format json > "$model_path"
 
 node scripts/assert-compose-model.mjs "$model_path"
+
+PEPEAUDIO_DOMAIN=audio.example.test \
+PEPEAUDIO_DISCORD_CLIENT_ID=100000000000000002 \
+PEPEAUDIO_VALKEY_KEYSPACE=pepeaudio-production \
+PEPEAUDIO_SHARD_TOTAL=4 \
+PEPEAUDIO_DISCORD_CLIENT_SECRET_SOURCE=./secrets/discord_client_secret.txt.example \
+PEPEAUDIO_SPOTIFY_CLIENT_ID=compose-contract-client-id \
+PEPEAUDIO_SPOTIFY_CLIENT_SECRET_SOURCE=./secrets/spotify_client_secret.txt.example \
+PEPEAUDIO_SPOTIFY_MARKET=JP \
+PEPEAUDIO_APPLE_MUSIC_TEAM_ID=ABCDE12345 \
+PEPEAUDIO_APPLE_MUSIC_KEY_ID=KEY1234567 \
+PEPEAUDIO_APPLE_MUSIC_PRIVATE_KEY_SOURCE=./secrets/apple_music_private_key.p8.example \
+    docker compose \
+        -f compose.yaml \
+        -f compose.discord.yaml \
+        -f compose.catalog.spotify.yaml \
+        -f compose.catalog.apple.yaml \
+        -f compose.production.yaml \
+        --profile production \
+        config --format json > "$model_path"
+
+node scripts/assert-provider-compose-model.mjs "$model_path" credentials
+
+PEPEAUDIO_DOMAIN=audio.example.test \
+PEPEAUDIO_DISCORD_CLIENT_ID=100000000000000002 \
+PEPEAUDIO_VALKEY_KEYSPACE=pepeaudio-production \
+PEPEAUDIO_SHARD_TOTAL=4 \
+PEPEAUDIO_DISCORD_CLIENT_SECRET_SOURCE=./secrets/discord_client_secret.txt.example \
+    docker compose \
+        -f compose.yaml \
+        -f compose.discord.yaml \
+        -f compose.catalog.public-metadata.yaml \
+        -f compose.production.yaml \
+        --profile production \
+        config --format json > "$model_path"
+
+node scripts/assert-provider-compose-model.mjs "$model_path" public-metadata

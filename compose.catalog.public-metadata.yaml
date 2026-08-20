@@ -1,0 +1,9 @@
+# Explicit keyless catalog mode for Spotify tracks and Apple Music songs/albums.
+# It reads only bounded public metadata and never mounts provider credentials.
+services:
+  bot:
+    environment:
+      PEPEAUDIO_ENABLE_SITE_EXTRACTORS: "true"
+      PEPEAUDIO_ENABLE_CROSS_SERVICE_MATCHING: "true"
+      PEPEAUDIO_ENABLE_SPOTIFY_PUBLIC_METADATA: "true"
+      PEPEAUDIO_ENABLE_APPLE_MUSIC_PUBLIC_METADATA: "true"

@@ -110,6 +110,12 @@ fn media_failure_message(error: &crate::ResolveError) -> Option<&'static str> {
         crate::ResolveError::SpotifyPlaylistRequiresUserAuthorization => Some(
             "Spotifyプレイリストの取り込みにはSpotifyユーザー認証が必要なため、現在は利用できません。",
         ),
+        crate::ResolveError::SpotifyAlbumRequiresCredentials => Some(
+            "Spotifyアルバムの取り込みには、運用側でSpotify credential overlayの有効化が必要です。",
+        ),
+        crate::ResolveError::AppleMusicPlaylistRequiresDeveloperCredentials => Some(
+            "Apple Musicプレイリストの取り込みにはApple Developerの認証情報が必要です。曲とアルバムのリンクは認証情報なしで利用できます。",
+        ),
         crate::ResolveError::CrossServiceMatchingDisabled => {
             Some("Spotify・Apple Musicリンクからの音源照合は、このBotでは無効です。")
         }
@@ -228,9 +234,19 @@ mod tests {
         let spotify =
             media_failure_message(&crate::ResolveError::SpotifyPlaylistRequiresUserAuthorization)
                 .expect("specific copy");
+        let spotify_album =
+            media_failure_message(&crate::ResolveError::SpotifyAlbumRequiresCredentials)
+                .expect("Spotify album copy");
+        let apple = media_failure_message(
+            &crate::ResolveError::AppleMusicPlaylistRequiresDeveloperCredentials,
+        )
+        .expect("specific copy");
         let no_match =
             media_failure_message(&crate::ResolveError::NoSearchMatch).expect("specific copy");
         assert!(spotify.contains("Spotifyユーザー認証"));
+        assert!(spotify_album.contains("credential overlay"));
+        assert!(apple.contains("Apple Developer"));
+        assert!(apple.contains("曲とアルバム"));
         assert!(no_match.contains("YouTube"));
         assert!(media_failure_message(&crate::ResolveError::Failed("secret".into())).is_none());
     }

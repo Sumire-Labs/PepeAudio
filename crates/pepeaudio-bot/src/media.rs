@@ -90,6 +90,10 @@ pub enum ResolveError {
     CatalogProviderUnavailable,
     #[error("Spotify playlist import requires Spotify user authorization")]
     SpotifyPlaylistRequiresUserAuthorization,
+    #[error("Spotify album import requires configured app credentials")]
+    SpotifyAlbumRequiresCredentials,
+    #[error("Apple Music playlist import requires Apple developer credentials")]
+    AppleMusicPlaylistRequiresDeveloperCredentials,
     #[error("playlist contains more items than the configured limit")]
     PlaylistTooLarge,
     #[error("the provider did not expose one safe direct audio stream")]

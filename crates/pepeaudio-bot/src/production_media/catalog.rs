@@ -162,13 +162,31 @@ pub(super) fn map_catalog_error(error: CatalogError) -> ResolveError {
         CatalogError::SpotifyPlaylistAccessDenied => {
             ResolveError::SpotifyPlaylistRequiresUserAuthorization
         }
+        CatalogError::PublicMetadataUnsupported {
+            provider: CatalogProvider::Spotify,
+            kind: CatalogItemKind::Album,
+        } => ResolveError::SpotifyAlbumRequiresCredentials,
+        CatalogError::PublicMetadataUnsupported {
+            provider: CatalogProvider::Spotify,
+            kind: CatalogItemKind::Playlist,
+        } => ResolveError::SpotifyPlaylistRequiresUserAuthorization,
+        CatalogError::AppleMusicPlaylistRequiresCredentials => {
+            ResolveError::AppleMusicPlaylistRequiresDeveloperCredentials
+        }
+        CatalogError::PublicMetadataUnsupported {
+            provider: CatalogProvider::AppleMusic,
+            kind: CatalogItemKind::Playlist,
+        } => ResolveError::AppleMusicPlaylistRequiresDeveloperCredentials,
         _ => ResolveError::Failed("catalog metadata resolution failed".into()),
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::bounded_text;
+    use pepeaudio_catalog::{CatalogError, CatalogItemKind, CatalogProvider};
+
+    use super::{bounded_text, map_catalog_error};
+    use crate::ResolveError;
 
     #[test]
     fn catalog_search_text_is_utf8_safe_at_the_media_boundary() {
@@ -177,5 +195,27 @@ mod tests {
         assert!(bounded.len() <= 200);
         assert!(value.starts_with(&bounded));
         assert!(!bounded.is_empty());
+    }
+
+    #[test]
+    fn public_collection_limits_keep_specific_safe_error_types() {
+        assert_eq!(
+            map_catalog_error(CatalogError::PublicMetadataUnsupported {
+                provider: CatalogProvider::Spotify,
+                kind: CatalogItemKind::Album,
+            }),
+            ResolveError::SpotifyAlbumRequiresCredentials
+        );
+        assert_eq!(
+            map_catalog_error(CatalogError::PublicMetadataUnsupported {
+                provider: CatalogProvider::Spotify,
+                kind: CatalogItemKind::Playlist,
+            }),
+            ResolveError::SpotifyPlaylistRequiresUserAuthorization
+        );
+        assert_eq!(
+            map_catalog_error(CatalogError::AppleMusicPlaylistRequiresCredentials),
+            ResolveError::AppleMusicPlaylistRequiresDeveloperCredentials
+        );
     }
 }

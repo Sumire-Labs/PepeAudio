@@ -99,6 +99,6 @@ fn normalize_isrc(value: &str) -> Option<String> {
         .then(|| String::from_utf8(normalized).expect("ASCII ISRC"))
 }
 
-fn valid_spotify_id(value: &str) -> bool {
+pub(super) fn valid_spotify_id(value: &str) -> bool {
     value.len() == 22 && value.bytes().all(|byte| byte.is_ascii_alphanumeric())
 }

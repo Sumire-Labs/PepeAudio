@@ -133,6 +133,8 @@ for (const key of [
   "PEPEAUDIO_DENO_PATH",
   "PEPEAUDIO_DENO_DIR",
   "PEPEAUDIO_ENABLE_CROSS_SERVICE_MATCHING",
+  "PEPEAUDIO_ENABLE_SPOTIFY_PUBLIC_METADATA",
+  "PEPEAUDIO_ENABLE_APPLE_MUSIC_PUBLIC_METADATA",
   "PEPEAUDIO_CATALOG_MAX_ITEMS",
 ]) {
   assert(key in bot.environment, `Bot environment is missing ${key}`);
@@ -149,6 +151,14 @@ assert(bot.environment.PEPEAUDIO_ENABLE_SITE_EXTRACTORS === "false", "site extra
 assert(
   bot.environment.PEPEAUDIO_ENABLE_CROSS_SERVICE_MATCHING === "false",
   "cross-service matching must default off",
+);
+assert(
+  bot.environment.PEPEAUDIO_ENABLE_SPOTIFY_PUBLIC_METADATA === "false",
+  "Spotify public metadata must default off",
+);
+assert(
+  bot.environment.PEPEAUDIO_ENABLE_APPLE_MUSIC_PUBLIC_METADATA === "false",
+  "Apple Music public metadata must default off",
 );
 assert(bot.environment.PEPEAUDIO_YTDLP_PATH === "/usr/local/bin/yt-dlp", "Bot yt-dlp path changed");
 assert(bot.environment.PEPEAUDIO_DENO_PATH === "/usr/local/bin/deno", "Bot Deno path changed");

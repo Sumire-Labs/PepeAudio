@@ -35,14 +35,12 @@ impl ShutdownDeadline {
 pub(crate) async fn signal() {
     #[cfg(unix)]
     {
-        let mut terminate =
-            match tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate()) {
-                Ok(signal) => signal,
-                Err(_) => {
-                    let _ = tokio::signal::ctrl_c().await;
-                    return;
-                }
-            };
+        let Ok(mut terminate) =
+            tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())
+        else {
+            let _ = tokio::signal::ctrl_c().await;
+            return;
+        };
         tokio::select! {
             _ = tokio::signal::ctrl_c() => {}
             _ = terminate.recv() => {}

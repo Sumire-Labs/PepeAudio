@@ -1,7 +1,8 @@
 use std::{sync::Arc, time::Duration};
 
 use pepeaudio_catalog::{
-    AppleMusicCatalog, CatalogResolver, CatalogResolverBuilder, SpotifyCatalog,
+    AppleMusicCatalog, AppleMusicPublicCatalog, CatalogResolver, CatalogResolverBuilder,
+    SpotifyCatalog, SpotifyPublicCatalog,
 };
 use pepeaudio_config::BotRuntimeConfig;
 use pepeaudio_media::ManagedDownloadJanitor;
@@ -172,25 +173,89 @@ fn build_catalog_resolver(runtime: &BotRuntimeConfig) -> Result<Option<CatalogRe
             usize::try_from(runtime.catalog.max_items.get()).map_err(|_| BotError::MediaAdapter)?,
         )
         .map_err(|_| BotError::MediaAdapter)?;
-    if let Some(spotify) = &runtime.catalog.spotify {
-        let provider = SpotifyCatalog::new(
-            spotify.client_id.expose_secret().to_owned(),
-            spotify.client_secret.expose_secret().to_owned(),
-            spotify.market.clone(),
-        )
-        .map_err(|_| BotError::MediaAdapter)?;
-        builder = builder.spotify(provider);
+    let (spotify_mode, apple_music_mode) = catalog_provider_modes(
+        CatalogProviderSelection {
+            credentials_configured: runtime.catalog.spotify.is_some(),
+            public_metadata_enabled: runtime.catalog.spotify_public_metadata_enabled,
+        },
+        CatalogProviderSelection {
+            credentials_configured: runtime.catalog.apple_music.is_some(),
+            public_metadata_enabled: runtime.catalog.apple_music_public_metadata_enabled,
+        },
+    );
+    match spotify_mode {
+        CatalogProviderMode::Credentials => {
+            let spotify = runtime
+                .catalog
+                .spotify
+                .as_ref()
+                .expect("credential mode requires Spotify configuration");
+            let provider = SpotifyCatalog::new(
+                spotify.client_id.expose_secret().to_owned(),
+                spotify.client_secret.expose_secret().to_owned(),
+                spotify.market.clone(),
+            )
+            .map_err(|_| BotError::MediaAdapter)?;
+            builder = builder.spotify(provider);
+        }
+        CatalogProviderMode::PublicMetadata => {
+            let provider = SpotifyPublicCatalog::new().map_err(|_| BotError::MediaAdapter)?;
+            builder = builder.spotify_public(provider);
+        }
+        CatalogProviderMode::Disabled => {}
     }
-    if let Some(apple) = &runtime.catalog.apple_music {
-        let provider = AppleMusicCatalog::new(
-            apple.team_id.clone(),
-            apple.key_id.clone(),
-            apple.private_key.expose_secret(),
-        )
-        .map_err(|_| BotError::MediaAdapter)?;
-        builder = builder.apple_music(provider);
+    match apple_music_mode {
+        CatalogProviderMode::Credentials => {
+            let apple = runtime
+                .catalog
+                .apple_music
+                .as_ref()
+                .expect("credential mode requires Apple Music configuration");
+            let provider = AppleMusicCatalog::new(
+                apple.team_id.clone(),
+                apple.key_id.clone(),
+                apple.private_key.expose_secret(),
+            )
+            .map_err(|_| BotError::MediaAdapter)?;
+            builder = builder.apple_music(provider);
+        }
+        CatalogProviderMode::PublicMetadata => {
+            let provider = AppleMusicPublicCatalog::new().map_err(|_| BotError::MediaAdapter)?;
+            builder = builder.apple_music_public(provider);
+        }
+        CatalogProviderMode::Disabled => {}
     }
     Ok(Some(builder.build()))
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum CatalogProviderMode {
+    Disabled,
+    PublicMetadata,
+    Credentials,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+struct CatalogProviderSelection {
+    credentials_configured: bool,
+    public_metadata_enabled: bool,
+}
+
+const fn provider_mode(selection: CatalogProviderSelection) -> CatalogProviderMode {
+    if selection.credentials_configured {
+        CatalogProviderMode::Credentials
+    } else if selection.public_metadata_enabled {
+        CatalogProviderMode::PublicMetadata
+    } else {
+        CatalogProviderMode::Disabled
+    }
+}
+
+const fn catalog_provider_modes(
+    spotify: CatalogProviderSelection,
+    apple_music: CatalogProviderSelection,
+) -> (CatalogProviderMode, CatalogProviderMode) {
+    (provider_mode(spotify), provider_mode(apple_music))
 }
 
 async fn connect_storage(runtime: &BotRuntimeConfig) -> Result<StorageServices, BotError> {
@@ -273,4 +338,55 @@ async fn synchronize_catalog(
         .synchronize_global_hrir_presets(&presets)
         .await
         .map_err(|_| BotError::HrirCatalog)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{CatalogProviderMode, CatalogProviderSelection, catalog_provider_modes};
+
+    const DISABLED: CatalogProviderSelection = CatalogProviderSelection {
+        credentials_configured: false,
+        public_metadata_enabled: false,
+    };
+    const PUBLIC: CatalogProviderSelection = CatalogProviderSelection {
+        credentials_configured: false,
+        public_metadata_enabled: true,
+    };
+    const CREDENTIALS: CatalogProviderSelection = CatalogProviderSelection {
+        credentials_configured: true,
+        public_metadata_enabled: false,
+    };
+
+    #[test]
+    fn spotify_credentials_do_not_enable_apple_public_metadata() {
+        assert_eq!(
+            catalog_provider_modes(CREDENTIALS, DISABLED),
+            (
+                CatalogProviderMode::Credentials,
+                CatalogProviderMode::Disabled
+            )
+        );
+    }
+
+    #[test]
+    fn apple_credentials_do_not_enable_spotify_public_metadata() {
+        assert_eq!(
+            catalog_provider_modes(DISABLED, CREDENTIALS),
+            (
+                CatalogProviderMode::Disabled,
+                CatalogProviderMode::Credentials
+            )
+        );
+    }
+
+    #[test]
+    fn public_metadata_mode_explicitly_enables_both_providers() {
+        assert_eq!(
+            catalog_provider_modes(PUBLIC, PUBLIC),
+            (
+                CatalogProviderMode::PublicMetadata,
+                CatalogProviderMode::PublicMetadata
+            )
+        );
+    }
 }

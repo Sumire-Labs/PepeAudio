@@ -1,8 +1,9 @@
 use url::Url;
 
 use crate::{
-    AppleMusicCatalog, CatalogCollection, CatalogError, CatalogProvider, CatalogReference,
-    CatalogResult, SpotifyCatalog, parse_catalog_url, provider::ProviderCatalog,
+    AppleMusicCatalog, AppleMusicPublicCatalog, CatalogCollection, CatalogError, CatalogProvider,
+    CatalogReference, CatalogResult, SpotifyCatalog, SpotifyPublicCatalog, parse_catalog_url,
+    provider::ProviderCatalog,
 };
 
 const DEFAULT_COLLECTION_LIMIT: usize = 25;
@@ -10,8 +11,8 @@ const HARD_COLLECTION_LIMIT: usize = 100;
 
 pub struct CatalogResolverBuilder {
     collection_limit: usize,
-    spotify: Option<SpotifyCatalog>,
-    apple_music: Option<AppleMusicCatalog>,
+    spotify: Option<Box<dyn ProviderCatalog>>,
+    apple_music: Option<Box<dyn ProviderCatalog>>,
 }
 
 impl Default for CatalogResolverBuilder {
@@ -46,13 +47,25 @@ impl CatalogResolverBuilder {
 
     #[must_use]
     pub fn spotify(mut self, client: SpotifyCatalog) -> Self {
-        self.spotify = Some(client);
+        self.spotify = Some(Box::new(client));
+        self
+    }
+
+    #[must_use]
+    pub fn spotify_public(mut self, client: SpotifyPublicCatalog) -> Self {
+        self.spotify = Some(Box::new(client));
         self
     }
 
     #[must_use]
     pub fn apple_music(mut self, client: AppleMusicCatalog) -> Self {
-        self.apple_music = Some(client);
+        self.apple_music = Some(Box::new(client));
+        self
+    }
+
+    #[must_use]
+    pub fn apple_music_public(mut self, client: AppleMusicPublicCatalog) -> Self {
+        self.apple_music = Some(Box::new(client));
         self
     }
 
@@ -68,8 +81,8 @@ impl CatalogResolverBuilder {
 
 pub struct CatalogResolver {
     collection_limit: usize,
-    spotify: Option<SpotifyCatalog>,
-    apple_music: Option<AppleMusicCatalog>,
+    spotify: Option<Box<dyn ProviderCatalog>>,
+    apple_music: Option<Box<dyn ProviderCatalog>>,
 }
 
 impl CatalogResolver {

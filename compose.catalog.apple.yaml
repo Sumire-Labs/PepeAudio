@@ -1,3 +1,5 @@
+# Credential-backed Apple Music mode, including catalog playlists. For the
+# secret-free song/album fallback, use compose.catalog.public-metadata.yaml.
 services:
   bot:
     environment:

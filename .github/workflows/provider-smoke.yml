@@ -66,9 +66,11 @@ jobs:
           chmod 0755 "$tool_dir/deno"
           test "$("$tool_dir/yt-dlp" --version)" = 2026.06.09
           "$tool_dir/deno" --version | sed -n '1p' | grep -Eq '^deno 2[.]8[.]1 '
-          echo "PEPEAUDIO_YTDLP_PATH=$tool_dir/yt-dlp" >> "$GITHUB_ENV"
-          echo "PEPEAUDIO_DENO_PATH=$tool_dir/deno" >> "$GITHUB_ENV"
-          echo "PEPEAUDIO_DENO_DIR=$RUNNER_TEMP/pepeaudio-deno" >> "$GITHUB_ENV"
+          {
+            echo "PEPEAUDIO_YTDLP_PATH=$tool_dir/yt-dlp"
+            echo "PEPEAUDIO_DENO_PATH=$tool_dir/deno"
+            echo "PEPEAUDIO_DENO_DIR=$RUNNER_TEMP/pepeaudio-deno"
+          } >> "$GITHUB_ENV"
 
       - name: Exercise managed provider ingestion
         env:

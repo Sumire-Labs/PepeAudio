@@ -49,9 +49,36 @@ MSYS_NO_PATHCONV=1 docker run --rm --network none \
         sh /workspace/scripts/prepare-production-secrets.sh >/dev/null
         sh /workspace/scripts/prepare-production-secrets.sh --check >/dev/null
 
+        if sh /workspace/scripts/prepare-production-secrets.sh \
+            --spotify >/dev/null 2>&1
+        then
+            echo "prepare accepted a missing Spotify secret" >&2
+            exit 1
+        fi
+        printf x > /workspace/secrets/spotify_client_secret.txt
+        chmod 0600 /workspace/secrets/spotify_client_secret.txt
+        sh /workspace/scripts/prepare-production-secrets.sh --spotify >/dev/null
+
+        if sh /workspace/scripts/prepare-production-secrets.sh \
+            --apple-music >/dev/null 2>&1
+        then
+            echo "prepare accepted a missing Apple Music secret" >&2
+            exit 1
+        fi
+        printf x > /workspace/secrets/apple_music_private_key.p8
+        chmod 0600 /workspace/secrets/apple_music_private_key.p8
+        sh /workspace/scripts/prepare-production-secrets.sh \
+            --spotify --apple-music >/dev/null
+        sh /workspace/scripts/prepare-production-secrets.sh \
+            --check --spotify --apple-music >/dev/null
+        test "$(stat --printf "%u:%g:%a" \
+            /workspace/secrets/spotify_client_secret.txt)" = "0:10001:440"
+        test "$(stat --printf "%u:%g:%a" \
+            /workspace/secrets/apple_music_private_key.p8)" = "0:10001:440"
+
         chmod 0644 /workspace/secrets/database_runtime_url.txt
         if sh /workspace/scripts/prepare-production-secrets.sh \
-            --check >/dev/null 2>&1
+            --check --spotify --apple-music >/dev/null 2>&1
         then
             echo "check accepted mode 0644" >&2
             exit 1

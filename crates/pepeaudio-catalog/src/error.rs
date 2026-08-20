@@ -1,4 +1,4 @@
-use crate::CatalogProvider;
+use crate::{CatalogItemKind, CatalogProvider};
 
 pub type CatalogResult<T> = Result<T, CatalogError>;
 
@@ -16,6 +16,13 @@ pub enum CatalogError {
         "Spotify playlist metadata requires an authorized owner or collaborator user and is unavailable to the app-only client"
     )]
     SpotifyPlaylistAccessDenied,
+    #[error("credential-free {provider} metadata does not support {kind} links")]
+    PublicMetadataUnsupported {
+        provider: CatalogProvider,
+        kind: CatalogItemKind,
+    },
+    #[error("Apple Music playlist metadata requires configured developer credentials")]
+    AppleMusicPlaylistRequiresCredentials,
     #[error("{0} denied access to the requested catalog item")]
     AccessDenied(CatalogProvider),
     #[error("{provider} rate limited the catalog request")]

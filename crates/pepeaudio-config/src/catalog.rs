@@ -7,6 +7,8 @@ use crate::{
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct CatalogConfig {
     pub cross_service_matching_enabled: bool,
+    pub spotify_public_metadata_enabled: bool,
+    pub apple_music_public_metadata_enabled: bool,
     pub max_items: NonZeroU32,
     pub spotify: Option<SpotifyCatalogConfig>,
     pub apple_music: Option<AppleMusicCatalogConfig>,
@@ -37,21 +39,36 @@ pub(crate) fn load_catalog(
     if !enabled {
         return Ok(CatalogConfig {
             cross_service_matching_enabled: false,
+            spotify_public_metadata_enabled: false,
+            apple_music_public_metadata_enabled: false,
             max_items,
             spotify: None,
             apple_music: None,
         });
     }
 
+    let spotify_public_metadata_enabled =
+        optional_bool(source, "PEPEAUDIO_ENABLE_SPOTIFY_PUBLIC_METADATA", false)?;
+    let apple_music_public_metadata_enabled = optional_bool(
+        source,
+        "PEPEAUDIO_ENABLE_APPLE_MUSIC_PUBLIC_METADATA",
+        false,
+    )?;
     let spotify = load_spotify(source)?;
     let apple_music = load_apple_music(source)?;
-    if spotify.is_none() && apple_music.is_none() {
+    if spotify.is_none()
+        && apple_music.is_none()
+        && !spotify_public_metadata_enabled
+        && !apple_music_public_metadata_enabled
+    {
         return Err(ConfigError::Inconsistent {
-            reason: "cross-service matching requires at least one complete catalog provider",
+            reason: "cross-service matching requires an explicitly enabled catalog provider",
         });
     }
     Ok(CatalogConfig {
         cross_service_matching_enabled: true,
+        spotify_public_metadata_enabled,
+        apple_music_public_metadata_enabled,
         max_items,
         spotify,
         apple_music,

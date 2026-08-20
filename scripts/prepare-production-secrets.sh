@@ -3,30 +3,40 @@ set -eu
 
 usage() {
     cat <<'EOF'
-Usage: sudo sh scripts/prepare-production-secrets.sh [--check]
+Usage: sudo sh scripts/prepare-production-secrets.sh [--check] [--spotify] [--apple-music]
 
-With no option, set every production Compose secret source to owner root,
+Set every selected production Compose secret source to owner root,
 PEPEAUDIO_RUNTIME_GID (default 10001), and mode 0440. --check performs the same
-validation without changing files. Secret values are never printed.
+validation without changing files. Add the matching option for each catalog
+provider overlay used by the deployment. Secret values are never printed.
 EOF
 }
 
 mode=prepare
-case "${1:-}" in
-    '')
-        ;;
-    --check)
-        mode=check
-        ;;
-    -h|--help)
-        usage
-        exit 0
-        ;;
-    *)
-        usage >&2
-        exit 2
-        ;;
-esac
+include_spotify=false
+include_apple_music=false
+while [ "$#" -gt 0 ]; do
+    case "$1" in
+        --check)
+            mode=check
+            ;;
+        --spotify)
+            include_spotify=true
+            ;;
+        --apple-music)
+            include_apple_music=true
+            ;;
+        -h|--help)
+            usage
+            exit 0
+            ;;
+        *)
+            usage >&2
+            exit 2
+            ;;
+    esac
+    shift
+done
 
 script_dir=$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd)
 repository_root=$(CDPATH='' cd -- "$script_dir/.." && pwd)
@@ -105,14 +115,24 @@ set_secret_metadata() {
     chmod 0440 -- "$path"
 }
 
-production_secret_sources assert_materialized_secret "$repository_root"
+selected_secret_sources() {
+    production_secret_sources "$1" "$2"
+    if [ "$include_spotify" = true ]; then
+        production_spotify_secret_sources "$1" "$2"
+    fi
+    if [ "$include_apple_music" = true ]; then
+        production_apple_music_secret_sources "$1" "$2"
+    fi
+}
+
+selected_secret_sources assert_materialized_secret "$repository_root"
 if [ "$mode" = prepare ]; then
-    production_secret_sources set_secret_metadata "$repository_root"
-    production_secret_sources assert_secret "$repository_root"
+    selected_secret_sources set_secret_metadata "$repository_root"
+    selected_secret_sources assert_secret "$repository_root"
     printf 'Prepared production secrets as root:%s with mode 0440.\n' \
         "$runtime_gid"
 else
-    production_secret_sources assert_secret "$repository_root"
+    selected_secret_sources assert_secret "$repository_root"
     printf 'Production secrets satisfy root:%s with mode 0440.\n' \
         "$runtime_gid"
 fi

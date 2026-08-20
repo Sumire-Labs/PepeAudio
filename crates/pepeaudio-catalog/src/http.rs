@@ -19,6 +19,7 @@ pub(crate) struct HttpRequest {
     url: Url,
     headers: Vec<(&'static str, String)>,
     body: Option<Vec<u8>>,
+    maximum_response_bytes: usize,
 }
 
 impl HttpRequest {
@@ -28,6 +29,7 @@ impl HttpRequest {
             url,
             headers: Vec::new(),
             body: None,
+            maximum_response_bytes: MAX_RESPONSE_BYTES,
         }
     }
 
@@ -40,11 +42,17 @@ impl HttpRequest {
                 "application/x-www-form-urlencoded".to_owned(),
             )],
             body: Some(body),
+            maximum_response_bytes: MAX_RESPONSE_BYTES,
         }
     }
 
     pub(crate) fn with_header(mut self, name: &'static str, value: String) -> Self {
         self.headers.push((name, value));
+        self
+    }
+
+    pub(crate) const fn with_response_limit(mut self, maximum_bytes: usize) -> Self {
+        self.maximum_response_bytes = maximum_bytes;
         self
     }
 
@@ -59,6 +67,11 @@ impl HttpRequest {
             .iter()
             .find(|(candidate, _)| candidate.eq_ignore_ascii_case(name))
             .map(|(_, value)| value.as_str())
+    }
+
+    #[cfg(test)]
+    pub(crate) const fn response_limit(&self) -> usize {
+        self.maximum_response_bytes
     }
 }
 
@@ -109,6 +122,7 @@ impl ReqwestTransport {
 #[async_trait]
 impl HttpTransport for ReqwestTransport {
     async fn execute(&self, request: HttpRequest) -> Result<HttpResponse, HttpError> {
+        let maximum_response_bytes = request.maximum_response_bytes.min(MAX_RESPONSE_BYTES);
         let mut builder = self.client.request(request.method, request.url);
         for (name, value) in request.headers {
             builder = builder.header(name, value);
@@ -122,7 +136,7 @@ impl HttpTransport for ReqwestTransport {
             .get(CONTENT_LENGTH)
             .and_then(|value| value.to_str().ok())
             .and_then(|value| value.parse::<u64>().ok())
-            .is_some_and(|length| length > MAX_RESPONSE_BYTES as u64)
+            .is_some_and(|length| length > maximum_response_bytes as u64)
         {
             return Err(HttpError::ResponseTooLarge);
         }
@@ -140,7 +154,7 @@ impl HttpTransport for ReqwestTransport {
                 .len()
                 .checked_add(chunk.len())
                 .ok_or(HttpError::ResponseTooLarge)?;
-            if next_length > MAX_RESPONSE_BYTES {
+            if next_length > maximum_response_bytes {
                 return Err(HttpError::ResponseTooLarge);
             }
             body.extend_from_slice(&chunk);
@@ -188,6 +202,14 @@ pub(crate) mod tests {
                 .get(index)
                 .and_then(|request| request.header(name))
                 .map(str::to_owned)
+        }
+
+        pub(crate) fn request_response_limit(&self, index: usize) -> Option<usize> {
+            self.requests
+                .lock()
+                .expect("requests lock")
+                .get(index)
+                .map(HttpRequest::response_limit)
         }
     }
 

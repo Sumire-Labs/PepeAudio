@@ -24,6 +24,16 @@ pub enum CatalogItemKind {
     Playlist,
 }
 
+impl fmt::Display for CatalogItemKind {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter.write_str(match self {
+            Self::Track => "track",
+            Self::Album => "album",
+            Self::Playlist => "playlist",
+        })
+    }
+}
+
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct CatalogReference {
     provider: CatalogProvider,

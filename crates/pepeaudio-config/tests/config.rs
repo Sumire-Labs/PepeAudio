@@ -66,6 +66,8 @@ fn loads_every_documented_setting_into_typed_sections() {
     assert!(!config.tools.site_extractors_enabled);
     assert_eq!(config.tools.deno_path, std::path::Path::new("deno"));
     assert!(!config.catalog.cross_service_matching_enabled);
+    assert!(!config.catalog.spotify_public_metadata_enabled);
+    assert!(!config.catalog.apple_music_public_metadata_enabled);
 }
 
 #[test]
@@ -297,7 +299,27 @@ fn disabled_catalog_matching_does_not_read_optional_secret_files() {
 }
 
 #[test]
-fn enabled_catalog_matching_requires_complete_providers_and_site_tools() {
+fn enabled_catalog_matching_allows_public_metadata_but_rejects_partial_credentials() {
+    let no_provider = valid_source()
+        .with("PEPEAUDIO_ENABLE_SITE_EXTRACTORS", "true")
+        .with("PEPEAUDIO_ENABLE_CROSS_SERVICE_MATCHING", "true");
+    assert!(matches!(
+        BotRuntimeConfig::from_source(&no_provider),
+        Err(ConfigError::Inconsistent { .. })
+    ));
+
+    let public = valid_source()
+        .with("PEPEAUDIO_ENABLE_SITE_EXTRACTORS", "true")
+        .with("PEPEAUDIO_ENABLE_CROSS_SERVICE_MATCHING", "true")
+        .with("PEPEAUDIO_ENABLE_SPOTIFY_PUBLIC_METADATA", "true")
+        .with("PEPEAUDIO_ENABLE_APPLE_MUSIC_PUBLIC_METADATA", "true");
+    let config = BotRuntimeConfig::from_source(&public).expect("public metadata configuration");
+    assert!(config.catalog.cross_service_matching_enabled);
+    assert!(config.catalog.spotify_public_metadata_enabled);
+    assert!(config.catalog.apple_music_public_metadata_enabled);
+    assert!(config.catalog.spotify.is_none());
+    assert!(config.catalog.apple_music.is_none());
+
     let partial = valid_source()
         .with("PEPEAUDIO_ENABLE_SITE_EXTRACTORS", "true")
         .with("PEPEAUDIO_ENABLE_CROSS_SERVICE_MATCHING", "true")
@@ -315,6 +337,32 @@ fn enabled_catalog_matching_requires_complete_providers_and_site_tools() {
         BotRuntimeConfig::from_source(&no_site_tools),
         Err(ConfigError::Inconsistent { .. })
     ));
+}
+
+#[test]
+fn credential_catalog_configuration_does_not_enable_the_other_public_provider() {
+    let spotify = valid_source()
+        .with("PEPEAUDIO_ENABLE_SITE_EXTRACTORS", "true")
+        .with("PEPEAUDIO_ENABLE_CROSS_SERVICE_MATCHING", "true")
+        .with("PEPEAUDIO_SPOTIFY_CLIENT_ID", "client-id")
+        .with("PEPEAUDIO_SPOTIFY_CLIENT_SECRET", "client-secret");
+    let spotify = BotRuntimeConfig::from_source(&spotify).expect("Spotify credentials");
+    assert!(spotify.catalog.spotify.is_some());
+    assert!(spotify.catalog.apple_music.is_none());
+    assert!(!spotify.catalog.spotify_public_metadata_enabled);
+    assert!(!spotify.catalog.apple_music_public_metadata_enabled);
+
+    let apple = valid_source()
+        .with("PEPEAUDIO_ENABLE_SITE_EXTRACTORS", "true")
+        .with("PEPEAUDIO_ENABLE_CROSS_SERVICE_MATCHING", "true")
+        .with("PEPEAUDIO_APPLE_MUSIC_TEAM_ID", "ABCDE12345")
+        .with("PEPEAUDIO_APPLE_MUSIC_KEY_ID", "KEY1234567")
+        .with("PEPEAUDIO_APPLE_MUSIC_PRIVATE_KEY", "x".repeat(64));
+    let apple = BotRuntimeConfig::from_source(&apple).expect("Apple Music credentials");
+    assert!(apple.catalog.spotify.is_none());
+    assert!(apple.catalog.apple_music.is_some());
+    assert!(!apple.catalog.spotify_public_metadata_enabled);
+    assert!(!apple.catalog.apple_music_public_metadata_enabled);
 }
 
 #[test]

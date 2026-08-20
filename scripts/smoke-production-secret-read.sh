@@ -3,26 +3,49 @@ set -eu
 
 usage() {
     cat <<'EOF'
-Usage: sh scripts/smoke-production-secret-read.sh
+Usage: sh scripts/smoke-production-secret-read.sh [--public-metadata]
+       sh scripts/smoke-production-secret-read.sh [--spotify] [--apple-music]
 
-Verify every production Compose service can read only its file-backed secrets
-under the supported Ubuntu/rootful-Docker ownership contract. Secret values are
-never printed and infrastructure services are not started.
+Verify every selected production Compose service can read only its file-backed
+secrets under the supported Ubuntu/rootful-Docker ownership contract. Select
+the keyless public-metadata overlay or the credential provider overlays used by
+the deployment.
+Secret values are never printed and infrastructure services are not started.
 EOF
 }
 
-case "${1:-}" in
-    '')
-        ;;
-    -h|--help)
-        usage
-        exit 0
-        ;;
-    *)
-        usage >&2
+include_spotify=false
+include_apple_music=false
+include_public_metadata=false
+while [ "$#" -gt 0 ]; do
+    case "$1" in
+        --public-metadata)
+            include_public_metadata=true
+            ;;
+        --spotify)
+            include_spotify=true
+            ;;
+        --apple-music)
+            include_apple_music=true
+            ;;
+        -h|--help)
+            usage
+            exit 0
+            ;;
+        *)
+            usage >&2
+            exit 2
+            ;;
+    esac
+    shift
+done
+if [ "$include_public_metadata" = true ]; then
+    if [ "$include_spotify" = true ] || [ "$include_apple_music" = true ]; then
+        printf '%s\n' \
+            '--public-metadata cannot be combined with credential provider options.' >&2
         exit 2
-        ;;
-esac
+    fi
+fi
 
 script_dir=$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd)
 repository_root=$(CDPATH='' cd -- "$script_dir/.." && pwd)
@@ -68,7 +91,28 @@ if printf '%s\n' "$security_options" | grep -Eiq 'rootless|userns'; then
 fi
 
 cd "$repository_root"
-sh "$script_dir/prepare-production-secrets.sh" --check
+check_selected_secrets() {
+    set -- --check
+    if [ "$include_spotify" = true ]; then
+        set -- "$@" --spotify
+    fi
+    if [ "$include_apple_music" = true ]; then
+        set -- "$@" --apple-music
+    fi
+    sh "$script_dir/prepare-production-secrets.sh" "$@"
+}
+
+selected_secret_sources() {
+    production_secret_sources "$1" "$2"
+    if [ "$include_spotify" = true ]; then
+        production_spotify_secret_sources "$1" "$2"
+    fi
+    if [ "$include_apple_music" = true ]; then
+        production_apple_music_secret_sources "$1" "$2"
+    fi
+}
+
+check_selected_secrets
 
 negative_image=${PEPEAUDIO_SECRET_PROBE_IMAGE:-${PEPEAUDIO_API_IMAGE:-pepeaudio-api:local}}
 docker image inspect "$negative_image" >/dev/null
@@ -113,7 +157,7 @@ deny_unrelated_user() {
 }
 
 printf '%s\n' 'Checking raw host binds without the secret-reader group.'
-production_secret_sources deny_unrelated_user "$repository_root"
+selected_secret_sources deny_unrelated_user "$repository_root"
 
 export PEPEAUDIO_RUNTIME_GID="$runtime_gid"
 export PEPEAUDIO_DOMAIN=${PEPEAUDIO_DOMAIN:-audio.example.test}
@@ -121,12 +165,26 @@ export PEPEAUDIO_DISCORD_CLIENT_ID=${PEPEAUDIO_DISCORD_CLIENT_ID:-10000000000000
 export PEPEAUDIO_VALKEY_KEYSPACE=${PEPEAUDIO_VALKEY_KEYSPACE:-pepeaudio-production}
 
 compose() {
-    docker compose \
-        -f compose.yaml \
-        -f compose.discord.yaml \
-        -f compose.production.yaml \
-        --profile production \
-        "$@"
+    if [ "$include_public_metadata" = true ]; then
+        docker compose -f compose.yaml -f compose.discord.yaml \
+            -f compose.catalog.public-metadata.yaml -f compose.production.yaml \
+            --profile production "$@"
+    elif [ "$include_spotify" = true ] && [ "$include_apple_music" = true ]; then
+        docker compose -f compose.yaml -f compose.discord.yaml \
+            -f compose.catalog.spotify.yaml -f compose.catalog.apple.yaml \
+            -f compose.production.yaml --profile production "$@"
+    elif [ "$include_spotify" = true ]; then
+        docker compose -f compose.yaml -f compose.discord.yaml \
+            -f compose.catalog.spotify.yaml -f compose.production.yaml \
+            --profile production "$@"
+    elif [ "$include_apple_music" = true ]; then
+        docker compose -f compose.yaml -f compose.discord.yaml \
+            -f compose.catalog.apple.yaml -f compose.production.yaml \
+            --profile production "$@"
+    else
+        docker compose -f compose.yaml -f compose.discord.yaml \
+            -f compose.production.yaml --profile production "$@"
+    fi
 }
 
 probe=' 
@@ -178,13 +236,20 @@ compose run --rm --no-deps -e PEPEAUDIO_RUNTIME_GID="$runtime_gid" \
     /run/secrets/discord_client_secret
 
 printf '%s\n' 'Checking Bot secret access.'
-compose run --rm --no-deps -e PEPEAUDIO_RUNTIME_GID="$runtime_gid" \
-    --entrypoint /bin/sh bot \
-    -euc "$probe" -- 10001 \
+set -- \
     /run/secrets/discord_token \
     /run/secrets/component_signing_key \
     /run/secrets/database_runtime_url \
     /run/secrets/valkey_url
+if [ "$include_spotify" = true ]; then
+    set -- "$@" /run/secrets/spotify_client_secret
+fi
+if [ "$include_apple_music" = true ]; then
+    set -- "$@" /run/secrets/apple_music_private_key
+fi
+compose run --rm --no-deps -e PEPEAUDIO_RUNTIME_GID="$runtime_gid" \
+    --entrypoint /bin/sh bot \
+    -euc "$probe" -- 10001 "$@"
 
 printf 'All production consumers passed the root:%s mode 0440 secret-read smoke.\n' \
     "$runtime_gid"

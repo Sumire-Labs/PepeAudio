@@ -1,8 +1,9 @@
 #!/bin/sh
 
 # Keep this list aligned with the file-backed secrets declared by the base,
-# Discord, and production Compose models. The callback receives a logical name
-# followed by the configured source path.
+# Discord, and production Compose models. Provider secrets stay in separate
+# lists because their Compose overlays are optional. Each callback receives a
+# logical name followed by the configured source path.
 production_secret_sources() {
     "$1" postgres_superuser_password \
         "${PEPEAUDIO_POSTGRES_SUPERUSER_PASSWORD_SOURCE:-$2/secrets/postgres_superuser_password.txt}"
@@ -24,6 +25,16 @@ production_secret_sources() {
         "${PEPEAUDIO_COMPONENT_SIGNING_KEY_SOURCE:-$2/secrets/component_signing_key.txt}"
     "$1" discord_client_secret \
         "${PEPEAUDIO_DISCORD_CLIENT_SECRET_SOURCE:-$2/secrets/discord_client_secret.txt}"
+}
+
+production_spotify_secret_sources() {
+    "$1" spotify_client_secret \
+        "${PEPEAUDIO_SPOTIFY_CLIENT_SECRET_SOURCE:-$2/secrets/spotify_client_secret.txt}"
+}
+
+production_apple_music_secret_sources() {
+    "$1" apple_music_private_key \
+        "${PEPEAUDIO_APPLE_MUSIC_PRIVATE_KEY_SOURCE:-$2/secrets/apple_music_private_key.p8}"
 }
 
 production_secret_absolute_path() {

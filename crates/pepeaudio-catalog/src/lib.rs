@@ -17,6 +17,8 @@ pub use model::{
     CatalogCollection, CatalogItemKind, CatalogProvider, CatalogReference, CatalogSearchRequest,
     CatalogTrackMetadata,
 };
-pub use provider::{AppleMusicCatalog, SpotifyCatalog};
+pub use provider::{
+    AppleMusicCatalog, AppleMusicPublicCatalog, SpotifyCatalog, SpotifyPublicCatalog,
+};
 pub use service::{CatalogResolver, CatalogResolverBuilder};
 pub use url::parse_catalog_url;

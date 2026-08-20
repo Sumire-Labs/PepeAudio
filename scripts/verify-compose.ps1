@@ -15,6 +15,7 @@ $overrides = @{
     PEPEAUDIO_DISCORD_CLIENT_SECRET_SOURCE = Join-Path $repositoryRoot 'secrets\discord_client_secret.txt.example'
     PEPEAUDIO_SPOTIFY_CLIENT_ID = 'compose-contract-client-id'
     PEPEAUDIO_SPOTIFY_CLIENT_SECRET_SOURCE = Join-Path $repositoryRoot 'secrets\spotify_client_secret.txt.example'
+    PEPEAUDIO_SPOTIFY_MARKET = 'JP'
     PEPEAUDIO_APPLE_MUSIC_TEAM_ID = 'ABCDE12345'
     PEPEAUDIO_APPLE_MUSIC_KEY_ID = 'KEY1234567'
     PEPEAUDIO_APPLE_MUSIC_PRIVATE_KEY_SOURCE = Join-Path $repositoryRoot 'secrets\apple_music_private_key.p8.example'
@@ -57,6 +58,11 @@ try {
         '-f', 'compose.catalog.apple.yaml', '--profile', 'discord',
         'config', '--quiet'
     )
+    Invoke-Checked docker @(
+        'compose', '-f', 'compose.yaml', '-f', 'compose.discord.yaml',
+        '-f', 'compose.catalog.public-metadata.yaml', '--profile', 'discord',
+        'config', '--quiet'
+    )
 
     Invoke-Checked docker @(
         'compose', '-f', 'compose.yaml', '-f', 'compose.discord.yaml',
@@ -78,6 +84,45 @@ try {
         [System.Text.UTF8Encoding]::new($false)
     )
     Invoke-Checked node @('scripts/assert-compose-model.mjs', $modelPath)
+
+    $model = & docker compose `
+        -f compose.yaml `
+        -f compose.discord.yaml `
+        -f compose.catalog.spotify.yaml `
+        -f compose.catalog.apple.yaml `
+        -f compose.production.yaml `
+        --profile production `
+        config --format json
+    if ($LASTEXITCODE -ne 0) {
+        throw "provider docker compose config --format json exited with code $LASTEXITCODE"
+    }
+    [System.IO.File]::WriteAllLines(
+        $modelPath,
+        [string[]]$model,
+        [System.Text.UTF8Encoding]::new($false)
+    )
+    Invoke-Checked node @(
+        'scripts/assert-provider-compose-model.mjs', $modelPath, 'credentials'
+    )
+
+    $model = & docker compose `
+        -f compose.yaml `
+        -f compose.discord.yaml `
+        -f compose.catalog.public-metadata.yaml `
+        -f compose.production.yaml `
+        --profile production `
+        config --format json
+    if ($LASTEXITCODE -ne 0) {
+        throw "public-metadata docker compose config exited with code $LASTEXITCODE"
+    }
+    [System.IO.File]::WriteAllLines(
+        $modelPath,
+        [string[]]$model,
+        [System.Text.UTF8Encoding]::new($false)
+    )
+    Invoke-Checked node @(
+        'scripts/assert-provider-compose-model.mjs', $modelPath, 'public-metadata'
+    )
 }
 finally {
     foreach ($name in $overrides.Keys) {
