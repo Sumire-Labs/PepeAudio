@@ -208,8 +208,8 @@ probe='
 '
 
 printf '%s\n' 'Checking PostgreSQL secret access after gosu privilege drop.'
-compose run --rm --no-deps postgres \
-    -e PEPEAUDIO_RUNTIME_GID="$runtime_gid" \
+compose run --rm --no-deps \
+    -e PEPEAUDIO_RUNTIME_GID="$runtime_gid" postgres \
     gosu postgres sh -euc "$probe" -- 999 \
     /run/secrets/postgres_superuser_password \
     /run/secrets/postgres_runtime_password \
