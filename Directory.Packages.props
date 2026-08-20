@@ -23,7 +23,7 @@
 
     <!-- Data: PostgreSQL -->
     <PackageVersion Include="Npgsql" Version="10.0.3" />
-    <PackageVersion Include="Dapper" Version="2.1.66" />
+    <PackageVersion Include="Dapper" Version="2.1.79" />
     <PackageVersion Include="dbup-postgresql" Version="6.1.2" />
 
     <!-- Cache / coordination: Valkey (Redis protocol). >=2.12.27 required for Valkey 8+ -->
