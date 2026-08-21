@@ -25,21 +25,21 @@ pub(crate) enum PlayInputError {
 
 #[derive(Debug, Eq, PartialEq)]
 enum PlaySource {
-    Url(String),
+    Input(String),
     Attachment(AttachmentSource),
 }
 
-/// URLまたは添付ファイルを再生キューに追加します。
+/// 曲名、URL、または添付ファイルを再生キューに追加します。
 #[poise::command(slash_command, guild_only)]
 pub(crate) async fn play(
     ctx: Context<'_>,
-    #[description = "YouTube / SoundCloud / 対応カタログURL（/playは入力せずURLだけ貼り付け）"]
+    #[description = "曲名または対応URL（/playは入力せず検索語かURLだけ入力）"]
     #[max_length = 4096]
-    url: Option<String>,
+    query: Option<String>,
     #[description = "再生する音声ファイル"] file: Option<serenity::Attachment>,
 ) -> Result<(), CommandError> {
     ctx.defer().await?;
-    let source = select_play_source(url, file.map(attachment_source))?;
+    let source = select_play_source(query, file.map(attachment_source))?;
     let guild_id = guild_id(ctx)?;
     let (voice, policy) = voice_context(ctx).await?;
     authorize_play(voice, policy)?;
@@ -47,10 +47,10 @@ pub(crate) async fn play(
     let before = player.snapshot().await?;
     let maximum_items = available_batch_items(ctx.data().media.as_ref(), &before)?;
     let batch = match source {
-        PlaySource::Url(url) => {
+        PlaySource::Input(input) => {
             ctx.data()
                 .media
-                .resolve_url(guild_id, voice.actor_user_id, &url, maximum_items)
+                .resolve_input(guild_id, voice.actor_user_id, &input, maximum_items)
                 .await?
         }
         PlaySource::Attachment(attachment) => {
@@ -64,11 +64,11 @@ pub(crate) async fn play(
 }
 
 fn select_play_source(
-    url: Option<String>,
+    input: Option<String>,
     attachment: Option<AttachmentSource>,
 ) -> Result<PlaySource, PlayInputError> {
-    match (url, attachment) {
-        (Some(url), None) => Ok(PlaySource::Url(url)),
+    match (input, attachment) {
+        (Some(input), None) => Ok(PlaySource::Input(input)),
         (None, Some(attachment)) => Ok(PlaySource::Attachment(attachment)),
         (None, None) => Err(PlayInputError::Missing),
         (Some(_), Some(_)) => Err(PlayInputError::Conflicting),
@@ -177,7 +177,7 @@ async fn commit_resolved_tracks(
         .await?)
 }
 
-fn available_batch_items(
+pub(crate) fn available_batch_items(
     media: &dyn crate::MediaResolver,
     snapshot: &pepeaudio_core::PlayerSnapshot,
 ) -> Result<usize, CommandError> {

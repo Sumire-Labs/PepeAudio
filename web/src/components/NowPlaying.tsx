@@ -1,5 +1,4 @@
 import { AspectRatio } from "@astryxdesign/core/AspectRatio";
-import { Badge } from "@astryxdesign/core/Badge";
 import { Card } from "@astryxdesign/core/Card";
 import { Center } from "@astryxdesign/core/Center";
 import { EmptyState } from "@astryxdesign/core/EmptyState";
@@ -12,19 +11,12 @@ import { HStack, VStack } from "@astryxdesign/core/Stack";
 import { StatusDot } from "@astryxdesign/core/StatusDot";
 import { Heading, Text } from "@astryxdesign/core/Text";
 import { Token } from "@astryxdesign/core/Token";
-import {
-  AudioLines,
-  CirclePlay,
-  Headphones,
-  Orbit,
-  Radio,
-  UserRound
-} from "lucide-react";
-import { memo, type ReactNode } from "react";
+import { AudioLines, Headphones, UserRound } from "lucide-react";
+import { memo, useState } from "react";
 
 import type { GuildSummary, PlayerSnapshot } from "../app/types";
 import { nowPlayingStyles } from "./now-playing.styles";
-import { TrackSourceLinks } from "./TrackSourceLink";
+import { TrackTitleLink } from "./TrackTitleLink";
 
 interface NowPlayingProps {
   readonly guild: GuildSummary | undefined;
@@ -36,63 +28,37 @@ export const NowPlaying = memo(function NowPlaying({ guild, snapshot }: NowPlayi
 
   return (
     <Section variant="transparent" padding={6} xstyle={nowPlayingStyles.root}>
-      <VStack gap={6}>
-        <HStack gap={4} vAlign="center" hAlign="between" wrap="wrap">
-          <VStack gap={1}>
-            <Text type="supporting" color="secondary">
-              再生ワークスペース
-            </Text>
-            <Heading level={1} maxLines={1}>
-              {guild?.name ?? "サーバーを選択"}
-            </Heading>
-          </VStack>
-        </HStack>
+      <VStack gap={5}>
+        <Heading level={1} maxLines={1}>
+          {guild?.name ?? "サーバーを選択"}
+        </Heading>
 
         {snapshot.state === "loading" && track === null ? (
-          <Card width="100%" padding={0}>
-            <Center minHeight={260}>
+          <Card width="100%" padding={0} variant="muted">
+            <Center minHeight={320}>
               <EmptyState
                 headingLevel={2}
-                title="次の曲を読み込んでいます"
-                description="準備が完了すると、この画面へ自動的に反映されます。"
+                title="曲を準備しています"
+                description="準備が完了すると自動的に再生が始まります。"
                 icon={<Spinner size="lg" />}
               />
             </Center>
           </Card>
         ) : track === null ? (
-          <Card width="100%" padding={0}>
-            <Center minHeight={260}>
+          <Card width="100%" padding={0} variant="muted">
+            <Center minHeight={320}>
               <EmptyState
                 headingLevel={2}
-                title="再生待ちです"
-                description="Discordで /play を使うと、この画面へリアルタイムに反映されます。"
-                icon={<Icon icon={Headphones} size="lg" />}
+                title="まだ何も再生していません"
+                description="上の検索欄に曲名またはURLを入力して追加できます。"
+                icon={<Icon icon={Headphones} size="lg" color="secondary" />}
               />
             </Center>
           </Card>
         ) : (
-          <Card width="100%" padding={5}>
-            <Grid columns={{ minWidth: 220, max: 2, repeat: "fit" }} gap={6} align="center">
-              <VStack width="100%" maxWidth={360} hAlign="center">
-                <AspectRatio ratio={1} xstyle={nowPlayingStyles.artworkFrame}>
-                  <Center
-                    width="100%"
-                    height="100%"
-                    padding={6}
-                    xstyle={nowPlayingStyles.artworkSurface}
-                  >
-                    <VStack gap={4} hAlign="center" justify="center" height="100%">
-                      <NavIcon icon={<Icon icon={AudioLines} size="lg" color="inherit" />} />
-                      <Text type="supporting" color="secondary">
-                        PepeAudio ストリーム
-                      </Text>
-                      {snapshot.spatialEnabled ? (
-                        <Badge variant="info" label="360°" />
-                      ) : null}
-                    </VStack>
-                  </Center>
-                </AspectRatio>
-              </VStack>
+          <Card width="100%" padding={5} variant="muted">
+            <Grid columns={{ minWidth: 240, max: 2, repeat: "fit" }} gap={6} align="center">
+              <HeroArtwork title={track.title} url={track.artworkUrl} />
 
               <VStack gap={4} xstyle={nowPlayingStyles.trackDetails}>
                 <HStack gap={2} vAlign="center">
@@ -105,8 +71,12 @@ export const NowPlaying = memo(function NowPlaying({ guild, snapshot }: NowPlayi
                     {describeTrackStatus(snapshot.state)}
                   </Text>
                 </HStack>
-                <Heading level={2} type="display-3" maxLines={3} wordBreak="break-word">
-                  {track.title}
+                <Heading level={2} type="display-3" wordBreak="break-word">
+                  <TrackTitleLink
+                    title={track.title}
+                    provenance={track.provenance}
+                    maxLines={3}
+                  />
                 </Heading>
                 {track.artist ? (
                   <Text type="large" color="secondary" maxLines={2}>
@@ -123,49 +93,52 @@ export const NowPlaying = memo(function NowPlaying({ guild, snapshot }: NowPlayi
                     />
                   ) : null}
                 </HStack>
-                <TrackSourceLinks provenance={track.provenance} />
               </VStack>
             </Grid>
           </Card>
         )}
-
-        <Grid columns={{ minWidth: 180, max: 3, repeat: "fit" }} gap={3}>
-          <SignalMetric
-            label="再生"
-            value={describePlayback(snapshot.state)}
-            variant={playbackStatusVariant(snapshot.state)}
-            icon={<Icon icon={CirclePlay} size="sm" color="secondary" />}
-          />
-          <SignalMetric
-            label="ボイス"
-            value={
-              !snapshot.voiceConnected
-                ? "未接続"
-                : snapshot.voiceChannelName ?? "接続中"
-            }
-            description={
-              snapshot.voiceConnected &&
-              guild !== undefined &&
-              guild.listenerCount !== null
-                ? `${guild.listenerCount}人が参加中`
-                : undefined
-            }
-            variant={snapshot.voiceConnected ? "success" : "neutral"}
-            icon={<Icon icon={Radio} size="sm" color="secondary" />}
-          />
-          <SignalMetric
-            label="360° Audio"
-            value={snapshot.spatialEnabled ? "HRIR適用中" : "オフ"}
-            variant={snapshot.spatialEnabled ? "accent" : "neutral"}
-            icon={<Icon icon={Orbit} size="sm" color="secondary" />}
-          />
-        </Grid>
       </VStack>
     </Section>
   );
 });
 
-type StatusVariant = "success" | "warning" | "error" | "accent" | "neutral";
+function HeroArtwork({ title, url }: { readonly title: string; readonly url: string | null }) {
+  const [failedUrl, setFailedUrl] = useState<string | null>(null);
+  const safeUrl = safeArtworkUrl(url);
+  const shownUrl = safeUrl !== null && safeUrl !== failedUrl ? safeUrl : null;
+
+  return (
+    <AspectRatio ratio={1} fit="cover" xstyle={nowPlayingStyles.artworkFrame}>
+      {shownUrl === null ? (
+        <Center width="100%" height="100%" xstyle={nowPlayingStyles.artworkSurface}>
+          <NavIcon icon={<Icon icon={AudioLines} size="lg" color="secondary" />} />
+        </Center>
+      ) : (
+        <img
+          src={shownUrl}
+          alt={`${title}のアートワーク`}
+          decoding="async"
+          referrerPolicy="no-referrer"
+          onError={() => setFailedUrl(shownUrl)}
+        />
+      )}
+    </AspectRatio>
+  );
+}
+
+function safeArtworkUrl(value: string | null): string | null {
+  if (value === null) return null;
+  try {
+    const url = new URL(value);
+    return url.protocol === "https:" && url.hostname === "i.ytimg.com"
+      ? url.href
+      : null;
+  } catch {
+    return null;
+  }
+}
+
+type StatusVariant = "success" | "warning" | "accent" | "neutral";
 
 function playbackStatusVariant(state: PlayerSnapshot["state"]): StatusVariant {
   switch (state) {
@@ -178,21 +151,6 @@ function playbackStatusVariant(state: PlayerSnapshot["state"]): StatusVariant {
     case "idle_connected":
     case "disconnected":
       return "neutral";
-  }
-}
-
-function describePlayback(state: PlayerSnapshot["state"]): string {
-  switch (state) {
-    case "playing":
-      return "再生中";
-    case "paused":
-      return "一時停止中";
-    case "loading":
-      return "読み込み中";
-    case "idle_connected":
-      return "待機中";
-    case "disconnected":
-      return "未接続";
   }
 }
 
@@ -209,42 +167,4 @@ function describeTrackStatus(state: PlayerSnapshot["state"]): string {
     case "disconnected":
       return "再生停止中";
   }
-}
-
-function SignalMetric({
-  label,
-  value,
-  variant,
-  icon,
-  description
-}: {
-  readonly label: string;
-  readonly value: string;
-  readonly variant: StatusVariant;
-  readonly icon: ReactNode;
-  readonly description?: string | undefined;
-}) {
-  return (
-    <Card variant="muted" width="100%" minHeight={108} padding={4}>
-      <VStack gap={2}>
-        <HStack gap={2} vAlign="center">
-          {icon}
-          <Text type="supporting" color="secondary">
-            {label}
-          </Text>
-        </HStack>
-        <HStack gap={2} vAlign="center">
-          <StatusDot variant={variant} label={value} />
-          <Text type="label" maxLines={1}>
-            {value}
-          </Text>
-        </HStack>
-        {description ? (
-          <Text type="supporting" color="secondary" maxLines={1}>
-            {description}
-          </Text>
-        ) : null}
-      </VStack>
-    </Card>
-  );
 }

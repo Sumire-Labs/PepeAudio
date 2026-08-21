@@ -36,8 +36,8 @@ pub use api_backend::ValkeyApiBackend;
 pub use api_backend_runtime::ApiBackendRuntime;
 pub use command_authorization::{CommandAuthorization, CommandAuthorizer};
 pub use command_worker::{
-    CommandWorkerConfig, CommandWorkerRuntime, DEFAULT_COMMAND_RESULT_RETENTION, PlayerDirectory,
-    WorkerPlayerError,
+    CommandExecutionError, CommandWorkerConfig, CommandWorkerRuntime,
+    DEFAULT_COMMAND_RESULT_RETENTION, PlayerDirectory, WorkerPlayerError,
 };
 pub use error::{RuntimeError, RuntimeResult};
 pub use guild_presence::{GuildPresenceHandle, GuildPresenceRuntime};

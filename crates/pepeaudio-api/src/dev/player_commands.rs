@@ -1,8 +1,28 @@
-use pepeaudio_core::{PlayerCommand, PlayerSnapshot, PlayerState};
+use pepeaudio_core::{PlayerCommand, PlayerSnapshot, PlayerState, TrackSnapshot};
 use uuid::Uuid;
 
 pub(super) fn apply(snapshot: &mut PlayerSnapshot, command: &PlayerCommand) {
     match command {
+        PlayerCommand::EnqueueMedia { input } => {
+            let track = TrackSnapshot {
+                track_id: Uuid::new_v4(),
+                title: input.trim().to_owned(),
+                artist: Some("開発モードの検索結果".into()),
+                album: None,
+                provenance: None,
+                requester_user_id: None,
+                duration_ms: Some(210_000),
+                position_ms: 0,
+                seekable: true,
+            };
+            if snapshot.current_track.is_none() {
+                snapshot.current_track = Some(track);
+                snapshot.state = PlayerState::Playing;
+            } else {
+                snapshot.upcoming_tracks.push(track);
+                sync_queued_count(snapshot);
+            }
+        }
         PlayerCommand::Play => snapshot.state = PlayerState::Playing,
         PlayerCommand::Pause => snapshot.state = PlayerState::Paused,
         PlayerCommand::Stop => {

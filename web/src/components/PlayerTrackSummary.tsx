@@ -7,6 +7,7 @@ import { useState } from "react";
 
 import type { PlayerState, TrackView } from "../app/types";
 import { playerBarStyles } from "./player-bar.styles";
+import { TrackTitleLink } from "./TrackTitleLink";
 
 interface PlayerTrackSummaryProps {
   readonly state: PlayerState;
@@ -17,7 +18,11 @@ export function PlayerTrackSummary({ state, track }: PlayerTrackSummaryProps) {
   return (
     <Item
       density="compact"
-      label={track?.title ?? (state === "loading" ? "読み込み中" : "再生待ち")}
+      label={
+        track ? (
+          <TrackTitleLink title={track.title} provenance={track.provenance} maxLines={1} />
+        ) : state === "loading" ? "読み込み中" : "再生待ち"
+      }
       description={track?.artist ?? idleDescription(state)}
       labelLines={1}
       descriptionLines={1}

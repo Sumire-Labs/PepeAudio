@@ -2,7 +2,6 @@ import { Avatar } from "@astryxdesign/core/Avatar";
 import { Badge } from "@astryxdesign/core/Badge";
 import { EmptyState } from "@astryxdesign/core/EmptyState";
 import { Icon } from "@astryxdesign/core/Icon";
-import { NavIcon } from "@astryxdesign/core/NavIcon";
 import {
   SideNav,
   SideNavHeading,
@@ -12,9 +11,8 @@ import {
 import { HStack } from "@astryxdesign/core/Stack";
 import { StatusDot } from "@astryxdesign/core/StatusDot";
 import { Text } from "@astryxdesign/core/Text";
-import { useMediaQuery } from "@astryxdesign/core/hooks";
-import { Headphones, ServerOff } from "lucide-react";
-import { useCallback, useState } from "react";
+import { ServerOff } from "lucide-react";
+import { useCallback } from "react";
 
 import type { DashboardAccount, DashboardStatus, GuildSummary } from "../app/types";
 import { AccountPanel } from "./AccountPanel";
@@ -40,26 +38,45 @@ export function GuildSidebar({
   onLogout,
   loggingOut
 }: GuildSidebarProps) {
-  const [isCollapsed, setIsCollapsed] = useState(false);
-  const usesInlineSidebar = useMediaQuery("(min-width: 769px)");
+  const currentPlayer = guilds.filter((guild) => guild.active && guild.connected);
+  const available = guilds.filter((guild) => guild.active && !guild.connected);
+  const unavailable = guilds.filter((guild) => !guild.active);
   const hideNavigationScrollbar = useCallback((section: HTMLDivElement | null) => {
-    const scrollRegion = section?.parentElement;
-    if (scrollRegion !== null && scrollRegion !== undefined) {
-      scrollRegion.style.scrollbarWidth = "none";
+    if (section?.parentElement) {
+      section.parentElement.style.scrollbarWidth = "none";
+    }
+    let candidate = section?.parentElement ?? null;
+    while (candidate !== null) {
+      const overflow = getComputedStyle(candidate).overflowY;
+      if (overflow === "auto" || overflow === "scroll") {
+        candidate.style.scrollbarWidth = "none";
+        break;
+      }
+      candidate = candidate.parentElement;
     }
   }, []);
 
   return (
     <SideNav
       collapsible={{
-        isCollapsed,
-        onCollapsedChange: setIsCollapsed
+        defaultIsCollapsed: true,
+        buttonLabel: "サーバー一覧を開閉"
       }}
-      {...(usesInlineSidebar && !isCollapsed ? { style: { width: 320 } } : {})}
+      resizable={{
+        defaultWidth: 280,
+        minWidth: 240,
+        maxWidth: 360,
+        autoSaveId: "pepeaudio-guild-sidebar"
+      }}
       header={
         <SideNavHeading
           icon={
-            <NavIcon icon={<Icon icon={Headphones} color="inherit" />} />
+            <Avatar
+              src="/branding/bot-icon.png"
+              name="PepeAudio"
+              size="sm"
+              tooltip={false}
+            />
           }
           heading="PepeAudio"
           subheading="音楽ダッシュボード"
@@ -74,12 +91,8 @@ export function GuildSidebar({
         />
       }
     >
-      <SideNavSection
-        ref={hideNavigationScrollbar}
-        title="Discordサーバー"
-        endContent={<Badge variant="neutral" label={String(guilds.length)} />}
-      >
-        {guilds.length === 0 ? (
+      {guilds.length === 0 ? (
+        <SideNavSection ref={hideNavigationScrollbar} title="Discordサーバー">
           <EmptyState
             headingLevel={3}
             isCompact
@@ -87,57 +100,108 @@ export function GuildSidebar({
             description="DiscordでBotを追加すると、ここから再生状態を確認できます。"
             icon={<Icon icon={ServerOff} />}
           />
-        ) : guilds.map((guild) => {
-          const selected = guild.id === selectedGuildId;
-          const status = describeGuildStatus(guild);
-          return (
-            <SideNavItem
-              key={guild.id}
-              label={guild.name}
-              icon={
-                <HStack aria-hidden="true">
-                  <Avatar
-                    {...(guild.iconUrl === null ? {} : { src: guild.iconUrl })}
-                    name={initialsName(guild.initials)}
-                    size="sm"
-                    tooltip={false}
-                  />
-                </HStack>
-              }
-              endContent={
-                <HStack gap={1} vAlign="center">
-                  <StatusDot
-                    variant={guildStatusVariant(guild)}
-                    label={status}
-                    isPulsing={guild.connected}
-                  />
-                  <Text type="supporting" color="secondary" aria-hidden="true">
-                    {shortGuildStatus(guild)}
-                  </Text>
-                </HStack>
-              }
-              isSelected={selected}
-              isDisabled={!guild.active || commandPending}
-              onClick={() => onSelect(guild.id)}
-            />
-          );
-        })}
-      </SideNavSection>
+        </SideNavSection>
+      ) : (
+        <>
+          <GuildGroup
+            title="現在のプレイヤー"
+            guilds={currentPlayer}
+            selectedGuildId={selectedGuildId}
+            commandPending={commandPending}
+            onSelect={onSelect}
+            sectionRef={hideNavigationScrollbar}
+          />
+          <GuildGroup
+            title="Bot導入済み"
+            guilds={available}
+            selectedGuildId={selectedGuildId}
+            commandPending={commandPending}
+            onSelect={onSelect}
+          />
+          <GuildGroup
+            title="その他のサーバー"
+            guilds={unavailable}
+            selectedGuildId={selectedGuildId}
+            commandPending={commandPending}
+            onSelect={onSelect}
+          />
+        </>
+      )}
     </SideNav>
   );
 }
 
+interface GuildGroupProps {
+  readonly title: string;
+  readonly guilds: readonly GuildSummary[];
+  readonly selectedGuildId: string;
+  readonly commandPending: boolean;
+  readonly onSelect: (guildId: string) => void;
+  readonly sectionRef?: (section: HTMLDivElement | null) => void;
+}
+
+function GuildGroup({
+  title,
+  guilds,
+  selectedGuildId,
+  commandPending,
+  onSelect,
+  sectionRef
+}: GuildGroupProps) {
+  if (guilds.length === 0) return null;
+  return (
+    <SideNavSection
+      {...(sectionRef ? { ref: sectionRef } : {})}
+      title={title}
+      endContent={<Badge variant="neutral" label={String(guilds.length)} />}
+    >
+      {guilds.map((guild) => {
+        const guildStatus = describeGuildStatus(guild);
+        return (
+          <SideNavItem
+            key={guild.id}
+            label={guild.name}
+            icon={
+              <Avatar
+                {...(guild.iconUrl === null ? {} : { src: guild.iconUrl })}
+                name={initialsName(guild.initials)}
+                size="sm"
+                tooltip={false}
+              />
+            }
+            endContent={
+              <HStack gap={1} vAlign="center">
+                <StatusDot
+                  variant={guildStatusVariant(guild)}
+                  label={guildStatus}
+                  isPulsing={guild.connected}
+                />
+                <Text type="supporting" color="secondary" aria-hidden="true">
+                  {shortGuildStatus(guild)}
+                </Text>
+              </HStack>
+            }
+            isSelected={guild.id === selectedGuildId}
+            isDisabled={!guild.active || commandPending}
+            onClick={() => onSelect(guild.id)}
+          />
+        );
+      })}
+    </SideNavSection>
+  );
+}
+
 function shortGuildStatus(guild: GuildSummary): string {
-  if (!guild.active) return "未参加";
-  if (!guild.connected) return "未接続";
-  return guild.listenerCount === null ? "接続中" : `${guild.listenerCount}人`;
+  if (!guild.active) return "未導入";
+  if (!guild.connected) return "待機中";
+  return guild.listenerCount === null ? "使用中" : `${guild.listenerCount}人`;
 }
 
 function describeGuildStatus(guild: GuildSummary): string {
-  if (!guild.active) return "PepeAudio未参加";
-  if (!guild.connected) return "ボイスチャンネル未接続";
+  if (!guild.active) return "PepeAudio未導入";
+  if (!guild.connected) return "Bot導入済み・待機中";
   return guild.listenerCount === null
-    ? "ボイスチャンネル接続中"
+    ? "現在のプレイヤー"
     : `${guild.listenerCount}人が参加中`;
 }
 

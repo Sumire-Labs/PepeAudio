@@ -66,6 +66,68 @@ impl YtDlpClient {
         parse::collection(&output.stdout, provider, raw_url, maximum_items)
     }
 
+    /// Reports whether a supported page is one track rather than a collection.
+    ///
+    /// # Errors
+    ///
+    /// Returns a URL-policy error for malformed or unsafe input.
+    pub fn is_single_item_url(&self, raw_url: &str) -> Result<bool, SiteError> {
+        let provider = SiteProvider::classify(raw_url)?.ok_or(SiteError::InvalidUrl)?;
+        provider.is_single_item_url(raw_url)
+    }
+
+    /// Resolves a known single-track page without preliminary discovery.
+    ///
+    /// # Errors
+    ///
+    /// Returns a URL, process, metadata, duration, header, or stream-policy error.
+    pub async fn resolve_page(&self, raw_url: &str) -> Result<SiteResolvedTrack, SiteError> {
+        let provider = SiteProvider::classify(raw_url)?.ok_or(SiteError::InvalidUrl)?;
+        if !provider.is_single_item_url(raw_url)? {
+            return Err(SiteError::InvalidUrl);
+        }
+        let reference = SiteReference {
+            provider,
+            page_url: raw_url.to_owned(),
+            title: None,
+            artist: None,
+            duration_ms: None,
+        };
+        self.resolve(&reference).await
+    }
+
+    /// Resolves the first safe `YouTube` result for an explicit user search,
+    /// falling back to `SoundCloud` only when `YouTube` has no usable result.
+    ///
+    /// # Errors
+    ///
+    /// Returns an invalid-search, process, metadata, duration, header, or
+    /// stream-policy error.
+    pub async fn resolve_query(&self, query: &str) -> Result<SiteResolvedTrack, SiteError> {
+        if query.trim().is_empty() || query.len() > 256 || query.chars().any(char::is_control) {
+            return Err(SiteError::InvalidSearch);
+        }
+        for provider in [SiteProvider::YouTube, SiteProvider::SoundCloud] {
+            let output = self
+                .runner
+                .run(
+                    &command::resolve_query(&self.config, provider, query),
+                    OutputLimits {
+                        timeout: Duration::from_secs(45),
+                        max_stdout_bytes: RESOLVE_STDOUT_BYTES,
+                        max_stderr_bytes: STDERR_BYTES,
+                    },
+                )
+                .await?;
+            match parse::resolved_search(&output.stdout, provider, &self.config) {
+                Ok(track) => return Ok(track),
+                Err(SiteError::NoSearchMatch | SiteError::UnsupportedStream) => {}
+                Err(error) => return Err(error),
+            }
+        }
+        Err(SiteError::NoSearchMatch)
+    }
+
     /// Verifies both explicitly configured executables before Discord starts.
     ///
     /// # Errors

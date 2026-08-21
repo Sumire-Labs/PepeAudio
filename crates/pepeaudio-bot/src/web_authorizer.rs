@@ -1,6 +1,6 @@
 use std::{num::NonZeroU32, ops::Range, sync::Arc};
 
-use pepeaudio_core::{CommandEnvelope, PlayerCommand, shard_id};
+use pepeaudio_core::{ChannelId, CommandEnvelope, GuildId, PlayerCommand, UserId, shard_id};
 use pepeaudio_runtime::{CommandAuthorization, CommandAuthorizer};
 use pepeaudio_storage::{
     ControlPolicy as StoredControlPolicy, GuildSettingsRepository, PostgresStorage,
@@ -31,6 +31,21 @@ impl DiscordCommandAuthorizer {
             owned_shards,
         }
     }
+
+    pub(crate) fn actor_voice_channel(
+        &self,
+        guild_id: GuildId,
+        actor_id: UserId,
+    ) -> Option<ChannelId> {
+        let guild = self
+            .cache
+            .guild(serenity::all::GuildId::new(guild_id.get()))?;
+        guild
+            .voice_states
+            .get(&serenity::all::UserId::new(actor_id.get()))?
+            .channel_id
+            .and_then(|channel| ChannelId::new(channel.get()).ok())
+    }
 }
 
 #[async_trait::async_trait]
@@ -45,7 +60,12 @@ impl CommandAuthorizer for DiscordCommandAuthorizer {
         let Some(actor) = envelope.actor_user_id else {
             return CommandAuthorization::Denied;
         };
-        let facts = match cached_voice_facts(&self.cache, envelope.guild_id.get(), actor.get()) {
+        let facts = match cached_voice_facts(
+            &self.cache,
+            envelope.guild_id.get(),
+            actor.get(),
+            matches!(envelope.command, PlayerCommand::EnqueueMedia { .. }),
+        ) {
             CachedFacts::Available(facts) => facts,
             CachedFacts::Denied => return CommandAuthorization::Denied,
             CachedFacts::Unavailable => return CommandAuthorization::RetryableFailure,
@@ -95,7 +115,12 @@ enum CachedFacts {
     Unavailable,
 }
 
-fn cached_voice_facts(cache: &Cache, guild_id: u64, actor_id: u64) -> CachedFacts {
+fn cached_voice_facts(
+    cache: &Cache,
+    guild_id: u64,
+    actor_id: u64,
+    allow_absent_bot: bool,
+) -> CachedFacts {
     let Some(guild) = cache.guild(serenity::all::GuildId::new(guild_id)) else {
         return CachedFacts::Unavailable;
     };
@@ -107,14 +132,14 @@ fn cached_voice_facts(cache: &Cache, guild_id: u64, actor_id: u64) -> CachedFact
         return CachedFacts::Denied;
     };
     let bot_id = cache.current_user().id;
-    let Some(bot_channel) = guild
+    let bot_channel = guild
         .voice_states
         .get(&bot_id)
-        .and_then(|state| state.channel_id)
-    else {
+        .and_then(|state| state.channel_id);
+    if bot_channel.is_none() && !allow_absent_bot {
         return CachedFacts::Denied;
-    };
-    if actor_channel != bot_channel {
+    }
+    if bot_channel.is_some_and(|bot_channel| actor_channel != bot_channel) {
         return CachedFacts::Denied;
     }
     let Some(member) = current_cached_member(&guild, actor_id, actor_state.member.as_ref()) else {

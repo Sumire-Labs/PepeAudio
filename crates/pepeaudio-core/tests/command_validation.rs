@@ -121,6 +121,38 @@ fn valid_command_passes_all_envelope_checks() {
 }
 
 #[test]
+fn media_input_is_trimmed_for_presence_and_bounded_before_resolution() {
+    assert_eq!(
+        command(PlayerCommand::EnqueueMedia {
+            input: "   ".into()
+        })
+        .validate_against(&snapshot(), UnixTimeMillis::new(1_500)),
+        Err(CommandValidationError::InvalidMediaInput)
+    );
+    assert_eq!(
+        command(PlayerCommand::EnqueueMedia {
+            input: "bad\nquery".into(),
+        })
+        .validate_against(&snapshot(), UnixTimeMillis::new(1_500)),
+        Err(CommandValidationError::InvalidMediaInput)
+    );
+    assert_eq!(
+        command(PlayerCommand::EnqueueMedia {
+            input: "a".repeat(4_097),
+        })
+        .validate_against(&snapshot(), UnixTimeMillis::new(1_500)),
+        Err(CommandValidationError::InvalidMediaInput)
+    );
+    assert_eq!(
+        command(PlayerCommand::EnqueueMedia {
+            input: "Alan Walker Faded".into(),
+        })
+        .validate_against(&snapshot(), UnixTimeMillis::new(1_500)),
+        Ok(())
+    );
+}
+
+#[test]
 fn queued_track_removal_requires_an_upcoming_identity() {
     let existing = Uuid::from_u128(2);
     assert_eq!(

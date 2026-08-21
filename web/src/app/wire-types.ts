@@ -5,6 +5,7 @@ import type {
   RepeatMode,
   TrackProvenance
 } from "./types";
+import { trackArtworkUrl } from "./track-presentation";
 
 export interface PublicMediaPageWire {
   readonly provider: MediaProvider;
@@ -46,6 +47,7 @@ export interface PlayerSnapshotWire {
 }
 
 export type PlayerCommand =
+  | { readonly type: "enqueue_media"; readonly input: string }
   | { readonly type: "play" }
   | { readonly type: "pause" }
   | { readonly type: "stop" }
@@ -66,6 +68,7 @@ export type PlayerCommand =
 
 export function toPlayerSnapshot(wire: PlayerSnapshotWire): PlayerSnapshot {
   const observedAt = validObservedAt(wire.observed_at);
+  const currentProvenance = toProvenance(wire.current_track?.provenance);
   return {
     guildId: wire.guild_id,
     revision: wire.revision,
@@ -80,13 +83,13 @@ export function toPlayerSnapshot(wire: PlayerSnapshotWire): PlayerSnapshot {
             title: wire.current_track.title,
             artist: wire.current_track.artist ?? null,
             album: wire.current_track.album ?? null,
-            provenance: toProvenance(wire.current_track.provenance),
+            provenance: currentProvenance,
             requestedBy: null,
             durationMs: wire.current_track.duration_ms,
             positionMsAtAnchor: wire.current_track.position_ms,
             anchorUnixMs: observedAt,
             seekable: wire.current_track.seekable,
-            artworkUrl: null
+            artworkUrl: trackArtworkUrl(currentProvenance)
           },
     queue: wire.upcoming_tracks.map((track) => ({
       id: track.track_id,

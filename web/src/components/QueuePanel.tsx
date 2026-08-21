@@ -2,6 +2,7 @@ import { Badge } from "@astryxdesign/core/Badge";
 import { Center } from "@astryxdesign/core/Center";
 import { EmptyState } from "@astryxdesign/core/EmptyState";
 import { Icon } from "@astryxdesign/core/Icon";
+import { IconButton } from "@astryxdesign/core/IconButton";
 import { List } from "@astryxdesign/core/List";
 import { HStack, VStack } from "@astryxdesign/core/Stack";
 import { Heading } from "@astryxdesign/core/Text";
@@ -19,7 +20,7 @@ import {
   sortableKeyboardCoordinates,
   verticalListSortingStrategy
 } from "@dnd-kit/sortable";
-import { ListMusic } from "lucide-react";
+import { ListMusic, PanelRightClose } from "lucide-react";
 import { memo, useMemo } from "react";
 
 import type { QueueItem } from "../app/types";
@@ -35,15 +36,17 @@ interface QueuePanelProps {
   readonly commandPending: boolean;
   readonly onRemove: (trackId: string) => void;
   readonly onMove: (trackId: string, beforeTrackId: string | null) => void;
+  readonly onCollapse?: (() => void) | undefined;
 }
 
 export const QueuePanel = memo(function QueuePanel({
   queue,
   commandPending,
   onRemove,
-  onMove
+  onMove,
+  onCollapse
 }: QueuePanelProps) {
-  const header = <QueueHeader count={queue.length} />;
+  const header = <QueueHeader count={queue.length} onCollapse={onCollapse} />;
   const orderedTrackIds = useMemo(() => queue.map((item) => item.id), [queue]);
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
@@ -58,7 +61,7 @@ export const QueuePanel = memo(function QueuePanel({
             headingLevel={3}
             isCompact
             title="キューは空です"
-            description="Discordの /play から次の曲を追加できます。"
+            description="上の検索欄またはDiscordの /play から追加できます。"
             icon={<Icon icon={ListMusic} />}
           />
         </Center>
@@ -110,14 +113,32 @@ export const QueuePanel = memo(function QueuePanel({
   }
 });
 
-function QueueHeader({ count }: { readonly count: number }) {
+function QueueHeader({
+  count,
+  onCollapse
+}: {
+  readonly count: number;
+  readonly onCollapse?: (() => void) | undefined;
+}) {
   return (
     <HStack gap={3} vAlign="center" hAlign="between">
       <HStack gap={2} vAlign="center">
         <Icon icon={ListMusic} color="accent" />
         <Heading level={2}>次に再生</Heading>
       </HStack>
-      <Badge variant="neutral" label={`${count}曲`} />
+      <HStack gap={2} vAlign="center">
+        <Badge variant="neutral" label={`${count}曲`} />
+        {onCollapse ? (
+          <IconButton
+            label="キューパネルを閉じる"
+            tooltip="キューを閉じる"
+            icon={<Icon icon={PanelRightClose} />}
+            variant="ghost"
+            size="sm"
+            onClick={onCollapse}
+          />
+        ) : null}
+      </HStack>
     </HStack>
   );
 }

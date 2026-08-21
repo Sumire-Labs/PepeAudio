@@ -34,6 +34,9 @@ where
         idempotency_key: Uuid,
     ) -> Result<PlayerSnapshot, PlayerError> {
         match command {
+            PlayerCommand::EnqueueMedia { .. } => Err(PlayerError::InvalidTrack {
+                field: "media command route",
+            }),
             PlayerCommand::Play => self.resume().await,
             PlayerCommand::Pause => self.pause().await,
             PlayerCommand::Stop => self.stop().await,

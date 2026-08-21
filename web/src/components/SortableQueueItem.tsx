@@ -11,7 +11,7 @@ import { Clock3, GripVertical } from "lucide-react";
 import { formatDuration } from "../app/progress";
 import type { QueueItem } from "../app/types";
 import { queuePanelStyles } from "./queue-panel.styles";
-import { TrackSourceLinks } from "./TrackSourceLink";
+import { TrackTitleLink } from "./TrackTitleLink";
 
 interface SortableQueueItemProps {
   readonly item: QueueItem;
@@ -50,7 +50,7 @@ export function SortableQueueItem({
     <ListItem
       ref={setNodeRef}
       data-queue-track-id={item.id}
-      label={item.title}
+      label={<TrackTitleLink title={item.title} provenance={item.provenance} maxLines={1} />}
       description={details.length > 0 ? details.join(" · ") : undefined}
       startContent={
         <IconButton
@@ -69,7 +69,6 @@ export function SortableQueueItem({
       }
       endContent={
         <HStack gap={2} vAlign="center">
-          <TrackSourceLinks provenance={item.provenance} />
           <HStack gap={1} vAlign="center">
             <Icon icon={Clock3} size="xsm" color="secondary" />
             <Text type="code" color="secondary" hasTabularNumbers>

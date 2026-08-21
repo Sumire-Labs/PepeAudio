@@ -47,6 +47,18 @@ pub trait MediaResolver: Send + Sync + 'static {
         1
     }
 
+    /// Resolves a supported URL or a bounded song-title search.
+    async fn resolve_input(
+        &self,
+        guild_id: GuildId,
+        requester: UserId,
+        input: &str,
+        maximum_items: usize,
+    ) -> Result<ResolvedMediaBatch, ResolveError> {
+        self.resolve_url(guild_id, requester, input, maximum_items)
+            .await
+    }
+
     /// Resolves a direct audio URL without downloading it in the command layer.
     async fn resolve_url(
         &self,

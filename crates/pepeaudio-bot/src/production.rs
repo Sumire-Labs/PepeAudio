@@ -2,6 +2,7 @@ use std::{num::NonZeroU32, sync::Arc, time::Duration};
 
 use crate::{
     BotConfig, BotError, PlayerRegistry,
+    dashboard_command_executor::DashboardCommandExecutor,
     discord_status::DiscordStatusRuntime,
     guild_lifecycle::GuildLifecycleRuntime,
     production_build::assemble,
@@ -19,6 +20,7 @@ use pepeaudio_storage::{PostgresStorage, ValkeyStore};
 pub(crate) async fn run(discord: BotConfig) -> Result<(), BotError> {
     let runtime = &discord.runtime;
     let services = assemble(&discord, runtime).await?;
+    let dashboard_media = services.data.media.clone();
     let mut client =
         build_client(&discord, Arc::new(services.data), services.manager.clone()).await?;
     let mut discord_status = DiscordStatusRuntime::start(client.shard_manager.clone());
@@ -30,9 +32,14 @@ pub(crate) async fn run(discord: BotConfig) -> Result<(), BotError> {
         shard_total,
         discord.shards().range(),
     ));
+    let executor = Arc::new(DashboardCommandExecutor::new(
+        services.players.clone(),
+        dashboard_media,
+        authorizer.clone(),
+    ));
     let mut command_worker = CommandWorkerRuntime::start(
         services.valkey,
-        services.players.clone(),
+        executor,
         authorizer,
         command_worker_config(&discord, &runtime.instance_id),
     )
@@ -200,7 +207,10 @@ fn command_worker_config(discord: &BotConfig, instance_id: &str) -> CommandWorke
         batch_size: 32,
         block: Duration::from_secs(1),
         claim_idle: Duration::from_secs(30),
-        lease_ttl: Duration::from_secs(15),
+        // Dashboard media commands may spend up to five minutes in the bounded
+        // resolver. The lease must outlive that window so another worker cannot
+        // resolve and enqueue the same command concurrently.
+        lease_ttl: Duration::from_mins(6),
         completion_retention: DEFAULT_COMMAND_RESULT_RETENTION,
         retry_delay: Duration::from_secs(1),
     }

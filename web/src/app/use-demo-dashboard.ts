@@ -2,6 +2,7 @@ import { useCallback, useMemo, useState } from "react";
 
 import { createDemoSnapshot, demoGuilds, demoPresets } from "./demo-data";
 import type { DashboardModel, PlayerSnapshot, RepeatMode } from "./types";
+import { createDemoQueueItem } from "./demo-data";
 
 const repeatSequence: readonly RepeatMode[] = ["off", "track", "queue"];
 
@@ -44,6 +45,12 @@ export function useDemoDashboard(): DashboardModel {
     connected: true,
     commandPending: false,
     selectGuild,
+    enqueueMedia: (input) =>
+      update((current) => ({
+        ...current,
+        revision: current.revision + 1,
+        queue: [...current.queue, createDemoQueueItem(input)]
+      })),
     togglePlayback: () =>
       update((current) => ({
         ...current,

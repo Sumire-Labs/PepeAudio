@@ -70,6 +70,7 @@ fn validation_rejection(
         }
         CommandValidationError::TrackNotSeekable => (CommandResultCode::TrackNotSeekable, None),
         CommandValidationError::SeekPastEnd { .. } => (CommandResultCode::SeekPastEnd, None),
+        CommandValidationError::InvalidMediaInput => (CommandResultCode::InvalidMediaInput, None),
         CommandValidationError::GuildMismatch { .. }
         | CommandValidationError::UnavailableInState { .. } => {
             (CommandResultCode::InvalidPlayerState, None)

@@ -78,11 +78,43 @@ impl SiteProvider {
         }
     }
 
+    pub(crate) const fn single_search_prefix(self) -> &'static str {
+        match self {
+            Self::YouTube => "ytsearch1:",
+            Self::SoundCloud => "scsearch1:",
+        }
+    }
+
     pub(crate) const fn format_selector(self) -> &'static str {
         match self {
             Self::YouTube => "bestaudio[protocol=https][vcodec=none][acodec!=none]",
             Self::SoundCloud => "bestaudio[protocol=http][vcodec=none][acodec!=none]",
         }
+    }
+
+    pub(crate) fn is_single_item_url(self, raw: &str) -> Result<bool, SiteError> {
+        let url = url::Url::parse(raw).map_err(|_| SiteError::InvalidUrl)?;
+        if url.query_pairs().any(|(name, _)| name == "list") {
+            return Ok(false);
+        }
+        let segments = url
+            .path_segments()
+            .map(|segments| segments.filter(|part| !part.is_empty()).collect::<Vec<_>>())
+            .ok_or(SiteError::InvalidUrl)?;
+        Ok(match self {
+            Self::YouTube => {
+                (url.host_str() == Some("youtu.be") && segments.len() == 1)
+                    || (segments.as_slice() == ["watch"]
+                        && url.query_pairs().any(|(name, value)| {
+                            name == "v"
+                                && value.len() == 11
+                                && value.bytes().all(|byte| {
+                                    byte.is_ascii_alphanumeric() || matches!(byte, b'_' | b'-')
+                                })
+                        }))
+            }
+            Self::SoundCloud => url.host_str() == Some("on.soundcloud.com") || segments.len() == 2,
+        })
     }
 }
 

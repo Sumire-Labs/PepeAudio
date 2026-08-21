@@ -5,6 +5,7 @@ mod component_dispatch;
 mod component_id;
 mod components;
 mod config;
+mod dashboard_command_executor;
 mod discord_status;
 mod display_text;
 mod error;

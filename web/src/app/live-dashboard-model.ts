@@ -40,6 +40,7 @@ export function buildLiveDashboardModel({
     connected: snapshot !== null,
     commandPending,
     selectGuild,
+    enqueueMedia: (input) => run({ type: "enqueue_media", input }),
     togglePlayback: () => void run({ type: current.state === "playing" ? "pause" : "play" }),
     skip: () => void run({ type: "skip" }),
     previous: () => void run({ type: "previous" }),

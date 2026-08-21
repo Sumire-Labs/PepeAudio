@@ -21,8 +21,8 @@ export const demoGuilds: readonly GuildSummary[] = [
     name: "Midnight Workshop",
     initials: "MW",
     iconUrl: null,
-    connected: true,
-    active: false,
+    connected: false,
+    active: true,
     listenerCount: 3
   },
   {
@@ -39,7 +39,7 @@ export const demoGuilds: readonly GuildSummary[] = [
     name: "Late Night Lab",
     initials: "LL",
     iconUrl: null,
-    connected: true,
+    connected: false,
     active: false,
     listenerCount: 5
   }
@@ -131,5 +131,15 @@ export function createDemoSnapshot(guildId: string): PlayerSnapshot {
     hrirPresetId: "studio-neutral",
     spatialEnabled: true,
     observedAtUnixMs: Date.now()
+  };
+}
+
+export function createDemoQueueItem(input: string): QueueItem {
+  return {
+    id: crypto.randomUUID(),
+    title: input.trim() || "新しい曲",
+    artist: "検索結果のデモ",
+    requestedBy: "s12kuma01",
+    durationMs: 210_000
   };
 }

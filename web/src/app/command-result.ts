@@ -47,6 +47,11 @@ export type CommandResultCode =
   | "voice_channel_mismatch"
   | "queue_full"
   | "duplicate_track"
+  | "invalid_media_input"
+  | "media_not_found"
+  | "media_unsupported"
+  | "media_busy"
+  | "media_failed"
   | "state_exhausted"
   | "idempotency_replayed"
   | "result_expired";
@@ -68,6 +73,11 @@ const RESULT_CODES = new Set<CommandResultCode>([
   "voice_channel_mismatch",
   "queue_full",
   "duplicate_track",
+  "invalid_media_input",
+  "media_not_found",
+  "media_unsupported",
+  "media_busy",
+  "media_failed",
   "state_exhausted",
   "idempotency_replayed",
   "result_expired"
@@ -149,6 +159,11 @@ export function commandFailureMessage(result: TerminalCommandResultWire): string
     voice_channel_mismatch: "Botは別のボイスチャンネルに接続しています。",
     queue_full: "キューが上限に達しています。",
     duplicate_track: "同じ曲はすでに再生中またはキューにあります。",
+    invalid_media_input: "曲名または対応URLを入力してください。",
+    media_not_found: "一致する曲を見つけられませんでした。曲名とアーティスト名を確認してください。",
+    media_unsupported: "このURLまたは音源には対応していません。",
+    media_busy: "音源の準備が混み合っています。少し待ってから再試行してください。",
+    media_failed: "音源を準備できませんでした。しばらくしてから再試行してください。",
     state_exhausted: "プレイヤーを安全に更新できません。再接続してください。",
     idempotency_replayed: "同じ操作はすでに処理されています。最新の状態を確認してください。",
     result_expired: "操作結果の保持期限が切れました。最新の状態を確認してください。"

@@ -2,17 +2,36 @@ mod support;
 
 use std::sync::atomic::{AtomicUsize, Ordering};
 
+use async_trait::async_trait;
 use pepeaudio_core::{
-    CommandResultCode, CommandResultStatus, GuildId, StateRevision, UnixTimeMillis,
+    CommandEnvelope, CommandResultCode, CommandResultStatus, GuildId, PlayerSnapshot,
+    StateRevision, UnixTimeMillis,
 };
-use pepeaudio_player::{NoopPlayback, NoopSnapshotPublisher, PlayerConfig, spawn_player};
+use pepeaudio_player::{
+    NoopPlayback, NoopSnapshotPublisher, PlayerConfig, PlayerHandle, spawn_player,
+};
 use pepeaudio_storage::DedupeClaim;
 
 use self::support::{
     TestAuthorizer, TestDirectory, TestStore, authorizer, empty_directory, process,
     process_with_deadline,
 };
-use crate::CommandAuthorization;
+use crate::{CommandAuthorization, CommandExecutionError, PlayerDirectory, WorkerPlayerError};
+
+struct RejectingDirectory;
+
+#[async_trait]
+impl PlayerDirectory for RejectingDirectory {
+    async fn player(&self, _: GuildId) -> Result<Option<PlayerHandle>, WorkerPlayerError> {
+        Ok(None)
+    }
+
+    async fn execute(&self, _: CommandEnvelope) -> Result<PlayerSnapshot, CommandExecutionError> {
+        Err(CommandExecutionError::Rejected(
+            CommandResultCode::MediaNotFound,
+        ))
+    }
+}
 
 #[tokio::test]
 async fn allowed_command_completes_and_acknowledges_after_player_apply() {
@@ -69,6 +88,25 @@ async fn denied_command_records_a_sanitized_result_before_acknowledgement() {
     );
     assert_eq!(directory.lookups.load(Ordering::SeqCst), 0);
     assert_eq!(authorizer.calls.load(Ordering::SeqCst), 1);
+}
+
+#[tokio::test]
+async fn stable_executor_rejection_is_stored_before_acknowledgement() {
+    let store = TestStore::new(DedupeClaim::Acquired);
+    let authorizer = authorizer(CommandAuthorization::Allowed);
+
+    process(&store, &RejectingDirectory, &authorizer).await;
+
+    let state = store.state.lock().expect("store lock");
+    assert_eq!((state.claims, state.completions, state.releases), (1, 1, 0));
+    assert_eq!(state.acknowledgements, ["1-0"]);
+    assert_eq!(
+        state.result.status,
+        CommandResultStatus::Rejected {
+            code: CommandResultCode::MediaNotFound,
+            current_revision: None,
+        }
+    );
 }
 
 #[tokio::test]

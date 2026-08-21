@@ -26,7 +26,7 @@ describe("GuildSidebar accessible names", () => {
     expect(
       screen.getByText("DiscordでBotを追加すると、ここから再生状態を確認できます。")
     ).toBeTruthy();
-    expect(screen.getByRole("button", { name: "Collapse sidebar" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Expand sidebar" })).toBeTruthy();
     expect(screen.queryAllByRole("button")).toHaveLength(1);
     expect(screen.queryByText("リアルタイム同期")).toBeNull();
   });
@@ -48,10 +48,10 @@ describe("GuildSidebar accessible names", () => {
 
     expect(screen.getByRole("navigation", { name: "Side navigation" })).toBeTruthy();
 
-    fireEvent.click(screen.getByRole("button", { name: "Collapse sidebar" }));
-    expect(screen.getByRole("button", { name: "Expand sidebar" })).toBeTruthy();
-    expect(screen.getByRole("button", { name: guild.name })).toBeTruthy();
-    expect(screen.queryByRole("separator", { name: "Resize sidebar" })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Expand sidebar" }));
+    expect(screen.getByRole("button", { name: "Collapse sidebar" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: /Sumire Listening Room/u })).toBeTruthy();
+    expect(screen.getByRole("separator", { name: "Resize sidebar" })).toBeTruthy();
   });
 
   it("keeps the guild list scrollable without reserving a visible scrollbar", () => {
@@ -69,7 +69,7 @@ describe("GuildSidebar accessible names", () => {
       />
     );
 
-    const section = screen.getByRole("group", { name: "Discordサーバー" });
+    const section = screen.getByRole("group", { name: "現在のプレイヤー" });
     expect(section.parentElement?.style.scrollbarWidth).toBe("none");
   });
 
@@ -89,8 +89,10 @@ describe("GuildSidebar accessible names", () => {
       />
     );
 
+    fireEvent.click(screen.getByRole("button", { name: "Expand sidebar" }));
+
     const button = screen.getByRole("button", {
-      name: new RegExp(`^${guild.name}.*${guild.listenerCount}人が参加中$`, "u")
+      name: new RegExp(`${guild.name}.*${guild.listenerCount}人が参加中$`, "u")
     });
     expect(button).toBeTruthy();
   });
@@ -157,6 +159,8 @@ describe("GuildSidebar accessible names", () => {
         loggingOut={false}
       />
     );
+
+    fireEvent.click(screen.getByRole("button", { name: "Expand sidebar" }));
 
     const image = container.querySelector(
       `img[src*="cdn.discordapp.com/icons/1/safe_hash"]`

@@ -21,6 +21,7 @@ function model(
     connected: true,
     commandPending: false,
     selectGuild: vi.fn(),
+    enqueueMedia: vi.fn(),
     togglePlayback: vi.fn(),
     skip: vi.fn(),
     previous: vi.fn(),

@@ -51,7 +51,7 @@ fn example_attachment() -> AttachmentSource {
 fn play_requires_exactly_one_source() {
     assert!(matches!(
         select_play_source(Some("https://example.com/audio".into()), None),
-        Ok(PlaySource::Url(url)) if url == "https://example.com/audio"
+        Ok(PlaySource::Input(input)) if input == "https://example.com/audio"
     ));
     assert!(matches!(
         select_play_source(None, Some(example_attachment())),
@@ -68,7 +68,7 @@ fn play_requires_exactly_one_source() {
 }
 
 #[test]
-fn play_registers_one_command_with_optional_url_and_file_options() {
+fn play_registers_one_command_with_optional_query_and_file_options() {
     let command = play();
     assert_eq!(command.name, "play");
     assert!(command.subcommands.is_empty());
@@ -90,12 +90,12 @@ fn play_registers_one_command_with_optional_url_and_file_options() {
         .expect("serializable slash option")
     };
 
-    let url = option("url");
-    assert_eq!(url["type"], 3);
-    assert_eq!(url["required"], false);
-    assert_eq!(url["max_length"], 4096);
+    let query = option("query");
+    assert_eq!(query["type"], 3);
+    assert_eq!(query["required"], false);
+    assert_eq!(query["max_length"], 4096);
     assert!(
-        url["description"]
+        query["description"]
             .as_str()
             .is_some_and(|description| description.contains("/playは入力せず"))
     );

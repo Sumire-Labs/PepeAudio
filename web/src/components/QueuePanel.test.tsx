@@ -96,7 +96,7 @@ describe("QueuePanel queue actions", () => {
     expect(screen.queryByText("System")).toBeNull();
   });
 
-  it("shows a safe playback source link for a queued track", () => {
+  it("links the queued title to its safe playback page", () => {
     render(
       <QueuePanel
         queue={[{
@@ -118,8 +118,9 @@ describe("QueuePanel queue actions", () => {
     );
 
     expect(
-      screen.getByRole("link", { name: /SoundCloudで再生/u }).getAttribute("target")
+      screen.getByRole("link", { name: /Known title/u }).getAttribute("target")
     ).toBe("_blank");
+    expect(screen.queryByText(/SoundCloudで再生/u)).toBeNull();
   });
 
   it("moves tracks using stable before-track identities", async () => {

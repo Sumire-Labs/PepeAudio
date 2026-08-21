@@ -9,6 +9,10 @@ use crate::{
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum PlayerCommand {
+    /// Resolves and enqueues a URL or song-title search outside the realtime actor.
+    EnqueueMedia {
+        input: String,
+    },
     Play,
     Pause,
     /// Stop playback and clear the queue.
@@ -55,6 +59,13 @@ impl PlayerCommand {
         snapshot: &PlayerSnapshot,
     ) -> Result<(), CommandValidationError> {
         match self {
+            Self::EnqueueMedia { input }
+                if input.trim().is_empty()
+                    || input.len() > 4_096
+                    || input.chars().any(char::is_control) =>
+            {
+                Err(CommandValidationError::InvalidMediaInput)
+            }
             Self::Play if snapshot.state != PlayerState::Paused => {
                 Err(CommandValidationError::UnavailableInState {
                     command: "play",
@@ -132,7 +143,8 @@ impl PlayerCommand {
                 }
                 Ok(())
             }
-            Self::Play
+            Self::EnqueueMedia { .. }
+            | Self::Play
             | Self::Pause
             | Self::Stop
             | Self::Skip

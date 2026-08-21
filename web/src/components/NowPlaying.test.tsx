@@ -1,4 +1,4 @@
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -20,80 +20,33 @@ afterEach(() => {
   sectionRender.mockClear();
 });
 
-describe("NowPlaying connection state", () => {
-  it("does not rerender when only the player clock changes outside its stable props", () => {
+describe("NowPlaying music presentation", () => {
+  it("does not rerender when stable props are reused", () => {
     const snapshot = createDemoSnapshot("guild-1");
     const guild = demoGuilds[0];
-    const { rerender } = render(
-      <NowPlaying guild={guild} snapshot={snapshot} />
-    );
+    const { rerender } = render(<NowPlaying guild={guild} snapshot={snapshot} />);
     const initialRenders = sectionRender.mock.calls.length;
-    expect(initialRenders).toBeGreaterThan(0);
 
-    rerender(
-      <NowPlaying guild={guild} snapshot={snapshot} />
-    );
+    rerender(<NowPlaying guild={guild} snapshot={snapshot} />);
 
     expect(sectionRender).toHaveBeenCalledTimes(initialRenders);
   });
 
-  it("does not claim that voice or 360° Audio is active while disconnected", () => {
-    const snapshot: PlayerSnapshot = {
-      ...createDemoSnapshot("guild-1"),
-      state: "disconnected",
-      voiceConnected: false,
-      voiceChannelName: null,
-      spatialEnabled: false
-    };
-
-    render(<NowPlaying guild={demoGuilds[0]} snapshot={snapshot} />);
-
-    expect(screen.getAllByText("未接続")).toHaveLength(2);
-    expect(screen.getByText("オフ")).toBeTruthy();
-    expect(screen.queryByText("Connected")).toBeNull();
-    expect(screen.queryByText("HRIR適用中")).toBeNull();
-  });
-
-  it("only shows the artwork marker when 360° Audio is enabled", () => {
-    const snapshot = createDemoSnapshot("guild-1");
-    const { rerender } = render(
-      <NowPlaying guild={demoGuilds[0]} snapshot={snapshot} />
-    );
-
-    expect(screen.getByText("360°")).toBeTruthy();
-    rerender(
+  it("removes the redundant playback, voice, and HRIR metric cards", () => {
+    render(
       <NowPlaying
         guild={demoGuilds[0]}
-        snapshot={{ ...snapshot, spatialEnabled: false }}
+        snapshot={{ ...createDemoSnapshot("guild-1"), state: "disconnected" }}
       />
     );
-    expect(screen.queryByText("360°")).toBeNull();
+
+    expect(screen.queryByText("ボイス")).toBeNull();
+    expect(screen.queryByText("HRIR適用中")).toBeNull();
+    expect(screen.queryByText("360° Audio")).toBeNull();
+    expect(sectionRender).toHaveBeenCalledTimes(1);
   });
 
-  it("uses a generic voice label and omits unavailable live metadata", () => {
-    const fixture = createDemoSnapshot("guild-1");
-    if (fixture.track === null) throw new Error("demo track fixture is missing");
-    const snapshot: PlayerSnapshot = {
-      ...fixture,
-      voiceConnected: true,
-      voiceChannelName: null,
-      track: {
-        ...fixture.track,
-        artist: null,
-        album: null,
-        requestedBy: null
-      }
-    };
-
-    render(<NowPlaying guild={demoGuilds[0]} snapshot={snapshot} />);
-
-    expect(screen.getByText("接続中")).toBeTruthy();
-    expect(screen.queryByText("Discord audio")).toBeNull();
-    expect(screen.queryByText("PepeAudio queue")).toBeNull();
-    expect(screen.queryByText(/リクエスト/u)).toBeNull();
-  });
-
-  it("shows the validated catalog origin for the current track", () => {
+  it("uses the track title itself as the validated external link", () => {
     const fixture = createDemoSnapshot("guild-1");
     if (fixture.track === null) throw new Error("demo track fixture is missing");
     render(
@@ -118,49 +71,64 @@ describe("NowPlaying connection state", () => {
       />
     );
 
-    expect(screen.getByRole("link", { name: /Spotifyで開く/u })).toBeTruthy();
+    const link = screen.getByRole("link", { name: /Signals After Rain/u });
+    expect(link.getAttribute("href"))
+      .toBe("https://open.spotify.com/track/4uLU6hMCjMI75M1A2tKUQC");
+    expect(screen.queryByText(/Spotifyで開く/u)).toBeNull();
+    expect(screen.queryByText(/YouTubeで再生/u)).toBeNull();
   });
 
-  it("does not describe a paused track as playing", () => {
-    const snapshot = { ...createDemoSnapshot("guild-1"), state: "paused" as const };
-    render(<NowPlaying guild={demoGuilds[0]} snapshot={snapshot} />);
+  it("renders a safe artwork and falls back after an image failure", () => {
+    const fixture = createDemoSnapshot("guild-1");
+    if (fixture.track === null) throw new Error("demo track fixture is missing");
+    const { container } = render(
+      <NowPlaying
+        guild={demoGuilds[0]}
+        snapshot={{
+          ...fixture,
+          track: {
+            ...fixture.track,
+            artworkUrl: "https://i.ytimg.com/vi/dQw4w9WgXcQ/hqdefault.jpg"
+          }
+        }}
+      />
+    );
 
-    expect(screen.getAllByText("一時停止中")).toHaveLength(2);
-    expect(screen.queryByText("Discordで再生中")).toBeNull();
+    const image = screen.getByRole("img", { name: /Signals After Rainのアートワーク/u });
+    fireEvent.error(image);
+    expect(container.querySelector("img")).toBeNull();
+    expect(container.querySelector(".lucide-audio-lines")).toBeTruthy();
   });
 
-  it("distinguishes a trackless loading state from an empty player", () => {
-    const snapshot: PlayerSnapshot = {
+  it("distinguishes track loading from the empty player", () => {
+    const loading: PlayerSnapshot = {
       ...createDemoSnapshot("guild-1"),
       state: "loading",
       track: null
     };
-    const { container } = render(
-      <NowPlaying guild={demoGuilds[0]} snapshot={snapshot} />
+    const { rerender } = render(
+      <NowPlaying guild={demoGuilds[0]} snapshot={loading} />
     );
 
-    expect(screen.getByText("次の曲を読み込んでいます")).toBeTruthy();
-    expect(screen.getByRole("status")).toBeTruthy();
-    expect(container.querySelector(".astryx-spinner")).toBeTruthy();
-    expect(screen.queryByText("再生待ちです")).toBeNull();
+    expect(screen.getByText("曲を準備しています")).toBeTruthy();
+    rerender(
+      <NowPlaying
+        guild={demoGuilds[0]}
+        snapshot={{ ...loading, state: "idle_connected" }}
+      />
+    );
+    expect(screen.getByText("まだ何も再生していません")).toBeTruthy();
   });
 
-  it("uses cards for playback metrics instead of nested full-bleed sections", () => {
-    const snapshot: PlayerSnapshot = {
-      ...createDemoSnapshot("guild-1"),
-      state: "disconnected",
-      voiceConnected: false,
-      track: null,
-      spatialEnabled: false
-    };
-
-    render(<NowPlaying guild={demoGuilds[0]} snapshot={snapshot} />);
-
-    const cards = ["再生", "ボイス", "360° Audio"].map((label) =>
-      screen.getByText(label).closest(".astryx-card")
+  it("does not describe a paused track as playing", () => {
+    render(
+      <NowPlaying
+        guild={demoGuilds[0]}
+        snapshot={{ ...createDemoSnapshot("guild-1"), state: "paused" }}
+      />
     );
-    expect(cards.every(Boolean)).toBe(true);
-    expect(new Set(cards).size).toBe(3);
-    expect(sectionRender).toHaveBeenCalledTimes(1);
+
+    expect(screen.getAllByText("一時停止中")).toHaveLength(1);
+    expect(screen.queryByText("Discordで再生中")).toBeNull();
   });
 });

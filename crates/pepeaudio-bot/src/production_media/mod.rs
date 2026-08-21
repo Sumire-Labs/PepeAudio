@@ -149,6 +149,29 @@ impl MediaResolver for ProductionMediaResolver {
         self.maximum_playlist_items
     }
 
+    async fn resolve_input(
+        &self,
+        guild_id: GuildId,
+        requester: UserId,
+        input: &str,
+        maximum_items: usize,
+    ) -> Result<ResolvedMediaBatch, ResolveError> {
+        let input = input.trim();
+        if input.is_empty() || input.len() > 4_096 || input.chars().any(char::is_control) {
+            return Err(ResolveError::UnsupportedUrl);
+        }
+        match Url::parse(input) {
+            Ok(_) => {
+                self.resolve_url(guild_id, requester, input, maximum_items)
+                    .await
+            }
+            Err(_) if input.contains("://") || input.len() > 256 => {
+                Err(ResolveError::UnsupportedUrl)
+            }
+            Err(_) => self.resolve_query(input, requester).await,
+        }
+    }
+
     async fn resolve_url(
         &self,
         _guild_id: GuildId,

@@ -5,6 +5,7 @@ use uuid::Uuid;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum CommandValidationError {
+    InvalidMediaInput,
     GuildMismatch {
         command_guild_id: GuildId,
         snapshot_guild_id: GuildId,
@@ -38,6 +39,7 @@ pub enum CommandValidationError {
 impl fmt::Display for CommandValidationError {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
+            Self::InvalidMediaInput => formatter.write_str("media input is invalid"),
             Self::GuildMismatch {
                 command_guild_id,
                 snapshot_guild_id,

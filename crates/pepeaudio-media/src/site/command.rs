@@ -42,6 +42,27 @@ pub(crate) fn search(config: &YtDlpConfig, provider: SiteProvider, query: &str) 
     discover(config, provider, &input, 5)
 }
 
+pub(crate) fn resolve_query(
+    config: &YtDlpConfig,
+    provider: SiteProvider,
+    query: &str,
+) -> CommandSpec {
+    let input = format!("{}{query}", provider.single_search_prefix());
+    let mut arguments = base(config, provider);
+    arguments.extend(strings([
+        "--no-playlist",
+        "--playlist-items",
+        "1",
+        "--format",
+        provider.format_selector(),
+        "--dump-single-json",
+        "--skip-download",
+        "--",
+        &input,
+    ]));
+    specification(config, arguments).classify_unavailable_media()
+}
+
 pub(crate) fn ytdlp_version(config: &YtDlpConfig) -> CommandSpec {
     CommandSpec::new(&config.executable, strings(["--version"]))
         .with_deno_directory(&config.deno_directory)

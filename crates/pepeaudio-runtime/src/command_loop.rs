@@ -1,7 +1,6 @@
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use pepeaudio_core::{CommandResult, CommandResultCode, UnixTimeMillis};
-use pepeaudio_player::PlayerError;
 use pepeaudio_storage::{
     CommandCompletion, CommandConsumer, CommandResultStore, CommandResultWrite, DedupeClaim,
     IdempotencyStore, ReceivedCommand,
@@ -9,7 +8,8 @@ use pepeaudio_storage::{
 use uuid::Uuid;
 
 use crate::{
-    CommandAuthorization, CommandAuthorizer, CommandWorkerConfig, PlayerDirectory, command_outcome,
+    CommandAuthorization, CommandAuthorizer, CommandExecutionError, CommandWorkerConfig,
+    PlayerDirectory, command_outcome,
 };
 
 pub(crate) async fn process_command<S, D, A>(
@@ -87,10 +87,7 @@ pub(crate) async fn process_command<S, D, A>(
         }
         Ok(DedupeClaim::InProgress) | Err(_) => {}
         Ok(DedupeClaim::Acquired) => {
-            let outcome = match directory.player(guild_id).await {
-                Ok(Some(player)) => player.apply(received.envelope).await,
-                Ok(None) | Err(_) => Err(PlayerError::ActorStopped),
-            };
+            let outcome = directory.execute(received.envelope).await;
             let terminal = match outcome {
                 Ok(snapshot) => Some(command_outcome::applied(
                     command_id,
@@ -98,7 +95,13 @@ pub(crate) async fn process_command<S, D, A>(
                     snapshot.guild_id,
                     snapshot.revision,
                 )),
-                Err(error) => command_outcome::rejected(command_id, guild_id, &error),
+                Err(CommandExecutionError::Player(error)) => {
+                    command_outcome::rejected(command_id, guild_id, &error)
+                }
+                Err(CommandExecutionError::Rejected(code)) => {
+                    Some(CommandResult::rejected(command_id, guild_id, code, None))
+                }
+                Err(CommandExecutionError::Retryable) => None,
             };
             if let Some(result) = terminal {
                 complete_with_result_and_acknowledge(

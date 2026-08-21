@@ -72,7 +72,7 @@ fn collection_with_empty_error(
             .into_iter()
             .take(maximum)
             .filter_map(|entry| {
-                if let Some(reference) = entry.and_then(|entry| reference(entry, provider).ok()) {
+                if let Some(reference) = entry.and_then(|entry| reference(&entry, provider).ok()) {
                     Some(reference)
                 } else {
                     skipped_items += 1;
@@ -133,6 +133,31 @@ pub(crate) fn resolved(
     config: &YtDlpConfig,
 ) -> Result<SiteResolvedTrack, SiteError> {
     let raw: RawInfo = serde_json::from_slice(bytes).map_err(|_| SiteError::InvalidMetadata)?;
+    resolved_info(raw, reference, config)
+}
+
+pub(crate) fn resolved_search(
+    bytes: &[u8],
+    provider: SiteProvider,
+    config: &YtDlpConfig,
+) -> Result<SiteResolvedTrack, SiteError> {
+    let mut raw: RawInfo = serde_json::from_slice(bytes).map_err(|_| SiteError::InvalidMetadata)?;
+    if raw.kind.as_deref() == Some("playlist") || raw.entries.is_some() {
+        raw = raw
+            .entries
+            .take()
+            .and_then(|entries| entries.into_iter().flatten().next())
+            .ok_or(SiteError::NoSearchMatch)?;
+    }
+    let reference = reference_from_raw(&raw, provider)?;
+    resolved_info(raw, &reference, config)
+}
+
+fn resolved_info(
+    raw: RawInfo,
+    reference: &SiteReference,
+    config: &YtDlpConfig,
+) -> Result<SiteResolvedTrack, SiteError> {
     let provider = reference.provider;
     if raw.is_live.unwrap_or(false)
         || !matches!(
@@ -235,16 +260,21 @@ fn valid_youtube_id(id: &str) -> bool {
             .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'_' | b'-'))
 }
 
-fn reference(raw: RawInfo, provider: SiteProvider) -> Result<SiteReference, SiteError> {
-    let title = raw.title.and_then(clean_title);
+fn reference(raw: &RawInfo, provider: SiteProvider) -> Result<SiteReference, SiteError> {
+    reference_from_raw(raw, provider)
+}
+
+fn reference_from_raw(raw: &RawInfo, provider: SiteProvider) -> Result<SiteReference, SiteError> {
+    let title = raw.title.clone().and_then(clean_title);
     let artist = raw
         .artist
-        .or(raw.uploader)
-        .or(raw.channel)
+        .clone()
+        .or_else(|| raw.uploader.clone())
+        .or_else(|| raw.channel.clone())
         .and_then(clean_title);
     let duration_ms = raw.duration.and_then(finite_duration_ms);
-    if let Some(url) = raw.webpage_url.or(raw.url)
-        && let Ok(mut reference) = validated_reference(provider, &url)
+    if let Some(url) = raw.webpage_url.as_ref().or(raw.url.as_ref())
+        && let Ok(mut reference) = validated_reference(provider, url)
     {
         reference.title = title;
         reference.artist = artist;
@@ -252,8 +282,8 @@ fn reference(raw: RawInfo, provider: SiteProvider) -> Result<SiteReference, Site
         return Ok(reference);
     }
     if provider == SiteProvider::YouTube {
-        let id = raw.id.ok_or(SiteError::InvalidMetadata)?;
-        if valid_youtube_id(&id) {
+        let id = raw.id.as_deref().ok_or(SiteError::InvalidMetadata)?;
+        if valid_youtube_id(id) {
             let mut reference =
                 validated_reference(provider, &format!("https://www.youtube.com/watch?v={id}"))?;
             reference.title = title;

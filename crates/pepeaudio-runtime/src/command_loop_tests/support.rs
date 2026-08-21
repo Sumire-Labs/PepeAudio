@@ -230,9 +230,9 @@ impl CommandAuthorizer for TestAuthorizer {
     }
 }
 
-pub(super) async fn process(
+pub(super) async fn process<D: PlayerDirectory>(
     store: &TestStore,
-    directory: &TestDirectory,
+    directory: &D,
     authorizer: &TestAuthorizer,
 ) {
     process_command(store, directory, authorizer, &config(), 0, received()).await;

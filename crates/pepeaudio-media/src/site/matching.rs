@@ -37,13 +37,37 @@ pub(super) fn ranked_candidates<'a>(
         return Err(SiteError::NoSearchMatch);
     };
     let runner_up = scored.get(1).map_or(0, |(score, _)| *score);
-    if best < MINIMUM_SCORE || best.saturating_sub(runner_up) < MINIMUM_WINNING_MARGIN {
+    if best < MINIMUM_SCORE
+        || (best.saturating_sub(runner_up) < MINIMUM_WINNING_MARGIN
+            && !authoritative_tie(&scored, search, best))
+    {
         return Err(SiteError::NoSearchMatch);
     }
     let _ = candidate;
     scored.retain(|(score, _)| *score >= MINIMUM_SCORE);
     scored.truncate(MAXIMUM_CANDIDATES_TO_RESOLVE);
     Ok(scored.into_iter().map(|(_, candidate)| candidate).collect())
+}
+
+fn authoritative_tie(scored: &[(u16, &SiteReference)], search: &SiteSearch, best: u16) -> bool {
+    scored
+        .iter()
+        .take_while(|(score, _)| best.saturating_sub(*score) < MINIMUM_WINNING_MARGIN)
+        .all(|(_, candidate)| authoritative_artist(candidate, &search.expected_artists))
+}
+
+fn authoritative_artist(candidate: &SiteReference, expected_artists: &[String]) -> bool {
+    let uploader = normalize(candidate.artist.as_deref().unwrap_or_default());
+    !uploader.is_empty()
+        && expected_artists
+            .iter()
+            .map(|artist| normalize(artist))
+            .any(|artist| {
+                uploader == artist
+                    || uploader
+                        .strip_suffix(" topic")
+                        .is_some_and(|value| value == artist)
+            })
 }
 
 pub(super) fn duration_matches(preferred: Option<u64>, actual: u64) -> bool {

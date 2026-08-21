@@ -8,6 +8,7 @@
 			health_uri /health/ready
 			health_interval 10s
 			health_timeout 2s
+			flush_interval -1
 		}
 	}
 
@@ -35,7 +36,7 @@
 		X-Robots-Tag "noindex, nofollow, noarchive"
 		Referrer-Policy strict-origin-when-cross-origin
 		Permissions-Policy "camera=(), microphone=(), geolocation=()"
-		Content-Security-Policy "default-src 'self'; base-uri 'self'; connect-src 'self'; font-src 'self'; form-action 'self'; frame-ancestors 'none'; img-src 'self' data: https://cdn.discordapp.com; manifest-src 'self'; object-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; worker-src 'self'"
+		Content-Security-Policy "default-src 'self'; base-uri 'self'; connect-src 'self'; font-src 'self'; form-action 'self'; frame-ancestors 'none'; img-src 'self' data: https://cdn.discordapp.com https://i.ytimg.com; manifest-src 'self'; object-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; worker-src 'self'"
 		Strict-Transport-Security "max-age=31536000; includeSubDomains"
 	}
 }

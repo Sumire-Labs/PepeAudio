@@ -65,7 +65,11 @@ export function usePlayerCommand(
       );
       if (!isCurrent()) return;
 
-      const result = await dependencies.waitForResult(selectedGuildId, receipt.command_id);
+      const result = await dependencies.waitForResult(
+        selectedGuildId,
+        receipt.command_id,
+        command.type === "enqueue_media" ? 330_000 : 10_000
+      );
       if (!isCurrent()) return;
       if (result.status !== "applied") {
         throw new UserFacingError(commandFailureMessage(result));

@@ -30,10 +30,7 @@ export const playerBarStyles = stylex.create({
   },
   volumeZone: {
     minWidth: 0,
-    width: "100%",
-    "@media (max-width: 1024px)": {
-      gridColumn: "1 / -1"
-    }
+    width: "100%"
   },
   rangeValue: {
     flexShrink: 0,

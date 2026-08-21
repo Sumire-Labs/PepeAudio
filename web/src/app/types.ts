@@ -107,6 +107,7 @@ export interface DashboardModel {
   readonly connected: boolean;
   readonly commandPending: boolean;
   readonly selectGuild: (guildId: string) => void;
+  readonly enqueueMedia: (input: string) => Promise<void> | void;
   readonly togglePlayback: () => void;
   readonly skip: () => void;
   readonly previous: () => void;

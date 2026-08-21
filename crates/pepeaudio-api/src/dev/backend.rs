@@ -239,7 +239,8 @@ fn map_validation_error(error: &CommandValidationError) -> RouteError {
             }
         }
         CommandValidationError::GuildMismatch { .. } => RouteError::Internal,
-        CommandValidationError::DeadlineExpired { .. }
+        CommandValidationError::InvalidMediaInput
+        | CommandValidationError::DeadlineExpired { .. }
         | CommandValidationError::UnavailableInState { .. }
         | CommandValidationError::NoCurrentTrack { .. }
         | CommandValidationError::NoPreviousTrack

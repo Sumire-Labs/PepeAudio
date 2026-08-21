@@ -1,8 +1,8 @@
 use std::{ops::Range, sync::Arc, time::Duration};
 
 use async_trait::async_trait;
-use pepeaudio_core::GuildId;
-use pepeaudio_player::PlayerHandle;
+use pepeaudio_core::{CommandEnvelope, CommandResultCode, GuildId, PlayerSnapshot};
+use pepeaudio_player::{PlayerError, PlayerHandle};
 use pepeaudio_storage::{CommandConsumer, CommandResultStore, IdempotencyStore};
 use thiserror::Error;
 use tokio::{sync::watch, task::JoinSet};
@@ -15,6 +15,32 @@ pub const DEFAULT_COMMAND_RESULT_RETENTION: Duration = Duration::from_hours(24);
 #[async_trait]
 pub trait PlayerDirectory: Send + Sync + 'static {
     async fn player(&self, guild_id: GuildId) -> Result<Option<PlayerHandle>, WorkerPlayerError>;
+
+    async fn execute(
+        &self,
+        envelope: CommandEnvelope,
+    ) -> Result<PlayerSnapshot, CommandExecutionError> {
+        let guild_id = envelope.guild_id;
+        let player = self
+            .player(guild_id)
+            .await
+            .map_err(|_| CommandExecutionError::Retryable)?
+            .ok_or(CommandExecutionError::Retryable)?;
+        player
+            .apply(envelope)
+            .await
+            .map_err(CommandExecutionError::Player)
+    }
+}
+
+#[derive(Debug, Error)]
+pub enum CommandExecutionError {
+    #[error(transparent)]
+    Player(#[from] PlayerError),
+    #[error("command was rejected with a stable result code")]
+    Rejected(CommandResultCode),
+    #[error("command execution dependency is temporarily unavailable")]
+    Retryable,
 }
 
 #[derive(Clone, Copy, Debug, Eq, Error, PartialEq)]

@@ -26,6 +26,7 @@ interface DashboardInspectorProps {
   readonly onMove: (trackId: string, beforeTrackId: string | null) => void;
   readonly onPresetChange: (presetId: string) => void;
   readonly onSpatialToggle: () => void;
+  readonly onCollapse?: (() => void) | undefined;
 }
 
 export function DashboardInspector({
@@ -40,7 +41,8 @@ export function DashboardInspector({
   onRemove,
   onMove,
   onPresetChange,
-  onSpatialToggle
+  onSpatialToggle,
+  onCollapse
 }: DashboardInspectorProps) {
   const queuePanel = (
     <QueuePanel
@@ -48,6 +50,7 @@ export function DashboardInspector({
       commandPending={commandPending}
       onRemove={onRemove}
       onMove={onMove}
+      onCollapse={presentation === "panel" ? onCollapse : undefined}
     />
   );
   const spatialPanel = (

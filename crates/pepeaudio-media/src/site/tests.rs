@@ -206,6 +206,58 @@ async fn commands_disable_ambient_configuration_and_select_safe_direct_audio() {
 }
 
 #[tokio::test]
+async fn a_single_track_page_skips_discovery_and_resolves_in_one_process() {
+    let runner = std::sync::Arc::new(FakeRunner::json([r#"{
+        "id":"abcdefghijk","webpage_url":"https://www.youtube.com/watch?v=abcdefghijk",
+        "title":"Direct Track","uploader":"Artist","duration":180,"protocol":"https",
+        "vcodec":"none","acodec":"opus",
+        "url":"https://rr1.googlevideo.com/videoplayback","http_headers":{}
+    }"#]));
+    let client = YtDlpClient::new(config(), runner.clone()).expect("client");
+
+    let resolved = client
+        .resolve_page("https://www.youtube.com/watch?v=abcdefghijk")
+        .await
+        .expect("single process resolve");
+
+    assert_eq!(resolved.title, "Direct Track");
+    let commands = runner.commands.lock().expect("commands");
+    assert_eq!(commands.len(), 1);
+    assert!(
+        commands[0]
+            .arguments()
+            .iter()
+            .all(|argument| argument != "--flat-playlist")
+    );
+}
+
+#[tokio::test]
+async fn an_explicit_song_search_resolves_the_first_youtube_result_in_one_process() {
+    let runner = std::sync::Arc::new(FakeRunner::json([r#"{
+        "_type":"playlist","entries":[{
+          "id":"abcdefghijk","webpage_url":"https://www.youtube.com/watch?v=abcdefghijk",
+          "title":"Alan Walker - Faded","uploader":"Alan Walker","duration":213,
+          "protocol":"https","vcodec":"none","acodec":"opus",
+          "url":"https://rr1.googlevideo.com/videoplayback","http_headers":{}
+        }]
+    }"#]));
+    let client = YtDlpClient::new(config(), runner.clone()).expect("client");
+
+    let resolved = client
+        .resolve_query("Alan Walker Faded")
+        .await
+        .expect("first YouTube result");
+
+    assert_eq!(resolved.title, "Alan Walker - Faded");
+    let commands = runner.commands.lock().expect("commands");
+    assert_eq!(commands.len(), 1);
+    assert_eq!(
+        commands[0].arguments().last(),
+        Some(&OsString::from("ytsearch1:Alan Walker Faded"))
+    );
+}
+
+#[tokio::test]
 async fn playlist_is_bounded_and_reports_truncation() {
     let runner = std::sync::Arc::new(FakeRunner::json([r#"{
         "_type":"playlist","title":"Long list","playlist_count":40,"entries":[
