@@ -124,12 +124,15 @@ impl SnapshotSource for InMemoryPlayerBackend {
 
 impl PlayerEventSource for InMemoryPlayerBackend {
     fn subscribe(&self, guild_id: GuildId) -> Result<broadcast::Receiver<PlayerEvent>, PortError> {
-        let inner = self.inner.lock().map_err(|_| PortError::Internal)?;
-        inner
+        let mut inner = self.inner.lock().map_err(|_| PortError::Internal)?;
+        Ok(inner
             .senders
-            .get(&guild_id)
-            .map(broadcast::Sender::subscribe)
-            .ok_or(PortError::NotFound)
+            .entry(guild_id)
+            .or_insert_with(|| {
+                let (sender, _) = broadcast::channel(self.event_capacity);
+                sender
+            })
+            .subscribe())
     }
 }
 

@@ -10,7 +10,52 @@ use http_body_util::BodyExt;
 use tokio::time::timeout;
 use tower::ServiceExt;
 
-use support::{fixture, playing_snapshot, request};
+use support::{empty_fixture, fixture, playing_snapshot, request};
+
+#[tokio::test]
+async fn sse_waits_from_revision_zero_before_the_first_player_snapshot() {
+    let fixture = empty_fixture(4);
+    let path = format!("/api/v1/guilds/{}/events", fixture.guild_id);
+    let response = fixture
+        .app
+        .clone()
+        .oneshot(
+            request(&fixture, Method::GET, &path)
+                .body(Body::empty())
+                .expect("valid request"),
+        )
+        .await
+        .expect("router response");
+    assert_eq!(response.status(), StatusCode::OK);
+
+    let mut body = response.into_body();
+    let initial = timeout(Duration::from_secs(1), body.frame())
+        .await
+        .expect("initial SSE event timeout")
+        .expect("initial SSE frame")
+        .expect("initial body frame")
+        .into_data()
+        .expect("initial data frame");
+    let initial = String::from_utf8(initial.to_vec()).expect("UTF-8 SSE frame");
+    assert!(initial.contains("event: snapshot"));
+    assert!(initial.contains("id: 0"));
+    assert!(initial.contains("\"state\":\"disconnected\""));
+
+    fixture
+        .backend
+        .publish_snapshot(playing_snapshot(fixture.guild_id, fixture.user_id, 1))
+        .expect("publish first snapshot");
+    let update = timeout(Duration::from_secs(1), body.frame())
+        .await
+        .expect("player SSE event timeout")
+        .expect("player SSE frame")
+        .expect("player body frame")
+        .into_data()
+        .expect("player data frame");
+    let update = String::from_utf8(update.to_vec()).expect("UTF-8 SSE frame");
+    assert!(update.contains("event: player"));
+    assert!(update.contains("id: 1"));
+}
 
 #[tokio::test]
 async fn sse_sends_a_full_snapshot_then_revisioned_player_events() {

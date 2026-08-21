@@ -11,6 +11,7 @@ use axum::{
 
 use crate::{
     Access, ApiError, AppState, Principal,
+    initial_snapshot::initial_snapshot,
     sse::{admission_guarded_stream, authorization_guarded_stream, player_stream},
     validation::{guild_id, last_event_id},
 };
@@ -45,7 +46,7 @@ pub(crate) async fn events(
         .snapshot(guild_id)
         .await
         .map_err(ApiError::from)?
-        .ok_or(ApiError::NotFound)?;
+        .unwrap_or_else(|| initial_snapshot(guild_id, state.clock.now()));
     if snapshot.guild_id != guild_id {
         return Err(ApiError::Internal);
     }

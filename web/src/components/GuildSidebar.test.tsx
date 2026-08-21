@@ -54,6 +54,25 @@ describe("GuildSidebar accessible names", () => {
     expect(screen.queryByRole("separator", { name: "Resize sidebar" })).toBeNull();
   });
 
+  it("keeps the guild list scrollable without reserving a visible scrollbar", () => {
+    const guild = demoGuilds[0];
+    if (!guild) throw new Error("demo guild fixture is missing");
+    render(
+      <GuildSidebar
+        guilds={[guild]}
+        selectedGuildId={guild.id}
+        account={null}
+        status="ready"
+        onSelect={vi.fn()}
+        onLogout={null}
+        loggingOut={false}
+      />
+    );
+
+    const section = screen.getByRole("group", { name: "Discordサーバー" });
+    expect(section.parentElement?.style.scrollbarWidth).toBe("none");
+  });
+
   it("keeps each guild name and status on its button when visible copy is collapsed", () => {
     const guild = demoGuilds[0];
     if (!guild) throw new Error("demo guild fixture is missing");

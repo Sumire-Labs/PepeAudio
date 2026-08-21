@@ -13,6 +13,7 @@ pub mod dev;
 mod error;
 mod handlers;
 mod hrir_catalog;
+mod initial_snapshot;
 mod ports;
 mod router;
 mod shutdown;

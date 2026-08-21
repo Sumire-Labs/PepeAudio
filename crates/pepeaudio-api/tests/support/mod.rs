@@ -35,7 +35,31 @@ pub(crate) fn fixture(event_capacity: usize) -> Fixture {
     fixture_for_guild(event_capacity, GuildId::new(10).expect("valid guild ID"))
 }
 
+pub(crate) fn empty_fixture(event_capacity: usize) -> Fixture {
+    fixture_with_snapshots(
+        event_capacity,
+        GuildId::new(10).expect("valid guild ID"),
+        [],
+    )
+}
+
 pub(crate) fn fixture_for_guild(event_capacity: usize, guild_id: GuildId) -> Fixture {
+    fixture_with_snapshots(
+        event_capacity,
+        guild_id,
+        [playing_snapshot(
+            guild_id,
+            UserId::new(20).expect("valid user ID"),
+            7,
+        )],
+    )
+}
+
+fn fixture_with_snapshots(
+    event_capacity: usize,
+    guild_id: GuildId,
+    snapshots: impl IntoIterator<Item = PlayerSnapshot>,
+) -> Fixture {
     let catalog = Arc::new(StaticHrirPresetCatalog::new([HrirPresetSummary {
         id: HrirPresetId::new("fixture-neutral").expect("preset ID"),
         display_name: "Fixture Neutral".into(),
@@ -46,7 +70,7 @@ pub(crate) fn fixture_for_guild(event_capacity: usize, guild_id: GuildId) -> Fix
             attribution: Some("API test fixture".into()),
         },
     }]));
-    fixture_with_catalog(event_capacity, guild_id, catalog)
+    fixture_with_catalog_and_snapshots(event_capacity, guild_id, catalog, snapshots)
 }
 
 pub(crate) fn fixture_with_catalog(
@@ -59,6 +83,26 @@ pub(crate) fn fixture_with_catalog(
         [playing_snapshot(guild_id, user_id, 7)],
         event_capacity,
     ));
+    build_fixture(guild_id, user_id, backend, catalog)
+}
+
+fn fixture_with_catalog_and_snapshots(
+    event_capacity: usize,
+    guild_id: GuildId,
+    catalog: Arc<dyn HrirPresetCatalogSource>,
+    snapshots: impl IntoIterator<Item = PlayerSnapshot>,
+) -> Fixture {
+    let user_id = UserId::new(20).expect("valid user ID");
+    let backend = Arc::new(InMemoryPlayerBackend::new(snapshots, event_capacity));
+    build_fixture(guild_id, user_id, backend, catalog)
+}
+
+fn build_fixture(
+    guild_id: GuildId,
+    user_id: UserId,
+    backend: Arc<InMemoryPlayerBackend>,
+    catalog: Arc<dyn HrirPresetCatalogSource>,
+) -> Fixture {
     let authorizer = Arc::new(AllowListAuthorizer::new());
     authorizer
         .grant(user_id, guild_id)

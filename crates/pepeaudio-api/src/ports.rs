@@ -26,7 +26,7 @@ pub enum Access {
 }
 
 pub trait SnapshotSource: Send + Sync {
-    /// Returns `None` when the guild player is not visible to this service.
+    /// Returns `None` before the guild has produced its first durable snapshot.
     fn snapshot(
         &self,
         guild_id: GuildId,

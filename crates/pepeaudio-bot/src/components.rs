@@ -55,38 +55,48 @@ pub fn build_ephemeral_status_panel(text: impl Into<String>) -> Result<Message, 
 }
 
 fn status_components(snapshot: &PlayerSnapshot) -> Vec<Component> {
-    let title = snapshot
-        .current_track
-        .as_ref()
-        .map_or("再生中の曲はありません", |track| {
-            track.title.as_str()
-        });
-    let voice_channel = snapshot.voice_channel_id.map_or_else(
-        || "未接続".to_owned(),
-        |channel_id| format!("<#{channel_id}>"),
-    );
-    let status = format!(
-        "## {}\n状態: `{}` · ボイス: {} · 音量: `{}%` · キュー: `{}曲`",
-        escape_discord_markdown(title),
-        state_label(snapshot.state),
-        voice_channel,
-        snapshot.volume.percent(),
-        snapshot.queued_tracks
-    );
-    let progress = snapshot.current_track.as_ref().map_or_else(
-        || "`--:-- / --:--`".to_owned(),
+    let title = snapshot.current_track.as_ref().map_or_else(
+        || "## 再生中の曲はありません".to_owned(),
         |track| {
-            format!(
-                "`{} / {}`",
-                format_duration(track.position_ms),
-                track
-                    .duration_ms
-                    .map_or_else(|| "LIVE".to_owned(), format_duration)
+            let title = escape_discord_markdown(&track.title);
+            track.provenance.as_ref().map_or_else(
+                || format!("## {title}"),
+                |provenance| {
+                    let page = provenance.origin().unwrap_or_else(|| provenance.playback());
+                    format!("## [{title}]({})", markdown_link_destination(page.url()))
+                },
             )
         },
     );
 
-    vec![Component::text(status), Component::text(progress)]
+    vec![
+        Component::text(title),
+        Component::text(progress_bar(snapshot)),
+    ]
+}
+
+fn markdown_link_destination(value: &str) -> String {
+    value.replace('(', "%28").replace(')', "%29")
+}
+
+fn progress_bar(snapshot: &PlayerSnapshot) -> String {
+    const SEGMENTS: usize = 18;
+    let Some(track) = snapshot.current_track.as_ref() else {
+        return format!("`{}`", "─".repeat(SEGMENTS));
+    };
+    let Some(duration) = track.duration_ms.filter(|duration| *duration > 0) else {
+        return format!("`{}`", "━".repeat(SEGMENTS));
+    };
+    let maximum_index = SEGMENTS - 1;
+    let marker = u128::from(track.position_ms.min(duration))
+        .saturating_mul(u128::try_from(maximum_index).unwrap_or(u128::MAX))
+        / u128::from(duration);
+    let marker = usize::try_from(marker).unwrap_or(maximum_index);
+    format!(
+        "`{}●{}`",
+        "━".repeat(marker),
+        "─".repeat(maximum_index.saturating_sub(marker))
+    )
 }
 
 fn playback_controls(
@@ -236,27 +246,12 @@ fn visible_hrir_options<'a>(
     visible
 }
 
-fn state_label(state: PlayerState) -> &'static str {
-    match state {
-        PlayerState::Disconnected => "切断",
-        PlayerState::IdleConnected => "待機",
-        PlayerState::Loading => "読込中",
-        PlayerState::Playing => "再生中",
-        PlayerState::Paused => "一時停止",
-    }
-}
-
 fn repeat_label(mode: RepeatMode) -> &'static str {
     match mode {
         RepeatMode::Off => "無効",
         RepeatMode::Track => "曲",
         RepeatMode::Queue => "キュー",
     }
-}
-
-fn format_duration(milliseconds: u64) -> String {
-    let seconds = milliseconds / 1_000;
-    format!("{}:{:02}", seconds / 60, seconds % 60)
 }
 
 #[cfg(test)]

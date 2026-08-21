@@ -60,11 +60,13 @@ fn now_panel_is_components_v2_only() {
     assert!(json.get("content").is_none());
     assert!(json.get("embeds").is_none());
     assert!(!json.to_string().contains("accent_color"));
-    assert!(json.to_string().contains("<#24>"));
+    assert!(!json.to_string().contains("<#24>"));
+    assert!(!json.to_string().contains("状態:"));
+    assert!(!json.to_string().contains("ボイス:"));
 }
 
 #[test]
-fn now_panel_omits_external_source_buttons() {
+fn now_panel_embeds_the_origin_in_the_title_without_link_buttons() {
     let provenance = TrackProvenance::new(
         Some(page(
             MediaProvider::Spotify,
@@ -81,9 +83,31 @@ fn now_panel_omits_external_source_buttons() {
     let serialized = json.to_string();
     assert!(!serialized.contains("Spotifyで開く"));
     assert!(!serialized.contains("YouTubeで再生"));
-    assert!(!serialized.contains("open.spotify.com"));
+    assert!(
+        serialized.contains("## [Example](https://open.spotify.com/track/4uLU6hMCjMI75M1A2tKUQC)")
+    );
     assert!(!serialized.contains("youtube.com"));
     assert!(!serialized.contains("\"style\":5"));
+}
+
+#[test]
+fn now_panel_replaces_textual_timestamps_with_a_progress_bar() {
+    let provenance = TrackProvenance::new(
+        None,
+        page(
+            MediaProvider::YouTube,
+            "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+        ),
+    )
+    .expect("provenance");
+    let serialized = now_panel_with_provenance(provenance).to_string();
+
+    assert!(serialized.contains('●'));
+    assert!(serialized.contains('─'));
+    assert!(!serialized.contains("0:01"));
+    assert!(!serialized.contains("2:00"));
+    assert!(!serialized.contains("音量:"));
+    assert!(!serialized.contains("キュー:"));
 }
 
 #[test]

@@ -13,6 +13,7 @@ use uuid::Uuid;
 
 use crate::{
     Access, ApiError, AppState, Principal,
+    initial_snapshot::initial_snapshot,
     validation::{command_deadline, guild_id, validate_mutation_headers},
 };
 
@@ -38,7 +39,7 @@ pub(crate) async fn snapshot(
         .snapshot(guild_id)
         .await
         .map_err(ApiError::from)?
-        .ok_or(ApiError::NotFound)?;
+        .unwrap_or_else(|| initial_snapshot(guild_id, state.clock.now()));
     let encoded_within_limit = matches!(
         serde_json::to_vec(&snapshot),
         Ok(encoded) if encoded.len() <= MAX_PLAYER_SNAPSHOT_JSON_BYTES

@@ -14,7 +14,7 @@ import { StatusDot } from "@astryxdesign/core/StatusDot";
 import { Text } from "@astryxdesign/core/Text";
 import { useMediaQuery } from "@astryxdesign/core/hooks";
 import { Headphones, ServerOff } from "lucide-react";
-import { useState } from "react";
+import { useCallback, useState } from "react";
 
 import type { DashboardAccount, DashboardStatus, GuildSummary } from "../app/types";
 import { AccountPanel } from "./AccountPanel";
@@ -42,6 +42,12 @@ export function GuildSidebar({
 }: GuildSidebarProps) {
   const [isCollapsed, setIsCollapsed] = useState(false);
   const usesInlineSidebar = useMediaQuery("(min-width: 769px)");
+  const hideNavigationScrollbar = useCallback((section: HTMLDivElement | null) => {
+    const scrollRegion = section?.parentElement;
+    if (scrollRegion !== null && scrollRegion !== undefined) {
+      scrollRegion.style.scrollbarWidth = "none";
+    }
+  }, []);
 
   return (
     <SideNav
@@ -69,6 +75,7 @@ export function GuildSidebar({
       }
     >
       <SideNavSection
+        ref={hideNavigationScrollbar}
         title="Discordサーバー"
         endContent={<Badge variant="neutral" label={String(guilds.length)} />}
       >
