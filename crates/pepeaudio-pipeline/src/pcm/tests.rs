@@ -108,6 +108,36 @@ async fn fragmented_pcm_is_processed_and_finished() {
     assert_samples_close(&decode(&output), &samples);
 }
 
+#[test]
+fn new_processor_fades_in_from_silence() {
+    let frames = 4;
+    let mut state = test_state();
+    state.spatial_enabled = false;
+    let mut processor = state
+        .build_processor(frames, frames)
+        .expect("build processor");
+    let input = vec![1.0_f32; frames * 2];
+    let mut output = vec![0.0_f32; input.len()];
+
+    processor
+        .process_block(&input, &mut output)
+        .expect("process startup block");
+
+    assert_samples_close(
+        &output,
+        &[
+            0.0,
+            0.0,
+            1.0 / 3.0,
+            1.0 / 3.0,
+            2.0 / 3.0,
+            2.0 / 3.0,
+            1.0,
+            1.0,
+        ],
+    );
+}
+
 #[tokio::test]
 async fn cancellation_reaches_decoder_while_bounded_output_is_full() {
     let finished = Arc::new(AtomicBool::new(false));

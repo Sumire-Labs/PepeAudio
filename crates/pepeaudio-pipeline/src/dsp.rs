@@ -17,13 +17,18 @@ pub(crate) struct DspState {
 }
 
 impl DspState {
-    pub(crate) fn build_processor(&self, block_frames: usize) -> PipelineResult<AudioProcessor> {
+    pub(crate) fn build_processor(
+        &self,
+        block_frames: usize,
+        startup_transition_frames: usize,
+    ) -> PipelineResult<AudioProcessor> {
         let mut processor = AudioProcessor::new(
             self.preset.as_ref(),
             RenderMode::HorizontalOrbit(self.orbit_origin),
             block_frames,
         )?;
-        processor.set_output_gain(self.gain, 0);
+        processor.set_output_gain(LinearGain::SILENCE, 0);
+        processor.set_output_gain(self.gain, startup_transition_frames);
         processor.set_wet_enabled(self.spatial_enabled, 0);
         Ok(processor)
     }

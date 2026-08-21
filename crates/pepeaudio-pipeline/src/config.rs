@@ -21,7 +21,7 @@ pub struct PipelineConfig {
     pub songbird_buffer_bytes: usize,
     pub control_capacity: usize,
     pub event_capacity: usize,
-    /// Equal-power HRIR and wet/gain ramp length.
+    /// Startup, equal-power HRIR, and wet/gain ramp length.
     pub transition_frames: usize,
     pub shutdown_timeout: Duration,
 }

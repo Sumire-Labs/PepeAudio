@@ -35,8 +35,10 @@ pub(crate) async fn spawn_pcm_worker(
     lifecycle: Arc<TrackLifecycle>,
 ) -> PipelineResult<PcmWorker> {
     let orbit_origin = state.orbit_origin;
-    let processor_result =
-        tokio::task::spawn_blocking(move || state.build_processor(config.block_frames)).await;
+    let processor_result = tokio::task::spawn_blocking(move || {
+        state.build_processor(config.block_frames, config.transition_frames)
+    })
+    .await;
     let processor = match processor_result {
         Ok(Ok(processor)) => processor,
         Ok(Err(error)) => {
