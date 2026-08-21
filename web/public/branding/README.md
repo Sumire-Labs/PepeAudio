@@ -1,11 +1,13 @@
 # PepeAudio branding
 
-Place the Discord bot icon in this directory as `bot-icon.png`.
+The dashboard uses the PepeAudio mascot from this directory for its login,
+navigation, browser, and installed-app icons.
 
-- Use a square transparent PNG.
-- 512 x 512 pixels is recommended.
-- Keep the file under 512 KiB.
-- Only use artwork that you have permission to distribute.
+- `pepeaudio-mark-source.png` is the unmodified source artwork.
+- `bot-icon.png` is the transparent 512 px dashboard avatar.
+- `favicon-64.png` is the browser tab icon.
+- `apple-touch-icon.png` has an opaque background for iOS home screens.
+- `icon-192.png` and `icon-512.png` are referenced by `site.webmanifest`.
 
-The login screen and collapsed guild rail use their built-in Avatar fallback
-until `bot-icon.png` is added. Vite copies this directory into the Web build.
+Keep generated icons square, below 512 KiB, and derived from artwork that can
+be distributed with the project. Vite copies this directory into the Web build.
