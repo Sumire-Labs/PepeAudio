@@ -6,7 +6,7 @@ use std::{
     time::Duration,
 };
 
-use pepeaudio_core::Volume;
+use pepeaudio_core::{HrirPresetId, Volume};
 use url::Url;
 
 use crate::{
@@ -149,6 +149,8 @@ pub struct ServiceConfig {
 pub struct PlayerLimits {
     pub idle_disconnect: Duration,
     pub default_volume: Volume,
+    pub default_hrir_preset: HrirPresetId,
+    pub default_spatial_audio_enabled: bool,
     pub max_queue_items: NonZeroU32,
     pub max_track_duration: Duration,
     pub max_upload_bytes: NonZeroU64,

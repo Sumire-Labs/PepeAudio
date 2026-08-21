@@ -126,6 +126,28 @@ fn transport_and_toggle_buttons_use_symbols_and_state_colors() {
 }
 
 #[test]
+fn volume_selector_uses_five_percent_steps() {
+    let codec = ComponentIdCodec::new([1; 32]).expect("codec");
+    let json = serde_json::to_value(build_now_panel(&snapshot(), &codec, &[]).expect("panel"))
+        .expect("serialize");
+    let options = json["components"][0]["components"][4]["components"][0]["options"]
+        .as_array()
+        .expect("volume options");
+
+    assert_eq!(options.len(), 21);
+    assert_eq!(options.first().expect("first")["value"], "0");
+    assert_eq!(options.last().expect("last")["value"], "100");
+    assert_eq!(options[2]["value"], "10");
+    assert_eq!(options[2]["default"], true);
+    assert!(options.iter().all(|option| {
+        option["value"]
+            .as_str()
+            .and_then(|value| value.parse::<u16>().ok())
+            .is_some_and(|value| value % 5 == 0)
+    }));
+}
+
+#[test]
 fn status_panel_has_no_legacy_message_fields() {
     let message = build_status_panel("操作が完了しました。").expect("valid panel");
     let json = serde_json::to_value(message).expect("serialize");

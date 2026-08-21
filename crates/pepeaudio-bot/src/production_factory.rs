@@ -72,13 +72,12 @@ impl ProductionPlayerFactory {
             .get_guild_settings(guild_id)
             .await
             .map_err(|_| RegistryError::Factory("guild settings are unavailable".into()))?;
-        let default_preset = self
-            .catalog
-            .descriptors()
-            .into_iter()
-            .next()
-            .map(|descriptor| descriptor.id)
-            .ok_or_else(|| RegistryError::Factory("HRIR catalog is empty".into()))?;
+        let default_preset = self.defaults.default_hrir_preset.clone();
+        if self.catalog.get(&default_preset).is_none() {
+            return Err(RegistryError::Factory(
+                "configured default HRIR preset is unavailable".into(),
+            ));
+        }
         let stored = if let Some(stored) = stored {
             stored
         } else {
@@ -90,7 +89,7 @@ impl ProductionPlayerFactory {
                 control_policy: StoredControlPolicy::SameVoiceChannel,
                 dj_role_id: None,
                 default_hrir_preset_id: Some(default_preset.clone()),
-                spatial_audio_enabled: false,
+                spatial_audio_enabled: self.defaults.default_spatial_audio_enabled,
                 revision: SettingsRevision::INITIAL,
                 created_at: now,
                 updated_at: now,

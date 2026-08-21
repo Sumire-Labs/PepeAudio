@@ -33,7 +33,9 @@ fn valid_source() -> MapSource {
         )
         .with("PEPEAUDIO_VALKEY_KEYSPACE", "pepeaudio-test")
         .with("PEPEAUDIO_IDLE_DISCONNECT_SECONDS", "300")
-        .with("PEPEAUDIO_DEFAULT_VOLUME_PERCENT", "75")
+        .with("PEPEAUDIO_DEFAULT_VOLUME_PERCENT", "10")
+        .with("PEPEAUDIO_DEFAULT_HRIR_PRESET", "dht")
+        .with("PEPEAUDIO_DEFAULT_SPATIAL_AUDIO_ENABLED", "true")
         .with("PEPEAUDIO_MAX_QUEUE_ITEMS", "100")
         .with("PEPEAUDIO_MAX_TRACK_DURATION_SECONDS", "21600")
         .with("PEPEAUDIO_MAX_UPLOAD_BYTES", "10485760")
@@ -58,7 +60,9 @@ fn loads_every_documented_setting_into_typed_sections() {
     assert!(config.shards.owns(2));
     assert!(!config.shards.owns(3));
     assert_eq!(config.player.idle_disconnect, Duration::from_mins(5));
-    assert_eq!(config.player.default_volume.percent(), 75);
+    assert_eq!(config.player.default_volume.percent(), 10);
+    assert_eq!(config.player.default_hrir_preset.as_str(), "dht");
+    assert!(config.player.default_spatial_audio_enabled);
     assert_eq!(config.player.max_queue_items.get(), 100);
     assert_eq!(config.player.max_playlist_items.get(), 25);
     assert_eq!(config.player.max_site_media_bytes.get(), 100 * 1024 * 1024);
@@ -170,6 +174,14 @@ fn validates_player_limits_and_separates_storage_directories() {
     let mut volume = valid_source();
     volume.insert("PEPEAUDIO_DEFAULT_VOLUME_PERCENT", "101");
     assert!(AppConfig::from_source(&volume).is_err());
+
+    let mut hrir = valid_source();
+    hrir.insert("PEPEAUDIO_DEFAULT_HRIR_PRESET", " dht");
+    assert!(AppConfig::from_source(&hrir).is_err());
+
+    let mut spatial = valid_source();
+    spatial.insert("PEPEAUDIO_DEFAULT_SPATIAL_AUDIO_ENABLED", "yes");
+    assert!(AppConfig::from_source(&spatial).is_err());
 
     let mut upload = valid_source();
     upload.insert("PEPEAUDIO_MAX_UPLOAD_BYTES", "0");
@@ -428,6 +440,8 @@ fn api_runtime_does_not_require_bot_token_or_media_tools() {
         "PEPEAUDIO_SESSION_KEY",
         "PEPEAUDIO_IDLE_DISCONNECT_SECONDS",
         "PEPEAUDIO_DEFAULT_VOLUME_PERCENT",
+        "PEPEAUDIO_DEFAULT_HRIR_PRESET",
+        "PEPEAUDIO_DEFAULT_SPATIAL_AUDIO_ENABLED",
         "PEPEAUDIO_MAX_QUEUE_ITEMS",
         "PEPEAUDIO_MAX_TRACK_DURATION_SECONDS",
         "PEPEAUDIO_MAX_UPLOAD_BYTES",

@@ -38,7 +38,7 @@ export function PlayerVolumeControl({
           value={value}
           min={0}
           max={100}
-          step={1}
+          step={5}
           width="100%"
           valueDisplay="none"
           formatValue={(nextValue) => `${nextValue}%`}

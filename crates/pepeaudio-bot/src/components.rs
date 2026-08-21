@@ -142,13 +142,8 @@ fn volume_selector(
     action: &impl Fn(ComponentAction) -> String,
 ) -> Result<Component, ValidationError> {
     let current = u16::from(snapshot.volume.percent());
-    let mut values = (0..=10).map(|step| step * 10).collect::<Vec<_>>();
-    if !values.contains(&current) {
-        values.push(current);
-        values.sort_unstable();
-    }
-    let volumes = values
-        .into_iter()
+    let volumes = (0..=20)
+        .map(|step| step * 5)
         .map(|value| {
             SelectOption::new(format!("{value}%"), value.to_string()).selected(value == current)
         })

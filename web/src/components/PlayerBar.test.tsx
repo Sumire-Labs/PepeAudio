@@ -76,7 +76,7 @@ describe("PlayerBar volume commit", () => {
     fireEvent.keyDown(slider, { key: "ArrowLeft" });
 
     expect(setVolume).toHaveBeenCalledOnce();
-    expect(setVolume).toHaveBeenCalledWith(74);
+    expect(setVolume).toHaveBeenCalledWith(70);
   });
 
   it("reconciles a volume draft when a command finishes without a new revision", () => {
@@ -86,13 +86,13 @@ describe("PlayerBar volume commit", () => {
     const slider = screen.getByRole("slider", { name: "音量" });
 
     fireEvent.keyDown(slider, { key: "ArrowLeft" });
-    expect(slider.getAttribute("aria-valuenow")).toBe("74");
+    expect(slider.getAttribute("aria-valuenow")).toBe("70");
 
     rerender(
       <PlayerBar model={{ ...dashboard, commandPending: true }} />
     );
     expect(screen.getByRole("slider", { name: "音量" }).getAttribute("aria-valuenow"))
-      .toBe("74");
+      .toBe("70");
     rerender(<PlayerBar model={dashboard} />);
 
     expect(screen.getByRole("slider", { name: "音量" }).getAttribute("aria-valuenow"))
@@ -143,7 +143,7 @@ describe("PlayerBar volume commit", () => {
     fireEvent.blur(slider);
 
     expect(setVolume).toHaveBeenCalledOnce();
-    expect(setVolume).toHaveBeenCalledWith(38);
+    expect(setVolume).toHaveBeenCalledWith(40);
   });
 
   it("exposes a readable value for both ranges", () => {

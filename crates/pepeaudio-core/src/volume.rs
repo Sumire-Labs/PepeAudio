@@ -11,7 +11,7 @@ pub struct Volume(u8);
 impl Volume {
     pub const MUTED: Self = Self(0);
     pub const MAX: Self = Self(100);
-    pub const DEFAULT: Self = Self(75);
+    pub const DEFAULT: Self = Self(10);
 
     /// Accepts an inclusive percentage from 0 through 100.
     ///
@@ -109,7 +109,7 @@ mod tests {
     fn accepts_inclusive_bounds() {
         assert_eq!(Volume::new(0), Ok(Volume::MUTED));
         assert_eq!(Volume::new(100), Ok(Volume::MAX));
-        assert_eq!(Volume::DEFAULT.percent(), 75);
+        assert_eq!(Volume::DEFAULT.percent(), 10);
         assert!((Volume::new(25).expect("valid volume").linear_gain() - 0.25).abs() < f32::EPSILON);
     }
 

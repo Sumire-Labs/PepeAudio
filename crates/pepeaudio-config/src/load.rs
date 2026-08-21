@@ -1,6 +1,6 @@
 use std::{num::NonZeroU32, time::Duration};
 
-use pepeaudio_core::Volume;
+use pepeaudio_core::{HrirPresetId, Volume};
 
 use crate::{
     AppConfig, BotRuntimeConfig, ConfigError, ConfigResult, ConfigSource, DiscordConfig,
@@ -161,6 +161,15 @@ fn load_player_limits(source: &impl ConfigSource) -> ConfigResult<PlayerLimits> 
             "must be between 0 and 100",
         )
     })?;
+    let default_hrir_preset = HrirPresetId::new(required(source, "PEPEAUDIO_DEFAULT_HRIR_PRESET")?)
+        .map_err(|_| {
+            invalid(
+                "PEPEAUDIO_DEFAULT_HRIR_PRESET",
+                "must be a valid installed HRIR preset identifier",
+            )
+        })?;
+    let default_spatial_audio_enabled =
+        parse_bool(source, "PEPEAUDIO_DEFAULT_SPATIAL_AUDIO_ENABLED")?;
     let max_upload_bytes = std::num::NonZeroU64::new(bounded::<u64>(
         source,
         "PEPEAUDIO_MAX_UPLOAD_BYTES",
@@ -189,6 +198,8 @@ fn load_player_limits(source: &impl ConfigSource) -> ConfigResult<PlayerLimits> 
     Ok(PlayerLimits {
         idle_disconnect: Duration::from_secs(idle_seconds),
         default_volume,
+        default_hrir_preset,
+        default_spatial_audio_enabled,
         // Upcoming items are part of each realtime snapshot. Keep the bound
         // below the Web client's 1 MiB SSE frame budget even when validated
         // titles use their full 120-character allowance.

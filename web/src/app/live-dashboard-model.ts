@@ -101,7 +101,7 @@ function disconnectedSnapshot(guildId: string): PlayerSnapshot {
     track: null,
     queue: [],
     hasPreviousTrack: false,
-    volumePercent: 75,
+    volumePercent: 10,
     repeatMode: "off",
     shuffleEnabled: false,
     hrirPresetId: null,
