@@ -94,12 +94,26 @@ fn public_failure_message(
     let poise::FrameworkError::Command { error, .. } = error else {
         return "操作を完了できませんでした。入力内容、ボイスチャンネル、権限を確認して再試行してください。";
     };
+    if let Some(error) = error.downcast_ref::<crate::commands::PlayInputError>() {
+        return play_input_failure_message(error);
+    }
     error
         .downcast_ref::<crate::ResolveError>()
         .and_then(media_failure_message)
         .unwrap_or(
             "操作を完了できませんでした。入力内容、ボイスチャンネル、権限を確認して再試行してください。",
         )
+}
+
+fn play_input_failure_message(error: &crate::commands::PlayInputError) -> &'static str {
+    match error {
+        crate::commands::PlayInputError::Missing => {
+            "URLまたは音声ファイルのどちらか一方を指定してください。"
+        }
+        crate::commands::PlayInputError::Conflicting => {
+            "URLと音声ファイルは同時に指定できません。どちらか一方を選んでください。"
+        }
+    }
 }
 
 fn media_failure_message(error: &crate::ResolveError) -> Option<&'static str> {
@@ -179,6 +193,11 @@ fn command_error_class(error: &CommandError) -> &'static str {
         .is_some()
     {
         "response_after_apply"
+    } else if error
+        .downcast_ref::<crate::commands::PlayInputError>()
+        .is_some()
+    {
+        "play_input"
     } else if error.downcast_ref::<crate::VoicePolicyError>().is_some()
         || error
             .downcast_ref::<crate::voice_facts::CurrentVoiceFactsError>()
@@ -215,7 +234,7 @@ fn command_error_class(error: &CommandError) -> &'static str {
 
 #[cfg(test)]
 mod tests {
-    use super::{command_error_class, media_failure_message};
+    use super::{command_error_class, media_failure_message, play_input_failure_message};
 
     #[test]
     fn classifications_do_not_depend_on_error_messages() {
@@ -226,10 +245,22 @@ mod tests {
         let applied = crate::commands::response::applied_response_error(std::io::Error::other(
             "sensitive response details",
         ));
+        let play_input: crate::CommandError = Box::new(crate::commands::PlayInputError::Missing);
 
         assert_eq!(command_error_class(&voice), "voice_policy");
         assert_eq!(command_error_class(&media), "media_resolution");
         assert_eq!(command_error_class(&applied), "response_after_apply");
+        assert_eq!(command_error_class(&play_input), "play_input");
+    }
+
+    #[test]
+    fn play_input_failures_have_specific_safe_public_copy() {
+        let missing = play_input_failure_message(&crate::commands::PlayInputError::Missing);
+        let conflicting = play_input_failure_message(&crate::commands::PlayInputError::Conflicting);
+
+        assert!(missing.contains("URLまたは音声ファイル"));
+        assert!(missing.contains("どちらか一方"));
+        assert!(conflicting.contains("同時に指定できません"));
     }
 
     #[test]

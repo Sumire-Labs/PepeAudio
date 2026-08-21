@@ -7,10 +7,10 @@ emit 48 kHz stereo `f32le` PCM.
 
 ## Supported inputs
 
-- A direct `http` or `https` media URL supplied to `/play url`.
-- A Discord attachment URL supplied to `/play file`. Attachment metadata is
-  treated only as an untrusted hint; the URL follows the exact same validation,
-  DNS, redirect, and byte-limit path as every other remote URL.
+- A direct `http` or `https` media URL supplied through `/play`'s `url` option.
+- A Discord attachment URL supplied through `/play`'s `file` option. Attachment
+  metadata is treated only as an untrusted hint; the URL follows the exact same
+  validation, DNS, redirect, and byte-limit path as every other remote URL.
 - A YouTube or SoundCloud page or playlist when the operator enables the site
   resolver. Playlists import a bounded prefix and report skipped/truncated
   entries instead of expanding without limit.

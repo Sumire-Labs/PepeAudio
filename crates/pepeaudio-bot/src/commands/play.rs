@@ -15,37 +15,73 @@ use crate::{
 
 const MAX_COMMIT_ATTEMPTS: usize = 4;
 
-/// URLまたは添付ファイルを再生キューに追加します。
-#[poise::command(
-    slash_command,
-    guild_only,
-    subcommands("play_url", "play_file"),
-    subcommand_required
-)]
-pub(crate) async fn play(_ctx: Context<'_>) -> Result<(), CommandError> {
-    tokio::task::yield_now().await;
-    Ok(())
+#[derive(Debug, Eq, PartialEq, thiserror::Error)]
+pub(crate) enum PlayInputError {
+    #[error("a URL or an attachment is required")]
+    Missing,
+    #[error("a URL and an attachment cannot be supplied together")]
+    Conflicting,
 }
 
-/// YouTube、SoundCloud、対応中の音楽サービスのURLを追加します。
-#[poise::command(slash_command, guild_only, rename = "url")]
-pub(crate) async fn play_url(
+#[derive(Debug, Eq, PartialEq)]
+enum PlaySource {
+    Url(String),
+    Attachment(AttachmentSource),
+}
+
+/// URLまたは添付ファイルを再生キューに追加します。
+#[poise::command(slash_command, guild_only)]
+pub(crate) async fn play(
     ctx: Context<'_>,
-    #[description = "YouTube / SoundCloud / 対応カタログの曲・プレイリストURL"] url: String,
+    #[description = "YouTube / SoundCloud / 対応カタログURL（/playは入力せずURLだけ貼り付け）"]
+    #[max_length = 4096]
+    url: Option<String>,
+    #[description = "再生する音声ファイル"] file: Option<serenity::Attachment>,
 ) -> Result<(), CommandError> {
     ctx.defer().await?;
+    let source = select_play_source(url, file.map(attachment_source))?;
     let guild_id = guild_id(ctx)?;
     let (voice, policy) = voice_context(ctx).await?;
     authorize_play(voice, policy)?;
     let player = authorized_player(&ctx.data().players, guild_id, voice_context(ctx).await).await?;
     let before = player.snapshot().await?;
     let maximum_items = available_batch_items(ctx.data().media.as_ref(), &before)?;
-    let batch = ctx
-        .data()
-        .media
-        .resolve_url(guild_id, voice.actor_user_id, &url, maximum_items)
-        .await?;
+    let batch = match source {
+        PlaySource::Url(url) => {
+            ctx.data()
+                .media
+                .resolve_url(guild_id, voice.actor_user_id, &url, maximum_items)
+                .await?
+        }
+        PlaySource::Attachment(attachment) => {
+            ctx.data()
+                .media
+                .resolve_attachment(guild_id, voice.actor_user_id, attachment)
+                .await?
+        }
+    };
     finish_enqueue(ctx, player, batch).await
+}
+
+fn select_play_source(
+    url: Option<String>,
+    attachment: Option<AttachmentSource>,
+) -> Result<PlaySource, PlayInputError> {
+    match (url, attachment) {
+        (Some(url), None) => Ok(PlaySource::Url(url)),
+        (None, Some(attachment)) => Ok(PlaySource::Attachment(attachment)),
+        (None, None) => Err(PlayInputError::Missing),
+        (Some(_), Some(_)) => Err(PlayInputError::Conflicting),
+    }
+}
+
+fn attachment_source(file: serenity::Attachment) -> AttachmentSource {
+    AttachmentSource {
+        filename: file.filename,
+        url: file.url,
+        content_type: file.content_type,
+        size_bytes: u64::from(file.size),
+    }
 }
 
 async fn finish_enqueue(
@@ -112,33 +148,6 @@ async fn finish_enqueue(
     };
     let panel = build_status_panel(message).map_err(applied_response_error)?;
     edit_deferred_after_apply(ctx, &panel).await
-}
-
-/// Discordに添付した音声ファイルをキューに追加します。
-#[poise::command(slash_command, guild_only, rename = "file")]
-pub(crate) async fn play_file(
-    ctx: Context<'_>,
-    #[description = "再生する音声ファイル"] file: serenity::Attachment,
-) -> Result<(), CommandError> {
-    ctx.defer().await?;
-    let guild_id = guild_id(ctx)?;
-    let (voice, policy) = voice_context(ctx).await?;
-    authorize_play(voice, policy)?;
-    let attachment = AttachmentSource {
-        filename: file.filename,
-        url: file.url,
-        content_type: file.content_type,
-        size_bytes: u64::from(file.size),
-    };
-    let player = authorized_player(&ctx.data().players, guild_id, voice_context(ctx).await).await?;
-    let before = player.snapshot().await?;
-    let _ = available_batch_items(ctx.data().media.as_ref(), &before)?;
-    let batch = ctx
-        .data()
-        .media
-        .resolve_attachment(guild_id, voice.actor_user_id, attachment)
-        .await?;
-    finish_enqueue(ctx, player, batch).await
 }
 
 async fn commit_resolved_tracks(

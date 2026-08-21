@@ -11,12 +11,12 @@ use pepeaudio_player::{
 use pepeaudio_storage::ControlPolicy as StoredControlPolicy;
 
 use super::{
-    MAX_COMMIT_ATTEMPTS, authorize_play, authorized_player, commit_resolved_tracks, import_notice,
-    retry_revision_conflicts,
+    MAX_COMMIT_ATTEMPTS, PlayInputError, PlaySource, authorize_play, authorized_player,
+    commit_resolved_tracks, import_notice, play, retry_revision_conflicts, select_play_source,
 };
 use crate::{
-    GuildControlPolicy, PlayerFactory, PlayerRegistry, RegistryError, ResolvedMediaBatch,
-    VoiceContext,
+    AttachmentSource, GuildControlPolicy, PlayerFactory, PlayerRegistry, RegistryError,
+    ResolvedMediaBatch, VoiceContext,
 };
 
 struct CountingFactory(AtomicUsize);
@@ -36,6 +36,73 @@ impl PlayerFactory for CountingFactory {
         );
         Ok(runtime.handle())
     }
+}
+
+fn example_attachment() -> AttachmentSource {
+    AttachmentSource {
+        filename: "track.opus".into(),
+        url: "https://cdn.discordapp.com/attachments/1/2/track.opus".into(),
+        content_type: Some("audio/ogg".into()),
+        size_bytes: 42,
+    }
+}
+
+#[test]
+fn play_requires_exactly_one_source() {
+    assert!(matches!(
+        select_play_source(Some("https://example.com/audio".into()), None),
+        Ok(PlaySource::Url(url)) if url == "https://example.com/audio"
+    ));
+    assert!(matches!(
+        select_play_source(None, Some(example_attachment())),
+        Ok(PlaySource::Attachment(source)) if source.filename == "track.opus"
+    ));
+    assert_eq!(select_play_source(None, None), Err(PlayInputError::Missing));
+    assert_eq!(
+        select_play_source(
+            Some("https://example.com/audio".into()),
+            Some(example_attachment()),
+        ),
+        Err(PlayInputError::Conflicting)
+    );
+}
+
+#[test]
+fn play_registers_one_command_with_optional_url_and_file_options() {
+    let command = play();
+    assert_eq!(command.name, "play");
+    assert!(command.subcommands.is_empty());
+    assert!(!command.subcommand_required);
+    assert_eq!(command.parameters.len(), 2);
+
+    let option = |name: &str| {
+        let parameter = command
+            .parameters
+            .iter()
+            .find(|parameter| parameter.name == name)
+            .unwrap_or_else(|| panic!("missing {name} option"));
+        assert!(!parameter.required);
+        serde_json::to_value(
+            parameter
+                .create_as_slash_command_option()
+                .expect("slash option builder"),
+        )
+        .expect("serializable slash option")
+    };
+
+    let url = option("url");
+    assert_eq!(url["type"], 3);
+    assert_eq!(url["required"], false);
+    assert_eq!(url["max_length"], 4096);
+    assert!(
+        url["description"]
+            .as_str()
+            .is_some_and(|description| description.contains("/playは入力せず"))
+    );
+
+    let file = option("file");
+    assert_eq!(file["type"], 11);
+    assert_eq!(file["required"], false);
 }
 
 #[tokio::test]
