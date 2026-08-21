@@ -124,6 +124,7 @@ export interface DashboardModel {
 
 export type DashboardStatus =
   | "connecting"
+  | "reconnecting"
   | "ready"
   | "unauthenticated"
   | "unavailable";

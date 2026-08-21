@@ -12,7 +12,9 @@ import {
 import { HStack } from "@astryxdesign/core/Stack";
 import { StatusDot } from "@astryxdesign/core/StatusDot";
 import { Text } from "@astryxdesign/core/Text";
+import { useMediaQuery } from "@astryxdesign/core/hooks";
 import { Headphones, ServerOff } from "lucide-react";
+import { useState } from "react";
 
 import type { DashboardAccount, DashboardStatus, GuildSummary } from "../app/types";
 import { AccountPanel } from "./AccountPanel";
@@ -38,8 +40,16 @@ export function GuildSidebar({
   onLogout,
   loggingOut
 }: GuildSidebarProps) {
+  const [isCollapsed, setIsCollapsed] = useState(false);
+  const usesInlineSidebar = useMediaQuery("(min-width: 769px)");
+
   return (
     <SideNav
+      collapsible={{
+        isCollapsed,
+        onCollapsedChange: setIsCollapsed
+      }}
+      {...(usesInlineSidebar && !isCollapsed ? { style: { width: 320 } } : {})}
       header={
         <SideNavHeading
           icon={
@@ -82,7 +92,7 @@ export function GuildSidebar({
                   <Avatar
                     {...(guild.iconUrl === null ? {} : { src: guild.iconUrl })}
                     name={initialsName(guild.initials)}
-                    size="md"
+                    size="sm"
                     tooltip={false}
                   />
                 </HStack>

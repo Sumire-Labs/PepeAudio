@@ -107,6 +107,9 @@ fn media_failure_message(error: &crate::ResolveError) -> Option<&'static str> {
         crate::ResolveError::NoSearchMatch => {
             Some("安全に一致するYouTubeまたはSoundCloud音源を確認できませんでした。")
         }
+        crate::ResolveError::UnsupportedStream => Some(
+            "このURLから再生可能な音源を取得できませんでした。動画が公開中で、地域・年齢制限がないか確認してください。",
+        ),
         crate::ResolveError::SpotifyPlaylistRequiresUserAuthorization => Some(
             "Spotifyプレイリストの取り込みにはSpotifyユーザー認証が必要なため、現在は利用できません。",
         ),
@@ -243,11 +246,14 @@ mod tests {
         .expect("specific copy");
         let no_match =
             media_failure_message(&crate::ResolveError::NoSearchMatch).expect("specific copy");
+        let unavailable = media_failure_message(&crate::ResolveError::UnsupportedStream)
+            .expect("unavailable media copy");
         assert!(spotify.contains("Spotifyユーザー認証"));
         assert!(spotify_album.contains("credential overlay"));
         assert!(apple.contains("Apple Developer"));
         assert!(apple.contains("曲とアルバム"));
         assert!(no_match.contains("YouTube"));
+        assert!(unavailable.contains("動画が公開中"));
         assert!(media_failure_message(&crate::ResolveError::Failed("secret".into())).is_none());
     }
 }

@@ -57,7 +57,7 @@ fn candidate_score(candidate: &SiteReference, search: &SiteSearch) -> Option<u16
         return None;
     }
 
-    let haystack = normalize(&format!(
+    let candidate_context = normalize(&format!(
         "{} {}",
         candidate.title.as_deref().unwrap_or_default(),
         candidate.artist.as_deref().unwrap_or_default()
@@ -67,10 +67,11 @@ fn candidate_score(candidate: &SiteReference, search: &SiteSearch) -> Option<u16
         search.expected_title,
         search.expected_artists.join(" ")
     ));
-    if qualifier_conflict(&expected_context, &haystack) {
+    if qualifier_conflict(&expected_context, &candidate_context) {
         return None;
     }
-    let artist_score = artist_score(&haystack, &search.expected_artists)?;
+    let candidate_artist = normalize(candidate.artist.as_deref().unwrap_or_default());
+    let artist_score = artist_score(&candidate_artist, &search.expected_artists)?;
     let duration_score = match (search.preferred_duration_ms, candidate.duration_ms) {
         (Some(expected), Some(actual)) if !duration_matches(Some(expected), actual) => return None,
         (Some(expected), Some(actual))
@@ -243,5 +244,40 @@ mod tests {
             candidate("Example Song", "Primary Artist Official", 180_000),
         ];
         assert!(select_candidate(&candidates, &search("Example Song")).is_err());
+    }
+
+    #[test]
+    fn artist_mentions_in_titles_do_not_make_reuploads_authoritative() {
+        let expected = SiteSearch::new(
+            "Faded Alan Walker",
+            "Faded",
+            vec!["Alan Walker".into()],
+            None,
+            None,
+        )
+        .expect("search");
+        let candidates = [
+            candidate("Alan Walker - Faded", "Alan Walker", 213_000),
+            candidate("Alan Walker - Faded (Lyrics)", "7clouds", 213_000),
+        ];
+
+        let selected = select_candidate(&candidates, &expected).expect("official artist match");
+
+        assert_eq!(selected.artist.as_deref(), Some("Alan Walker"));
+    }
+
+    #[test]
+    fn artist_name_in_title_cannot_replace_an_artist_match() {
+        let expected = SiteSearch::new(
+            "Faded Alan Walker",
+            "Faded",
+            vec!["Alan Walker".into()],
+            None,
+            None,
+        )
+        .expect("search");
+        let reupload = candidate("Alan Walker - Faded", "Unrelated Channel", 213_000);
+
+        assert!(select_candidate(&[reupload], &expected).is_err());
     }
 }

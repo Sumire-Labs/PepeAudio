@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { ApiResponseError, type AuthBootstrap } from "./api-client";
 import type { HrirPreset } from "./types";
+import type { PlayerSnapshotWire } from "./wire-types";
 import { useLiveDashboardWithDependencies } from "./use-live-dashboard";
 
 const SESSION: AuthBootstrap = {
@@ -88,7 +89,56 @@ describe("useLiveDashboard session boundaries", () => {
 
     expect(result.current.logout).toBe(initial);
   });
+
+  it("keeps the last snapshot usable while the event stream reconnects", async () => {
+    const maintainEvents = vi.fn(async (
+      _guildId: string,
+      signal: AbortSignal,
+      onSnapshot: (snapshot: PlayerSnapshotWire) => void,
+      onRetry: (error: unknown, delayMs: number) => void
+    ) => {
+      onSnapshot(snapshotWire());
+      onRetry(new Error("stream ended"), 3_000);
+      await waitUntilAborted("123", signal);
+    });
+    const dependencies = {
+      fetchBootstrap: vi.fn(async () => SESSION),
+      fetchPresets: vi.fn(async (): Promise<readonly HrirPreset[]> => []),
+      maintainEvents,
+      logout: vi.fn(async () => undefined)
+    };
+    const { result } = renderHook(() =>
+      useLiveDashboardWithDependencies(true, dependencies)
+    );
+
+    await waitFor(() => expect(result.current.status).toBe("reconnecting"));
+
+    expect(result.current.model.connected).toBe(true);
+    expect(result.current.model.snapshot.revision).toBe(7);
+    expect(result.current.message).toBe(
+      "リアルタイム接続を再接続しています（3秒以内）。"
+    );
+  });
 });
+
+function snapshotWire(): PlayerSnapshotWire {
+  return {
+    guild_id: "123",
+    voice_channel_id: null,
+    revision: 7,
+    state: "disconnected",
+    current_track: null,
+    queued_tracks: 0,
+    upcoming_tracks: [],
+    has_previous_track: false,
+    volume: 75,
+    repeat_mode: "off",
+    shuffle_enabled: false,
+    hrir_preset: null,
+    spatial_audio_enabled: false,
+    observed_at: 1
+  };
+}
 
 function waitUntilAborted(
   _guildId: string,

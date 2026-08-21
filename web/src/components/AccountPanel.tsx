@@ -1,7 +1,9 @@
 import { Avatar } from "@astryxdesign/core/Avatar";
+import { Center } from "@astryxdesign/core/Center";
 import { Icon } from "@astryxdesign/core/Icon";
 import { IconButton } from "@astryxdesign/core/IconButton";
 import { Item } from "@astryxdesign/core/Item";
+import { useSideNavCollapse } from "@astryxdesign/core/SideNav";
 import { LogOut } from "lucide-react";
 
 import type { DashboardAccount, DashboardStatus } from "../app/types";
@@ -20,6 +22,21 @@ export function AccountPanel({
   loggingOut
 }: AccountPanelProps) {
   const copy = accountCopy(account, status);
+  const { isCollapsed } = useSideNavCollapse();
+
+  if (isCollapsed) {
+    return (
+      <Center width="100%">
+        <Avatar
+          {...(account?.avatarUrl ? { src: account.avatarUrl } : {})}
+          name={copy.label}
+          size="sm"
+          tooltip={`${copy.label} — ${copy.description}`}
+        />
+      </Center>
+    );
+  }
+
   return (
     <Item
       density="balanced"

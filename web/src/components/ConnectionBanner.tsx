@@ -35,12 +35,29 @@ export function ConnectionBanner({
   }
 
   const connecting = status === "connecting";
+  const reconnecting = status === "reconnecting";
   return (
     <Banner
-      status={status === "unauthenticated" ? "warning" : connecting ? "info" : "error"}
+      status={
+        status === "unauthenticated"
+          ? "warning"
+          : connecting || reconnecting
+            ? "info"
+            : "error"
+      }
       container="section"
-      title={connecting ? "PepeAudioに接続しています" : statusTitle(status)}
-      description={connecting ? "再生状態を同期しています…" : message ?? fallbackMessage(status)}
+      title={
+        connecting
+          ? "PepeAudioに接続しています"
+          : reconnecting
+            ? "リアルタイム接続を復旧しています"
+            : statusTitle(status)
+      }
+      description={
+        connecting
+          ? "再生状態を同期しています…"
+          : message ?? fallbackMessage(status)
+      }
       icon={connecting ? <Spinner size="sm" aria-label="接続中" /> : undefined}
       endContent={
         status === "unauthenticated" ? (
@@ -50,7 +67,7 @@ export function ConnectionBanner({
             icon={<Icon icon={LogIn} />}
             onClick={onLogin}
           />
-        ) : status === "unavailable" ? (
+        ) : status === "unavailable" || reconnecting ? (
           <Button
             label="再試行"
             variant="secondary"
@@ -68,7 +85,11 @@ function statusTitle(status: DashboardStatus): string {
 }
 
 function fallbackMessage(status: DashboardStatus): string {
-  return status === "unauthenticated"
-    ? "Discordアカウントでログインしてください。"
-    : "時間をおいて再試行してください。";
+  if (status === "unauthenticated") {
+    return "Discordアカウントでログインしてください。";
+  }
+  if (status === "reconnecting") {
+    return "最後に受信した再生状態を表示したまま、自動で再接続しています。";
+  }
+  return "時間をおいて再試行してください。";
 }

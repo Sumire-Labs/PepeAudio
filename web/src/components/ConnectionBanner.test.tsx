@@ -49,4 +49,22 @@ describe("ConnectionBanner actions", () => {
     expect(onRetry).toHaveBeenCalledOnce();
     expect(screen.getByText("接続を確認してください。")).toBeTruthy();
   });
+
+  it("keeps a recovered snapshot visible while the live stream reconnects", () => {
+    const onRetry = vi.fn();
+    render(
+      <ConnectionBanner
+        status="reconnecting"
+        demo={false}
+        message="リアルタイム接続を再接続しています（3秒以内）。"
+        onRetry={onRetry}
+        onLogin={vi.fn()}
+      />
+    );
+
+    expect(screen.getByText("リアルタイム接続を復旧しています")).toBeTruthy();
+    expect(screen.queryByText("接続できませんでした")).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "再試行" }));
+    expect(onRetry).toHaveBeenCalledOnce();
+  });
 });

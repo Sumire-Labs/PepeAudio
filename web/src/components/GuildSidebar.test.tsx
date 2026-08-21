@@ -26,8 +26,32 @@ describe("GuildSidebar accessible names", () => {
     expect(
       screen.getByText("DiscordでBotを追加すると、ここから再生状態を確認できます。")
     ).toBeTruthy();
-    expect(screen.queryAllByRole("button")).toHaveLength(0);
+    expect(screen.getByRole("button", { name: "Collapse sidebar" })).toBeTruthy();
+    expect(screen.queryAllByRole("button")).toHaveLength(1);
     expect(screen.queryByText("リアルタイム同期")).toBeNull();
+  });
+
+  it("uses the Astryx collapse control to switch to the icon rail", () => {
+    const guild = demoGuilds[0];
+    if (!guild) throw new Error("demo guild fixture is missing");
+    render(
+      <GuildSidebar
+        guilds={[guild]}
+        selectedGuildId={guild.id}
+        account={null}
+        status="ready"
+        onSelect={vi.fn()}
+        onLogout={null}
+        loggingOut={false}
+      />
+    );
+
+    expect(screen.getByRole("navigation", { name: "Side navigation" })).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: "Collapse sidebar" }));
+    expect(screen.getByRole("button", { name: "Expand sidebar" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: guild.name })).toBeTruthy();
+    expect(screen.queryByRole("separator", { name: "Resize sidebar" })).toBeNull();
   });
 
   it("keeps each guild name and status on its button when visible copy is collapsed", () => {

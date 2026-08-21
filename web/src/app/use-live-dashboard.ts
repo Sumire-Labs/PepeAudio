@@ -48,6 +48,7 @@ export function useLiveDashboardWithDependencies(
   const [presets, setPresets] = useState<readonly HrirPreset[]>([]);
   const [catalogStatus, setCatalogStatus] = useState<HrirCatalogStatus>("loading");
   const [message, setMessage] = useState<string | null>(null);
+  const [reconnecting, setReconnecting] = useState(false);
   const [feedback, setFeedback] = useState<DashboardFeedback | null>(null);
   const [unauthenticated, setUnauthenticated] = useState(false);
   const [generation, setGeneration] = useState(0);
@@ -61,6 +62,7 @@ export function useLiveDashboardWithDependencies(
     setSnapshot(null);
     setPresets([]);
     setCatalogStatus("loading");
+    setReconnecting(false);
   }, []);
 
   const markUnauthorized = useCallback(() => {
@@ -100,6 +102,7 @@ export function useLiveDashboardWithDependencies(
         setSelectedGuildId((current) => selectInitialGuild(current, next.guilds));
         setUnauthenticated(false);
         setMessage(null);
+        setReconnecting(false);
       } catch (error) {
         if (controller.signal.aborted) return;
         if (error instanceof ApiResponseError && error.status === 401) {
@@ -120,6 +123,7 @@ export function useLiveDashboardWithDependencies(
     const sessionGeneration = sessionGenerationRef.current;
     const isCurrent = () => sessionGenerationRef.current === sessionGeneration;
     setSnapshot(null);
+    setReconnecting(false);
     void dependencies.maintainEvents(
       selectedGuildId,
       controller.signal,
@@ -127,6 +131,7 @@ export function useLiveDashboardWithDependencies(
         if (!controller.signal.aborted && isCurrent()) {
           setSnapshot(toPlayerSnapshot(wire));
           setMessage(null);
+          setReconnecting(false);
         }
       },
       (error, delayMs) => {
@@ -139,6 +144,7 @@ export function useLiveDashboardWithDependencies(
           return;
         }
         const seconds = Math.max(1, Math.ceil(delayMs / 1_000));
+        setReconnecting(true);
         setMessage(`リアルタイム接続を再接続しています（${seconds}秒以内）。`);
       }
     );
@@ -215,6 +221,7 @@ export function useLiveDashboardWithDependencies(
     setPresets([]);
     setCatalogStatus("loading");
     setMessage(null);
+    setReconnecting(false);
   }, [commandPending]);
   const model = useMemo(() => buildLiveDashboardModel({
     guilds: auth?.guilds ?? [],
@@ -240,6 +247,7 @@ export function useLiveDashboardWithDependencies(
     sessionGenerationRef.current += 1;
     invalidateCommands();
     setMessage(null);
+    setReconnecting(false);
     setGeneration((current) => current + 1);
   }, [invalidateCommands]);
 
@@ -254,8 +262,10 @@ export function useLiveDashboardWithDependencies(
   return {
     status: unauthenticated
       ? "unauthenticated"
-      : message
-        ? "unavailable"
+      : reconnecting && snapshot !== null
+        ? "reconnecting"
+        : message
+          ? "unavailable"
         : snapshot !== null || (auth !== null && selectedGuildId === "")
           ? "ready"
           : "connecting",
