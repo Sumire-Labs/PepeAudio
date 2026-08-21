@@ -76,6 +76,12 @@ export function useLiveDashboardWithDependencies(
     setUnauthenticated(true);
   }, [clearPlayerState]);
 
+  const refreshAfterForbiddenCommand = useCallback(() => {
+    sessionGenerationRef.current += 1;
+    clearPlayerState();
+    setGeneration((current) => current + 1);
+  }, [clearPlayerState]);
+
   const commandContext = useMemo(() => ({
     auth,
     selectedGuildId,
@@ -86,8 +92,9 @@ export function useLiveDashboardWithDependencies(
       message: next,
       type: "error"
     })),
-    onUnauthorized: markUnauthorized
-  }), [auth, markUnauthorized, selectedGuildId, snapshot]);
+    onUnauthorized: markUnauthorized,
+    onForbidden: refreshAfterForbiddenCommand
+  }), [auth, markUnauthorized, refreshAfterForbiddenCommand, selectedGuildId, snapshot]);
   const {
     pending: commandPending,
     run: runCommand,
@@ -242,7 +249,12 @@ export function useLiveDashboardWithDependencies(
   ]);
 
   const selectGuild = useCallback((guildId: string) => {
-    if (commandPending) return;
+    if (
+      commandPending
+      || auth?.guilds.some((guild) => guild.id === guildId && guild.botPresent) !== true
+    ) {
+      return;
+    }
     sessionGenerationRef.current += 1;
     setSelectedGuildId(guildId);
     setSnapshot(null);
@@ -250,7 +262,7 @@ export function useLiveDashboardWithDependencies(
     setCatalogStatus("loading");
     setMessage(null);
     setReconnecting(false);
-  }, [commandPending]);
+  }, [auth, commandPending]);
   const model = useMemo(() => buildLiveDashboardModel({
     guilds: auth?.guilds ?? [],
     selectedGuildId,

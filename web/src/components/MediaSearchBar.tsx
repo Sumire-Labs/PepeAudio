@@ -1,6 +1,7 @@
 import { Icon } from "@astryxdesign/core/Icon";
 import { IconButton } from "@astryxdesign/core/IconButton";
-import { HStack, StackItem } from "@astryxdesign/core/Stack";
+import { HStack, StackItem, VStack } from "@astryxdesign/core/Stack";
+import { Text } from "@astryxdesign/core/Text";
 import {
   Typeahead,
   TypeaheadItem,
@@ -27,14 +28,14 @@ interface MediaSuggestionData {
 type MediaSuggestion = SearchableItem<MediaSuggestionData>;
 
 interface MediaSearchBarProps {
-  readonly isDisabled: boolean;
+  readonly disabledMessage: string | null;
   readonly isLoading: boolean;
   readonly suggestions?: readonly MediaSearchSeed[];
   readonly onSubmit: (input: string) => Promise<void> | void;
 }
 
 export function MediaSearchBar({
-  isDisabled,
+  disabledMessage,
   isLoading,
   suggestions = [],
   onSubmit
@@ -47,6 +48,7 @@ export function MediaSearchBar({
     [history, suggestions]
   );
   const trimmed = draft.trim();
+  const isDisabled = disabledMessage !== null;
   const cannotSubmit = isDisabled || isLoading || trimmed.length === 0;
 
   const submit = async (value: string) => {
@@ -62,49 +64,56 @@ export function MediaSearchBar({
   };
 
   return (
-    <HStack gap={2} width="100%" vAlign="center">
-      <StackItem size="fill">
-        <Typeahead<MediaSuggestion>
-          key={inputRevision}
-          label="曲を検索またはURLを追加"
-          isLabelHidden
-          searchSource={searchSource}
-          value={null}
-          placeholder="曲名、YouTube・Spotify・Apple MusicのURL"
-          startIcon={Search}
-          hasEntriesOnFocus
-          hasClear
-          maxMenuItems={MAX_SUGGESTIONS}
-          debounceMs={0}
-          width="100%"
-          isDisabled={isDisabled}
-          disabledMessage="利用するDiscordサーバーを選択してください。"
-          emptySearchResultsText="候補がありません"
-          renderItem={(item) => (
-            <TypeaheadItem
-              item={item}
-              icon={<Icon icon={Search} />}
-              {...(item.auxiliaryData?.description
-                ? { description: item.auxiliaryData.description }
-                : {})}
-            />
-          )}
-          onChangeQuery={setDraft}
-          onChange={(item) => {
-            if (item) void submit(item.auxiliaryData?.query ?? item.label);
-          }}
+    <VStack gap={1} width="100%">
+      <HStack gap={2} width="100%" vAlign="center">
+        <StackItem size="fill">
+          <Typeahead<MediaSuggestion>
+            key={inputRevision}
+            label="曲を検索またはURLを追加"
+            isLabelHidden
+            searchSource={searchSource}
+            value={null}
+            placeholder="曲名、YouTube・Spotify・Apple MusicのURL"
+            startIcon={Search}
+            hasEntriesOnFocus
+            hasClear
+            maxMenuItems={MAX_SUGGESTIONS}
+            debounceMs={0}
+            width="100%"
+            isDisabled={isDisabled}
+            {...(disabledMessage === null ? {} : { disabledMessage })}
+            emptySearchResultsText="候補がありません"
+            renderItem={(item) => (
+              <TypeaheadItem
+                item={item}
+                icon={<Icon icon={Search} />}
+                {...(item.auxiliaryData?.description
+                  ? { description: item.auxiliaryData.description }
+                  : {})}
+              />
+            )}
+            onChangeQuery={setDraft}
+            onChange={(item) => {
+              if (item) void submit(item.auxiliaryData?.query ?? item.label);
+            }}
+          />
+        </StackItem>
+        <IconButton
+          label="キューに追加"
+          tooltip="キューに追加"
+          variant="primary"
+          icon={<Icon icon={ListPlus} />}
+          isDisabled={cannotSubmit}
+          isLoading={isLoading}
+          onClick={() => void submit(trimmed)}
         />
-      </StackItem>
-      <IconButton
-        label="キューに追加"
-        tooltip="キューに追加"
-        variant="primary"
-        icon={<Icon icon={ListPlus} />}
-        isDisabled={cannotSubmit}
-        isLoading={isLoading}
-        onClick={() => void submit(trimmed)}
-      />
-    </HStack>
+      </HStack>
+      {disabledMessage === null ? null : (
+        <Text type="supporting" color="secondary">
+          {disabledMessage}
+        </Text>
+      )}
+    </VStack>
   );
 }
 

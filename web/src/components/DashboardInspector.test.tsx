@@ -16,6 +16,7 @@ const baseProps = {
     spatialEnabled: false
   },
   connected: false,
+  searchDisabledMessage: "プレイヤー情報を読み込んでいます。",
   commandPending: false,
   searchSuggestions: [],
   onEnqueue: vi.fn(),

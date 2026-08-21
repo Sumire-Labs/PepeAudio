@@ -22,6 +22,7 @@ interface DashboardInspectorProps {
   readonly selectedPresetId: string | null;
   readonly snapshot: PlayerSnapshot;
   readonly connected: boolean;
+  readonly searchDisabledMessage: string | null;
   readonly commandPending: boolean;
   readonly searchSuggestions: readonly MediaSearchSeed[];
   readonly onEnqueue: (input: string) => Promise<void> | void;
@@ -40,6 +41,7 @@ export function DashboardInspector({
   selectedPresetId,
   snapshot,
   connected,
+  searchDisabledMessage,
   commandPending,
   searchSuggestions,
   onEnqueue,
@@ -51,7 +53,7 @@ export function DashboardInspector({
 }: DashboardInspectorProps) {
   const mediaSearch = (
     <MediaSearchBar
-      isDisabled={!connected}
+      disabledMessage={searchDisabledMessage}
       isLoading={commandPending}
       suggestions={searchSuggestions}
       onSubmit={onEnqueue}

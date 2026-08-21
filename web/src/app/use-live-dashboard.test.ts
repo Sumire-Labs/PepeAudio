@@ -50,6 +50,32 @@ describe("useLiveDashboard session boundaries", () => {
     expect(maintainEvents).not.toHaveBeenCalled();
   });
 
+  it("does not select a guild where the bot is absent", async () => {
+    const absentGuild = {
+      ...SESSION.guilds[0]!,
+      id: "456",
+      name: "Bot not installed",
+      botPresent: false
+    };
+    const dependencies = {
+      fetchBootstrap: vi.fn(async () => ({
+        ...SESSION,
+        guilds: [...SESSION.guilds, absentGuild]
+      })),
+      fetchPresets: vi.fn(async (): Promise<readonly HrirPreset[]> => []),
+      maintainEvents: vi.fn(waitUntilAborted),
+      logout: vi.fn(async () => undefined)
+    };
+    const { result } = renderHook(() =>
+      useLiveDashboardWithDependencies(true, dependencies)
+    );
+    await waitFor(() => expect(result.current.model.selectedGuildId).toBe("123"));
+
+    act(() => result.current.model.selectGuild(absentGuild.id));
+
+    expect(result.current.model.selectedGuildId).toBe("123");
+  });
+
   it("expires the whole dashboard session when the HRIR catalog returns 401", async () => {
     const dependencies = {
       fetchBootstrap: vi.fn(async () => SESSION),

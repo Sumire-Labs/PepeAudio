@@ -20,6 +20,7 @@ interface PlayerCommandContext {
   readonly onSnapshot: (snapshot: PlayerSnapshot) => void;
   readonly onMessage: (message: string) => void;
   readonly onUnauthorized: () => void;
+  readonly onForbidden: () => void;
 }
 
 interface PlayerCommandDependencies {
@@ -72,7 +73,10 @@ export function usePlayerCommand(
       );
       if (!isCurrent()) return;
       if (result.status !== "applied") {
-        throw new UserFacingError(commandFailureMessage(result));
+        const message = command.type === "enqueue_media" && result.code === "not_authorized"
+          ? "Discordでボイスチャンネルに参加し、必要な権限があることを確認してください。"
+          : commandFailureMessage(result);
+        throw new UserFacingError(message);
       }
 
       const confirmed = await dependencies.waitForRevision(
@@ -84,6 +88,12 @@ export function usePlayerCommand(
       if (!isCurrent()) return;
       if (error instanceof ApiResponseError && error.status === 401) {
         context.onUnauthorized();
+      } else if (
+        error instanceof ApiResponseError
+        && error.status === 403
+        && error.code === "forbidden"
+      ) {
+        context.onForbidden();
       }
       context.onMessage(publicErrorMessage(error, "操作に失敗しました。"));
     } finally {

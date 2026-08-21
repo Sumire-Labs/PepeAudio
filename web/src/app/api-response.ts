@@ -19,7 +19,10 @@ const KNOWN_ERRORS: Readonly<Record<string, KnownError>> = {
     statuses: [503],
     message: "Discordログインを現在利用できません。しばらくしてからお試しください。"
   },
-  forbidden: { statuses: [403], message: "このサーバーのプレイヤーを操作する権限がありません。" },
+  forbidden: {
+    statuses: [403],
+    message: "このサーバーではPepeAudioを利用できません。Botの導入状況を確認してください。"
+  },
   invalid_request: {
     statuses: [400],
     message: "送信した内容を処理できませんでした。画面を再読み込みしてお試しください。"

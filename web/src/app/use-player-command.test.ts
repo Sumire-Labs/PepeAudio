@@ -1,6 +1,7 @@
 import { act, renderHook } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
+import { ApiResponseError } from "./api-client";
 import { createDemoSnapshot } from "./demo-data";
 import { usePlayerCommand } from "./use-player-command";
 
@@ -29,7 +30,8 @@ describe("usePlayerCommand", () => {
       snapshot: createDemoSnapshot("1"),
       onSnapshot,
       onMessage: vi.fn(),
-      onUnauthorized: vi.fn()
+      onUnauthorized: vi.fn(),
+      onForbidden: vi.fn()
     }, {
       send: vi.fn(() => receipt.promise),
       waitForResult,
@@ -71,7 +73,8 @@ describe("usePlayerCommand", () => {
       snapshot: createDemoSnapshot("1"),
       onSnapshot: vi.fn(),
       onMessage: vi.fn(),
-      onUnauthorized: vi.fn()
+      onUnauthorized: vi.fn(),
+      onForbidden: vi.fn()
     }, {
       send,
       waitForResult: vi.fn(),
@@ -88,6 +91,75 @@ describe("usePlayerCommand", () => {
     act(() => result.current.invalidate());
     receipt.reject(new Error("cancelled by test"));
     await act(async () => firstOperation);
+  });
+
+  it("refreshes guild availability after a current bot-presence rejection", async () => {
+    const onForbidden = vi.fn();
+    const onMessage = vi.fn();
+    const { result } = renderHook(() => usePlayerCommand({
+      auth: {
+        csrfToken: "token",
+        guilds: [],
+        account: testAccount,
+        logoutAvailable: true
+      },
+      selectedGuildId: "1",
+      snapshot: createDemoSnapshot("1"),
+      onSnapshot: vi.fn(),
+      onMessage,
+      onUnauthorized: vi.fn(),
+      onForbidden
+    }, {
+      send: vi.fn(async () => {
+        throw new ApiResponseError(403, "このサーバーでは利用できません。", "forbidden");
+      }),
+      waitForResult: vi.fn(),
+      waitForRevision: vi.fn()
+    }));
+
+    await act(async () => result.current.run({ type: "enqueue_media", input: "Faded" }));
+
+    expect(onForbidden).toHaveBeenCalledOnce();
+    expect(onMessage).toHaveBeenCalledWith("このサーバーでは利用できません。");
+    expect(result.current.pending).toBe(false);
+  });
+
+  it("explains the voice requirement when an enqueue command is denied", async () => {
+    const onMessage = vi.fn();
+    const { result } = renderHook(() => usePlayerCommand({
+      auth: {
+        csrfToken: "token",
+        guilds: [],
+        account: testAccount,
+        logoutAvailable: true
+      },
+      selectedGuildId: "1",
+      snapshot: createDemoSnapshot("1"),
+      onSnapshot: vi.fn(),
+      onMessage,
+      onUnauthorized: vi.fn(),
+      onForbidden: vi.fn()
+    }, {
+      send: vi.fn(async () => ({
+        command_id: COMMAND_ID,
+        idempotency_key: IDEMPOTENCY_KEY,
+        resulting_revision: null,
+        replayed: false
+      })),
+      waitForResult: vi.fn(async () => ({
+        command_id: COMMAND_ID,
+        guild_id: "1",
+        status: "denied" as const,
+        code: "not_authorized" as const
+      })),
+      waitForRevision: vi.fn()
+    }));
+
+    await act(async () => result.current.run({ type: "enqueue_media", input: "Faded" }));
+
+    expect(onMessage).toHaveBeenCalledWith(
+      "Discordでボイスチャンネルに参加し、必要な権限があることを確認してください。"
+    );
   });
 });
 

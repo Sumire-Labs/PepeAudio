@@ -52,6 +52,13 @@ export function App() {
     inspectorSize.isCollapsed,
     inspectorSize.props
   );
+  const searchDisabledMessage = selectedGuild === undefined
+    ? "PepeAudio導入済みのDiscordサーバーを選択してください。"
+    : !selectedGuild.active
+      ? "このサーバーにはPepeAudioが導入されていません。"
+      : !model.connected
+        ? "プレイヤー情報を読み込んでいます。"
+        : null;
 
   useEffect(() => {
     if (session.feedback === null) return;
@@ -83,6 +90,7 @@ export function App() {
       selectedPresetId={model.snapshot.hrirPresetId}
       snapshot={model.snapshot}
       connected={selectedGuild?.active === true && model.connected}
+      searchDisabledMessage={searchDisabledMessage}
       commandPending={model.commandPending}
       searchSuggestions={searchSuggestions}
       onEnqueue={model.enqueueMedia}
