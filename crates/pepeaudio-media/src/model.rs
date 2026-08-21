@@ -43,6 +43,16 @@ impl MediaRequest {
         }
     }
 
+    pub(crate) const fn uses_open_range(&self) -> bool {
+        matches!(
+            self,
+            Self::ResolvedSite(ResolvedSiteMedia {
+                provider: SiteProvider::YouTube,
+                ..
+            })
+        )
+    }
+
     pub(crate) fn allows_host(&self, host: &str) -> bool {
         match self {
             Self::ResolvedSite(site) => site.provider.accepts_media_host(host),
@@ -169,8 +179,40 @@ impl fmt::Debug for DownloadedMedia {
 }
 
 #[cfg(test)]
-mod redaction_tests {
-    use super::{DownloadedMedia, MediaSourceKind};
+mod tests {
+    use super::{
+        DiscordAttachment, DownloadedMedia, MediaRequest, MediaSourceKind, ResolvedSiteMedia,
+        SafeHttpHeaders, SiteProvider,
+    };
+
+    fn resolved_site(provider: SiteProvider) -> MediaRequest {
+        MediaRequest::ResolvedSite(ResolvedSiteMedia::new(
+            "https://media.example/audio".to_owned(),
+            provider,
+            SafeHttpHeaders::default(),
+        ))
+    }
+
+    #[test]
+    fn open_range_is_limited_to_youtube_resolved_site_requests() {
+        assert!(resolved_site(SiteProvider::YouTube).uses_open_range());
+        assert!(!resolved_site(SiteProvider::SoundCloud).uses_open_range());
+        assert!(
+            !MediaRequest::DirectUrl {
+                url: "https://media.example/audio".to_owned(),
+            }
+            .uses_open_range()
+        );
+        assert!(
+            !MediaRequest::DiscordAttachment(DiscordAttachment {
+                url: "https://cdn.discord.example/audio".to_owned(),
+                filename: "audio".to_owned(),
+                content_type: None,
+                declared_size_bytes: None,
+            })
+            .uses_open_range()
+        );
+    }
 
     #[test]
     fn downloaded_media_debug_omits_paths_and_signed_urls() {

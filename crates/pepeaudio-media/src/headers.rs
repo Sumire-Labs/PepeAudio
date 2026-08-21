@@ -94,3 +94,24 @@ fn validate_provider_origin(value: &str, provider: SiteProvider) -> Result<(), S
     }
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn ytdlp_range_is_ignored_instead_of_becoming_a_request_header() {
+        let raw = BTreeMap::from([
+            ("Range".to_owned(), "bytes=500-999".to_owned()),
+            ("User-Agent".to_owned(), "provider-agent".to_owned()),
+        ]);
+
+        let headers = SafeHttpHeaders::from_ytdlp(raw, SiteProvider::YouTube)
+            .expect("sanitized provider headers");
+
+        assert_eq!(
+            headers.iter().collect::<Vec<_>>(),
+            [(SafeHeaderName::UserAgent, "provider-agent")]
+        );
+    }
+}

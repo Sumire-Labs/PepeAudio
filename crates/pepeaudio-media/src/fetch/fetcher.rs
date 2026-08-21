@@ -182,9 +182,10 @@ where
                 .ok_or(FetchError::RedirectTimeout)?;
             let response = timeout_at(
                 deadline,
-                self.transport.get_with_headers(
+                self.transport.get_with_headers_and_open_range(
                     &approved,
                     request.headers(),
+                    request.uses_open_range(),
                     remaining,
                     self.limits.connect_timeout,
                 ),

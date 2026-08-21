@@ -64,4 +64,19 @@ pub trait HttpTransport: Send + Sync {
         let _ = headers;
         self.get(target, timeout, connect_timeout).await
     }
+
+    /// Performs one GET with validated provider headers and an optional
+    /// downloader-owned open range.
+    async fn get_with_headers_and_open_range(
+        &self,
+        target: &ApprovedUrl,
+        headers: &SafeHttpHeaders,
+        use_open_range: bool,
+        timeout: Duration,
+        connect_timeout: Duration,
+    ) -> Result<HttpResponse, FetchError> {
+        let _ = use_open_range;
+        self.get_with_headers(target, headers, timeout, connect_timeout)
+            .await
+    }
 }

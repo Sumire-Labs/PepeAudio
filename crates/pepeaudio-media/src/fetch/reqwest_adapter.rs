@@ -7,7 +7,7 @@ use reqwest::{
     dns::{Addrs, Name, Resolve, Resolving},
     header::{
         ACCEPT, ACCEPT_LANGUAGE, CONTENT_LENGTH, CONTENT_TYPE, HeaderMap, HeaderValue, LOCATION,
-        ORIGIN, REFERER, USER_AGENT,
+        ORIGIN, RANGE, REFERER, USER_AGENT,
     },
     redirect::Policy,
 };
@@ -43,6 +43,18 @@ impl HttpTransport for ReqwestTransport {
         timeout: Duration,
         connect_timeout: Duration,
     ) -> Result<HttpResponse, FetchError> {
+        self.get_with_headers_and_open_range(target, headers, false, timeout, connect_timeout)
+            .await
+    }
+
+    async fn get_with_headers_and_open_range(
+        &self,
+        target: &ApprovedUrl,
+        headers: &SafeHttpHeaders,
+        use_open_range: bool,
+        timeout: Duration,
+        connect_timeout: Duration,
+    ) -> Result<HttpResponse, FetchError> {
         let resolver = PinnedResolver {
             expected_host: target
                 .url()
@@ -54,7 +66,7 @@ impl HttpTransport for ReqwestTransport {
         let client = build_client(resolver, timeout, connect_timeout)?;
         let response = client
             .get(target.url().clone())
-            .headers(reqwest_headers(headers)?)
+            .headers(reqwest_headers(headers, use_open_range)?)
             .send()
             .await
             .map_err(|_| FetchError::Transport)?;
@@ -74,7 +86,10 @@ impl HttpTransport for ReqwestTransport {
     }
 }
 
-fn reqwest_headers(headers: &SafeHttpHeaders) -> Result<HeaderMap, FetchError> {
+fn reqwest_headers(
+    headers: &SafeHttpHeaders,
+    use_open_range: bool,
+) -> Result<HeaderMap, FetchError> {
     let mut output = HeaderMap::new();
     for (name, value) in headers.iter() {
         let name = match name {
@@ -88,6 +103,9 @@ fn reqwest_headers(headers: &SafeHttpHeaders) -> Result<HeaderMap, FetchError> {
         if output.insert(name, value).is_some() {
             return Err(FetchError::Transport);
         }
+    }
+    if use_open_range {
+        output.insert(RANGE, HeaderValue::from_static("bytes=0-"));
     }
     Ok(output)
 }

@@ -73,6 +73,7 @@ async fn direct_url_follows_validated_redirect_and_saves_extensionless_object() 
             "https://cdn.example/song.fake"
         ]
     );
+    assert_eq!(calls.open_range_calls(), [false, false]);
 }
 
 #[tokio::test]
@@ -101,6 +102,7 @@ async fn discord_attachment_uses_the_identical_network_path() {
     assert_eq!(downloaded.source_kind, MediaSourceKind::DiscordAttachment);
     assert_eq!(downloaded.path.extension(), None);
     assert_eq!(calls.calls(), ["https://cdn.discord.example/evil.exe"]);
+    assert_eq!(calls.open_range_calls(), [false]);
 }
 
 #[tokio::test]

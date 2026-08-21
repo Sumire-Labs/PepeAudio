@@ -9,8 +9,9 @@ use std::{
 
 use async_trait::async_trait;
 use pepeaudio_media::{
-    ApprovedUrl, DnsResolver, DownloadStore, FetchError, HttpResponse, HttpTransport,
-    ManagedMediaLeaseRegistry, UrlPolicyError,
+    ApprovedUrl, CommandSpec, DnsResolver, DownloadStore, FetchError, HttpResponse, HttpTransport,
+    ManagedMediaLeaseRegistry, OutputLimits, ProcessError, ProcessOutput, ProcessRunner,
+    SafeHttpHeaders, UrlPolicyError,
 };
 use uuid::Uuid;
 
@@ -63,6 +64,7 @@ impl DnsResolver for FakeDns {
 pub(crate) struct FakeHttp {
     responses: Arc<Mutex<VecDeque<HttpResponse>>>,
     calls: Arc<Mutex<Vec<String>>>,
+    open_range_calls: Arc<Mutex<Vec<bool>>>,
 }
 
 impl FakeHttp {
@@ -70,11 +72,39 @@ impl FakeHttp {
         Self {
             responses: Arc::new(Mutex::new(responses.into_iter().collect())),
             calls: Arc::new(Mutex::new(Vec::new())),
+            open_range_calls: Arc::new(Mutex::new(Vec::new())),
         }
     }
 
     pub(crate) fn calls(&self) -> Vec<String> {
         self.calls.lock().expect("call lock").clone()
+    }
+
+    pub(crate) fn open_range_calls(&self) -> Vec<bool> {
+        self.open_range_calls
+            .lock()
+            .expect("open range call lock")
+            .clone()
+    }
+
+    fn respond(
+        &self,
+        target: &ApprovedUrl,
+        use_open_range: bool,
+    ) -> Result<HttpResponse, FetchError> {
+        self.calls
+            .lock()
+            .expect("call lock")
+            .push(target.url().as_str().to_owned());
+        self.open_range_calls
+            .lock()
+            .expect("open range call lock")
+            .push(use_open_range);
+        self.responses
+            .lock()
+            .expect("responses lock")
+            .pop_front()
+            .ok_or(FetchError::Transport)
     }
 }
 
@@ -86,15 +116,64 @@ impl HttpTransport for FakeHttp {
         _timeout: std::time::Duration,
         _connect_timeout: std::time::Duration,
     ) -> Result<HttpResponse, FetchError> {
-        self.calls
+        self.respond(target, false)
+    }
+
+    async fn get_with_headers(
+        &self,
+        target: &ApprovedUrl,
+        _headers: &SafeHttpHeaders,
+        _timeout: std::time::Duration,
+        _connect_timeout: std::time::Duration,
+    ) -> Result<HttpResponse, FetchError> {
+        self.respond(target, false)
+    }
+
+    async fn get_with_headers_and_open_range(
+        &self,
+        target: &ApprovedUrl,
+        _headers: &SafeHttpHeaders,
+        use_open_range: bool,
+        _timeout: std::time::Duration,
+        _connect_timeout: std::time::Duration,
+    ) -> Result<HttpResponse, FetchError> {
+        self.respond(target, use_open_range)
+    }
+}
+
+pub(crate) struct FakeProcess {
+    outputs: Mutex<VecDeque<ProcessOutput>>,
+}
+
+impl FakeProcess {
+    pub(crate) fn json(values: impl IntoIterator<Item = &'static str>) -> Self {
+        Self {
+            outputs: Mutex::new(
+                values
+                    .into_iter()
+                    .map(|value| ProcessOutput {
+                        status_code: Some(0),
+                        stdout: value.as_bytes().to_vec(),
+                        stderr: Vec::new(),
+                    })
+                    .collect(),
+            ),
+        }
+    }
+}
+
+#[async_trait]
+impl ProcessRunner for FakeProcess {
+    async fn run(
+        &self,
+        _specification: &CommandSpec,
+        _limits: OutputLimits,
+    ) -> Result<ProcessOutput, ProcessError> {
+        self.outputs
             .lock()
-            .expect("call lock")
-            .push(target.url().as_str().to_owned());
-        self.responses
-            .lock()
-            .expect("responses lock")
+            .expect("process outputs lock")
             .pop_front()
-            .ok_or(FetchError::Transport)
+            .ok_or(ProcessError::Exit { code: Some(1) })
     }
 }
 

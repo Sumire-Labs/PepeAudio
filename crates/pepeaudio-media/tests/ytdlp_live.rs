@@ -45,7 +45,7 @@ async fn exercise_page(page: &str, private_media_host: &str) {
             executable: env_path("PEPEAUDIO_YTDLP_PATH", "yt-dlp"),
             deno_executable: env_path("PEPEAUDIO_DENO_PATH", "deno"),
             deno_directory: env_path("PEPEAUDIO_DENO_DIR", root.0.join("deno").as_os_str()),
-            maximum_track_duration: Duration::from_mins(2),
+            maximum_track_duration: Duration::from_mins(4),
             maximum_playlist_items: 1,
         },
         Arc::new(runner.clone()),
