@@ -58,15 +58,22 @@ fn authoritative_tie(scored: &[(u16, &SiteReference)], search: &SiteSearch, best
 
 fn authoritative_artist(candidate: &SiteReference, expected_artists: &[String]) -> bool {
     let uploader = normalize(candidate.artist.as_deref().unwrap_or_default());
-    !uploader.is_empty()
+    let channel = uploader.strip_suffix(" topic").unwrap_or(&uploader);
+    let candidate_context = normalize(&format!(
+        "{} {}",
+        candidate.title.as_deref().unwrap_or_default(),
+        candidate.artist.as_deref().unwrap_or_default()
+    ));
+    !channel.is_empty()
         && expected_artists
             .iter()
             .map(|artist| normalize(artist))
             .any(|artist| {
-                uploader == artist
-                    || uploader
-                        .strip_suffix(" topic")
-                        .is_some_and(|value| value == artist)
+                channel == artist
+                    || (phrase_present(&artist, channel)
+                        && artist
+                            .split_whitespace()
+                            .all(|token| phrase_present(&candidate_context, token)))
             })
 }
 
@@ -470,5 +477,62 @@ mod tests {
         let selected = select_candidate(&candidates, &expected).expect("official contributor");
 
         assert_eq!(selected.artist.as_deref(), Some("Kehlani"));
+    }
+
+    #[test]
+    fn tied_official_uploads_accept_a_combined_spotify_artist_credit() {
+        let expected = SiteSearch::new(
+            "Monster Alan Walker Emyrson Flora",
+            "Monster",
+            vec!["Alan Walker, Emyrson Flora".into()],
+            None,
+            None,
+        )
+        .expect("search");
+        let candidates = [
+            candidate(
+                "Alan Walker, Emyrson Flora - Monster (Official Music Video)",
+                "Alan Walker",
+                159_000,
+            ),
+            candidate(
+                "Alan Walker, Emyrson Flora - Monster (Official Lyric Video)",
+                "Alan Walker",
+                159_000,
+            ),
+        ];
+
+        let selected = select_candidate(&candidates, &expected).expect("official contributor");
+
+        assert_eq!(
+            selected.title.as_deref(),
+            Some("Alan Walker, Emyrson Flora - Monster (Official Music Video)")
+        );
+    }
+
+    #[test]
+    fn combined_artist_credits_do_not_authorize_reupload_ties() {
+        let expected = SiteSearch::new(
+            "Monster Alan Walker Emyrson Flora",
+            "Monster",
+            vec!["Alan Walker, Emyrson Flora".into()],
+            None,
+            None,
+        )
+        .expect("search");
+        let candidates = [
+            candidate(
+                "Alan Walker, Emyrson Flora - Monster",
+                "Unofficial Uploads",
+                159_000,
+            ),
+            candidate(
+                "Alan Walker, Emyrson Flora - Monster (Lyrics)",
+                "Another Reupload",
+                159_000,
+            ),
+        ];
+
+        assert!(select_candidate(&candidates, &expected).is_err());
     }
 }
