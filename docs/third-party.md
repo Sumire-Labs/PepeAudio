@@ -102,7 +102,7 @@ The bot image, and only the bot image, adds two version-pinned executables:
 
 | Tool | Version | Distributed artifact | SHA-256 | License material in image |
 | --- | ---: | --- | --- | --- |
-| yt-dlp | 2026.06.09 | architecture-neutral `yt-dlp` zipimport executable | `e5d57466682cfa9d61e9cf7c8a4f09b00f4a62af37d3bbdc4bcffdf63615feac` | `/usr/share/licenses/yt-dlp` |
+| yt-dlp | 2026.08.19 | architecture-neutral `yt-dlp` zipimport executable | `1fa6733c37ea6fb51c99ad8fe785e7b7e5f3246c9b980230329d4fb72ed8d4d6` | `/usr/share/licenses/yt-dlp` |
 | Deno | 2.8.1 | `deno-x86_64-unknown-linux-gnu.zip` | `2d7bb6195226ac832e0bf7109a115f0af65ee69ac797a4bbde5b27a06cc242d9` | `/usr/share/licenses/deno` |
 | Deno | 2.8.1 | `deno-aarch64-unknown-linux-gnu.zip` | `67e9df91870fd0af700df924173e3009ea7ff6956e2c3c3bb86065d6070d0fd6` | `/usr/share/licenses/deno` |
 
@@ -119,9 +119,9 @@ The audited `v2.8.1` source tag does not publish one consolidated third-party
 notice; its source/lockfile remains the upstream dependency-license record and
 the release workflow emits an image SBOM.
 
-- [yt-dlp 2026.06.09 release](https://github.com/yt-dlp/yt-dlp/releases/tag/2026.06.09)
-- [yt-dlp 2026.06.09 license](https://github.com/yt-dlp/yt-dlp/blob/2026.06.09/LICENSE)
-- [yt-dlp 2026.06.09 bundled notices](https://github.com/yt-dlp/yt-dlp/blob/2026.06.09/THIRD_PARTY_LICENSES.txt)
+- [yt-dlp 2026.08.19 release](https://github.com/yt-dlp/yt-dlp/releases/tag/2026.08.19)
+- [yt-dlp 2026.08.19 license](https://github.com/yt-dlp/yt-dlp/blob/2026.08.19/LICENSE)
+- [yt-dlp 2026.08.19 bundled notices](https://github.com/yt-dlp/yt-dlp/blob/2026.08.19/THIRD_PARTY_LICENSES.txt)
 - [Deno 2.8.1 release](https://github.com/denoland/deno/releases/tag/v2.8.1)
 - [Deno 2.8.1 license](https://github.com/denoland/deno/blob/v2.8.1/LICENSE.md)
 

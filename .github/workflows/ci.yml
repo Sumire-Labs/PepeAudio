@@ -357,7 +357,7 @@ jobs:
           set -euo pipefail
           docker run --rm --entrypoint sh pepeaudio-bot:local -euc \
             'test "$(id -u)" = 10001
-             test "$(yt-dlp --version)" = 2026.06.09
+             test "$(yt-dlp --version)" = 2026.08.19
              deno --version | sed -n "1p" | grep -Eq "^deno 2[.]8[.]1 "
              python3 --version
              ffmpeg -version >/dev/null

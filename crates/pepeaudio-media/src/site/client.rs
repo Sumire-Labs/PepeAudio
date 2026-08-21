@@ -11,7 +11,7 @@ const DISCOVERY_STDOUT_BYTES: usize = 4 * 1024 * 1024;
 const RESOLVE_STDOUT_BYTES: usize = 2 * 1024 * 1024;
 const STDERR_BYTES: usize = 64 * 1024;
 const VERSION_OUTPUT_BYTES: usize = 4 * 1024;
-const MINIMUM_YTDLP_VERSION: (u32, u32, u32) = (2026, 6, 9);
+const MINIMUM_YTDLP_VERSION: (u32, u32, u32) = (2026, 8, 19);
 const MINIMUM_DENO_VERSION: (u32, u32, u32) = (2, 3, 0);
 
 #[derive(Clone)]

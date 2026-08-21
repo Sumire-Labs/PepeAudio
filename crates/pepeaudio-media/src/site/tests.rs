@@ -62,7 +62,7 @@ fn config() -> YtDlpConfig {
 #[tokio::test]
 async fn startup_verifies_supported_tool_versions_with_bounded_commands() {
     let runner = std::sync::Arc::new(FakeRunner::json([
-        "2026.06.09\n",
+        "2026.08.19\n",
         "deno 2.8.1 (stable, release, x86_64-unknown-linux-gnu)\n",
     ]));
     let client = YtDlpClient::new(config(), runner.clone()).expect("client");
@@ -111,8 +111,8 @@ async fn unavailable_playlist_item_is_skippable_but_operational_exit_is_not() {
 #[tokio::test]
 async fn startup_rejects_old_or_unparseable_tool_versions() {
     for outputs in [
-        ["2026.06.08\n", "deno 2.8.1\n"],
-        ["2026.06.09\n", "deno 1.46.0\n"],
+        ["2026.08.18\n", "deno 2.8.1\n"],
+        ["2026.08.19\n", "deno 1.46.0\n"],
         ["not-a-version\n", "deno 2.8.1\n"],
     ] {
         let runner = std::sync::Arc::new(FakeRunner::json(outputs));

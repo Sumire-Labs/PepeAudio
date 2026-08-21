@@ -52,9 +52,9 @@ jobs:
           tool_dir="$RUNNER_TEMP/pepeaudio-provider-tools"
           install -d "$tool_dir" "$RUNNER_TEMP/pepeaudio-deno"
           curl --fail --location --proto '=https' --tlsv1.2 \
-            https://github.com/yt-dlp/yt-dlp/releases/download/2026.06.09/yt-dlp \
+            https://github.com/yt-dlp/yt-dlp/releases/download/2026.08.19/yt-dlp \
             --output "$tool_dir/yt-dlp"
-          echo 'e5d57466682cfa9d61e9cf7c8a4f09b00f4a62af37d3bbdc4bcffdf63615feac  '"$tool_dir/yt-dlp" \
+          echo '1fa6733c37ea6fb51c99ad8fe785e7b7e5f3246c9b980230329d4fb72ed8d4d6  '"$tool_dir/yt-dlp" \
             | sha256sum --check --strict
           chmod 0755 "$tool_dir/yt-dlp"
           curl --fail --location --proto '=https' --tlsv1.2 \
@@ -64,7 +64,7 @@ jobs:
             | sha256sum --check --strict
           unzip -q "$RUNNER_TEMP/deno.zip" -d "$tool_dir"
           chmod 0755 "$tool_dir/deno"
-          test "$("$tool_dir/yt-dlp" --version)" = 2026.06.09
+          test "$("$tool_dir/yt-dlp" --version)" = 2026.08.19
           "$tool_dir/deno" --version | sed -n '1p' | grep -Eq '^deno 2[.]8[.]1 '
           {
             echo "PEPEAUDIO_YTDLP_PATH=$tool_dir/yt-dlp"
