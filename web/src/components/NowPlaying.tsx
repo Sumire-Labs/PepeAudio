@@ -2,13 +2,11 @@ import { AspectRatio } from "@astryxdesign/core/AspectRatio";
 import { Card } from "@astryxdesign/core/Card";
 import { Center } from "@astryxdesign/core/Center";
 import { EmptyState } from "@astryxdesign/core/EmptyState";
-import { Grid } from "@astryxdesign/core/Grid";
 import { Icon } from "@astryxdesign/core/Icon";
 import { NavIcon } from "@astryxdesign/core/NavIcon";
 import { Section } from "@astryxdesign/core/Section";
 import { Spinner } from "@astryxdesign/core/Spinner";
 import { HStack, VStack } from "@astryxdesign/core/Stack";
-import { StatusDot } from "@astryxdesign/core/StatusDot";
 import { Heading, Text } from "@astryxdesign/core/Text";
 import { Token } from "@astryxdesign/core/Token";
 import { AudioLines, Headphones, UserRound } from "lucide-react";
@@ -50,27 +48,18 @@ export const NowPlaying = memo(function NowPlaying({ guild, snapshot }: NowPlayi
               <EmptyState
                 headingLevel={2}
                 title="まだ何も再生していません"
-                description="上の検索欄に曲名またはURLを入力して追加できます。"
+                description="右の検索欄に曲名またはURLを入力して追加できます。"
                 icon={<Icon icon={Headphones} size="lg" color="secondary" />}
               />
             </Center>
           </Card>
         ) : (
           <Card width="100%" padding={5} variant="muted">
-            <Grid columns={{ minWidth: 240, max: 2, repeat: "fit" }} gap={6} align="center">
-              <HeroArtwork title={track.title} url={track.artworkUrl} />
-
-              <VStack gap={4} xstyle={nowPlayingStyles.trackDetails}>
-                <HStack gap={2} vAlign="center">
-                  <StatusDot
-                    variant={playbackStatusVariant(snapshot.state)}
-                    label={describeTrackStatus(snapshot.state)}
-                    isPulsing={snapshot.state === "playing"}
-                  />
-                  <Text type="label" color="secondary">
-                    {describeTrackStatus(snapshot.state)}
-                  </Text>
-                </HStack>
+            <VStack gap={5}>
+              <Center width="100%">
+                <HeroArtwork title={track.title} url={track.artworkUrl} />
+              </Center>
+              <VStack gap={3} xstyle={nowPlayingStyles.trackDetails}>
                 <Heading level={2} type="display-3" wordBreak="break-word">
                   <TrackTitleLink
                     title={track.title}
@@ -94,7 +83,7 @@ export const NowPlaying = memo(function NowPlaying({ guild, snapshot }: NowPlayi
                   ) : null}
                 </HStack>
               </VStack>
-            </Grid>
+            </VStack>
           </Card>
         )}
       </VStack>
@@ -135,36 +124,5 @@ function safeArtworkUrl(value: string | null): string | null {
       : null;
   } catch {
     return null;
-  }
-}
-
-type StatusVariant = "success" | "warning" | "accent" | "neutral";
-
-function playbackStatusVariant(state: PlayerSnapshot["state"]): StatusVariant {
-  switch (state) {
-    case "playing":
-      return "success";
-    case "paused":
-      return "warning";
-    case "loading":
-      return "accent";
-    case "idle_connected":
-    case "disconnected":
-      return "neutral";
-  }
-}
-
-function describeTrackStatus(state: PlayerSnapshot["state"]): string {
-  switch (state) {
-    case "playing":
-      return "Discordで再生中";
-    case "paused":
-      return "一時停止中";
-    case "loading":
-      return "読み込み中";
-    case "idle_connected":
-      return "再生待ち";
-    case "disconnected":
-      return "再生停止中";
   }
 }

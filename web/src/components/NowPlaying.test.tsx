@@ -71,7 +71,7 @@ describe("NowPlaying music presentation", () => {
       />
     );
 
-    const link = screen.getByRole("link", { name: /Signals After Rain/u });
+    const link = screen.getByRole("link", { name: /Alan Walker - Faded/u });
     expect(link.getAttribute("href"))
       .toBe("https://open.spotify.com/track/4uLU6hMCjMI75M1A2tKUQC");
     expect(screen.queryByText(/Spotifyで開く/u)).toBeNull();
@@ -94,7 +94,7 @@ describe("NowPlaying music presentation", () => {
       />
     );
 
-    const image = screen.getByRole("img", { name: /Signals After Rainのアートワーク/u });
+    const image = screen.getByRole("img", { name: /Alan Walker - Fadedのアートワーク/u });
     fireEvent.error(image);
     expect(container.querySelector("img")).toBeNull();
     expect(container.querySelector(".lucide-audio-lines")).toBeTruthy();
@@ -120,7 +120,7 @@ describe("NowPlaying music presentation", () => {
     expect(screen.getByText("まだ何も再生していません")).toBeTruthy();
   });
 
-  it("does not describe a paused track as playing", () => {
+  it("keeps playback status copy out of the artwork presentation", () => {
     render(
       <NowPlaying
         guild={demoGuilds[0]}
@@ -128,7 +128,8 @@ describe("NowPlaying music presentation", () => {
       />
     );
 
-    expect(screen.getAllByText("一時停止中")).toHaveLength(1);
+    expect(screen.queryByText("一時停止中")).toBeNull();
     expect(screen.queryByText("Discordで再生中")).toBeNull();
+    expect(screen.getByRole("heading", { name: /Alan Walker - Faded/u })).toBeTruthy();
   });
 });

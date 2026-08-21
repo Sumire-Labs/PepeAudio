@@ -1,16 +1,11 @@
 import { AppShell } from "@astryxdesign/core/AppShell";
+import { Center } from "@astryxdesign/core/Center";
 import { Icon } from "@astryxdesign/core/Icon";
 import { IconButton } from "@astryxdesign/core/IconButton";
-import {
-  Layout,
-  LayoutContent,
-  LayoutFooter,
-  LayoutHeader,
-  LayoutPanel
-} from "@astryxdesign/core/Layout";
+import { Layout, LayoutContent, LayoutPanel } from "@astryxdesign/core/Layout";
 import { ResizeHandle, useResizable } from "@astryxdesign/core/Resizable";
 import { Section } from "@astryxdesign/core/Section";
-import { HStack, StackItem, VStack } from "@astryxdesign/core/Stack";
+import { StackItem, VStack } from "@astryxdesign/core/Stack";
 import { useToast } from "@astryxdesign/core/Toast";
 import { useMediaQuery } from "@astryxdesign/core/hooks";
 import { PanelRightOpen } from "lucide-react";
@@ -20,7 +15,6 @@ import { ConnectionBanner } from "../components/ConnectionBanner";
 import { DashboardInspector } from "../components/DashboardInspector";
 import { GuildSidebar } from "../components/GuildSidebar";
 import { LoginScreen } from "../components/LoginScreen";
-import { MediaSearchBar } from "../components/MediaSearchBar";
 import { NowPlaying } from "../components/NowPlaying";
 import { PlayerBar } from "../components/PlayerBar";
 import { useDashboard } from "./use-dashboard";
@@ -29,19 +23,27 @@ export function App() {
   const session = useDashboard();
   const showToast = useToast();
   const { model } = session;
-  const usesSideInspector = useMediaQuery("(min-width: 1025px)");
+  const usesSideInspector = useMediaQuery("(min-width: 769px)");
   const inspectorSize = useResizable({
-    defaultSize: 380,
-    minSizePx: 300,
-    maxSizePx: 520,
+    defaultSize: 440,
+    minSizePx: 360,
+    maxSizePx: 600,
     collapsible: true,
-    collapsedSize: 220,
-    snaps: [340, 380, 440],
+    collapsedSize: 64,
+    snaps: [400, 440, 520],
     autoSaveId: "pepeaudio-queue-inspector"
   });
   const selectedGuild = model.guilds.find(
     (guild) => guild.id === model.selectedGuildId
   );
+  const searchSuggestions = [
+    ...(model.snapshot.track ? [model.snapshot.track] : []),
+    ...model.snapshot.queue
+  ].map((track) => ({
+    id: track.id,
+    title: track.title,
+    artist: track.artist ?? null
+  }));
 
   useEffect(() => {
     if (session.feedback === null) return;
@@ -72,8 +74,10 @@ export function App() {
       catalogStatus={model.hrirCatalogStatus}
       selectedPresetId={model.snapshot.hrirPresetId}
       snapshot={model.snapshot}
-      connected={model.connected}
+      connected={selectedGuild?.active === true && model.connected}
       commandPending={model.commandPending}
+      searchSuggestions={searchSuggestions}
+      onEnqueue={model.enqueueMedia}
       onRemove={model.removeQueued}
       onMove={model.moveQueued}
       onPresetChange={model.setPreset}
@@ -112,39 +116,28 @@ export function App() {
     >
       <Layout
         height="fill"
-        header={
-          <LayoutHeader padding={4} hasDivider label="曲を追加">
-            <HStack gap={2} width="100%" vAlign="center">
-              <StackItem size="fill">
-                <MediaSearchBar
-                  isDisabled={selectedGuild?.active !== true || !model.connected}
-                  isLoading={model.commandPending}
-                  onSubmit={model.enqueueMedia}
-                />
-              </StackItem>
-              {usesSideInspector && inspectorSize.isCollapsed ? (
-                <IconButton
-                  label="キューパネルを開く"
-                  tooltip="キューを開く"
-                  icon={<Icon icon={PanelRightOpen} />}
-                  variant="ghost"
-                  onClick={inspectorSize.expand}
-                />
-              ) : null}
-            </HStack>
-          </LayoutHeader>
-        }
         content={
-          <LayoutContent padding={0} isScrollable>
-            <VStack>
-              <NowPlaying guild={selectedGuild} snapshot={model.snapshot} />
+          <LayoutContent padding={0} isScrollable={!usesSideInspector}>
+            <VStack gap={0} {...(usesSideInspector ? { height: "100%" } : {})}>
+              {usesSideInspector ? (
+                <StackItem size="fill" isScrollable>
+                  <NowPlaying guild={selectedGuild} snapshot={model.snapshot} />
+                </StackItem>
+              ) : (
+                <NowPlaying guild={selectedGuild} snapshot={model.snapshot} />
+              )}
+              <StackItem size="static">
+                <Section variant="transparent" padding={6} dividers={["top"]}>
+                  <PlayerBar model={model} />
+                </Section>
+              </StackItem>
               {!usesSideInspector ? (
                 <Section
                   variant="transparent"
-                  padding={6}
+                  padding={4}
                   dividers={["top"]}
                   role="complementary"
-                  aria-label="キューと360° Audioの設定"
+                  aria-label="検索、キューと360° Audioの設定"
                 >
                   {inspector}
                 </Section>
@@ -155,28 +148,36 @@ export function App() {
         end={
           usesSideInspector ? (
             <>
-              <ResizeHandle
-                resizable={inspectorSize.props}
-                isReversed
-                hasDivider
-                isAlwaysVisible={false}
-                label="キューパネルの幅を調整"
-              />
+              {!inspectorSize.isCollapsed ? (
+                <ResizeHandle
+                  resizable={inspectorSize.props}
+                  isReversed
+                  hasDivider
+                  isAlwaysVisible={false}
+                  label="キューパネルの幅を調整"
+                />
+              ) : null}
               <LayoutPanel
                 resizable={inspectorSize.props}
                 padding={0}
+                isScrollable={false}
                 role="complementary"
-                label="キューと360° Audioの設定"
+                label="検索、キューと360° Audioの設定"
               >
-                {inspector}
+                {inspectorSize.isCollapsed ? (
+                  <Center width="100%" height="100%">
+                    <IconButton
+                      label="キューパネルを開く"
+                      tooltip="キューを開く"
+                      icon={<Icon icon={PanelRightOpen} />}
+                      variant="ghost"
+                      onClick={inspectorSize.expand}
+                    />
+                  </Center>
+                ) : inspector}
               </LayoutPanel>
             </>
           ) : undefined
-        }
-        footer={
-          <LayoutFooter padding={0} hasDivider role="region" label="音楽プレイヤー">
-            <PlayerBar model={model} />
-          </LayoutFooter>
         }
       />
     </AppShell>

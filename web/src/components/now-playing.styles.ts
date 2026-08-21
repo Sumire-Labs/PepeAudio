@@ -10,6 +10,7 @@ export const nowPlayingStyles = stylex.create({
   },
   artworkFrame: {
     width: "100%",
+    maxWidth: "62vh",
     borderRadius: radiusVars["--radius-page"],
     overflow: "hidden"
   },
@@ -22,6 +23,9 @@ export const nowPlayingStyles = stylex.create({
     backgroundImage: `radial-gradient(circle, ${colorVars["--color-accent-muted"]}, ${colorVars["--color-background-card"]})`
   },
   trackDetails: {
-    minWidth: 0
+    alignItems: "center",
+    minWidth: 0,
+    textAlign: "center",
+    width: "100%"
   }
 });

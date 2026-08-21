@@ -80,15 +80,22 @@ export const demoPresets: readonly HrirPreset[] = [
 
 const demoTrack: TrackView = {
   id: "84cb4cf6-7e0a-4c5e-b44b-cb8d8df5d37d",
-  title: "Signals After Rain",
-  artist: "Aster Vale",
-  album: "Nocturne Transit",
+  title: "Alan Walker - Faded",
+  artist: "Alan Walker",
+  album: "Different World",
+  provenance: {
+    origin: null,
+    playback: {
+      provider: "youtube",
+      url: "https://www.youtube.com/watch?v=60ItHLz5WEA"
+    }
+  },
   requestedBy: "s12kuma01",
   durationMs: 256_000,
   positionMsAtAnchor: 104_000,
   anchorUnixMs: Date.now(),
   seekable: true,
-  artworkUrl: null
+  artworkUrl: "https://i.ytimg.com/vi/60ItHLz5WEA/maxresdefault.jpg"
 };
 
 const demoQueue: readonly QueueItem[] = [

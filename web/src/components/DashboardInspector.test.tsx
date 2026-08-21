@@ -17,6 +17,8 @@ const baseProps = {
   },
   connected: false,
   commandPending: false,
+  searchSuggestions: [],
+  onEnqueue: vi.fn(),
   onRemove: vi.fn(),
   onMove: vi.fn(),
   onPresetChange: vi.fn(),
@@ -36,7 +38,9 @@ describe("DashboardInspector presentation", () => {
     expect(queueSection).toBeTruthy();
     expect(spatialSection).toBeTruthy();
     expect(queueSection).not.toBe(spatialSection);
-    expect(container.querySelectorAll(".astryx-section")).toHaveLength(2);
+    expect(container.querySelectorAll(".astryx-section")).toHaveLength(3);
+    expect(screen.getByRole("combobox", { name: "曲を検索またはURLを追加" }))
+      .toBeTruthy();
     const queueRegion = screen.getByRole("region", { name: "次に再生キュー" });
     expect(queueRegion.getAttribute("data-size")).toBe("fill");
     expect(queueRegion.contains(queueSection)).toBe(true);
@@ -58,5 +62,7 @@ describe("DashboardInspector presentation", () => {
     expect(queueCard?.parentElement?.className).toContain("astryx-grid-span");
     expect(spatialCard?.parentElement?.className).toContain("astryx-grid-span");
     expect(spatialCard?.getAttribute("data-variant")).toBe("muted");
+    expect(screen.getByRole("combobox", { name: "曲を検索またはURLを追加" }))
+      .toBeTruthy();
   });
 });

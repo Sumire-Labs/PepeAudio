@@ -147,10 +147,7 @@ fn curated_presentation(preset_id: &str) -> Option<PresetPresentation> {
             "CMSS-3D — Game Mode",
             Some("Recorded on X-Fi Titanium by Sossaman."),
         ),
-        "dht" => (
-            "Dolby Home Theater v4",
-            Some("Headphone Surround Virtualizer."),
-        ),
+        "dht" => ("Aura Cinema 4.1", Some("Headphone Surround Virtualizer.")),
         "ssc_ny" => (
             "Spatial Sound Card — New York",
             Some("Short room envelope. Do not use any upmix."),
@@ -217,10 +214,7 @@ mod tests {
                     "Dolby Atmos 7.1 (No Reverb)",
                     Some("Virtual surround sound for headphones without reverb.")
                 ),
-                (
-                    "Dolby Home Theater v4",
-                    Some("Headphone Surround Virtualizer.")
-                )
+                ("Aura Cinema 4.1", Some("Headphone Surround Virtualizer."))
             ]
         );
     }

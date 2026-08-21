@@ -43,7 +43,7 @@ fn applies_hesuvi_info_without_changing_the_stable_filename_id() {
     let catalog = HrirCatalog::load(directory.path(), CatalogLimits::default()).expect("catalog");
     let descriptor = catalog.descriptors().pop().expect("descriptor");
     assert_eq!(descriptor.id.as_str(), "dht");
-    assert_eq!(descriptor.display_name, "Dolby Home Theater v4");
+    assert_eq!(descriptor.display_name, "Aura Cinema 4.1");
     assert_eq!(
         descriptor.description.as_deref(),
         Some("Headphone Surround Virtualizer.")

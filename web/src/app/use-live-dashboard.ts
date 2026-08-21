@@ -10,6 +10,7 @@ import {
   type AuthBootstrap
 } from "./api-client";
 import { buildLiveDashboardModel, selectInitialGuild } from "./live-dashboard-model";
+import { findPreferredGuild } from "./preferred-guild";
 import type {
   DashboardFeedback,
   DashboardSession,
@@ -29,13 +30,15 @@ interface LiveDashboardDependencies {
   readonly fetchPresets: typeof fetchHrirPresets;
   readonly maintainEvents: typeof maintainPlayerEventStream;
   readonly logout: typeof logoutSession;
+  readonly findPreferredGuild?: typeof findPreferredGuild;
 }
 
 const defaultDependencies: LiveDashboardDependencies = {
   fetchBootstrap: fetchAuthBootstrap,
   fetchPresets: fetchHrirPresets,
   maintainEvents: maintainPlayerEventStream,
-  logout: logoutSession
+  logout: logoutSession,
+  findPreferredGuild
 };
 
 export function useLiveDashboardWithDependencies(
@@ -98,11 +101,25 @@ export function useLiveDashboardWithDependencies(
       try {
         const next = await dependencies.fetchBootstrap(controller.signal);
         if (controller.signal.aborted) return;
+        const fallbackGuildId = selectInitialGuild("", next.guilds);
         setAuth(next);
         setSelectedGuildId((current) => selectInitialGuild(current, next.guilds));
         setUnauthenticated(false);
         setMessage(null);
         setReconnecting(false);
+        if (fallbackGuildId && dependencies.findPreferredGuild) {
+          const preferredGuildId = await dependencies.findPreferredGuild(
+            fallbackGuildId,
+            next.guilds,
+            next.account.userId,
+            controller.signal
+          );
+          if (!controller.signal.aborted) {
+            setSelectedGuildId((current) =>
+              current === fallbackGuildId ? preferredGuildId : current
+            );
+          }
+        }
       } catch (error) {
         if (controller.signal.aborted) return;
         if (error instanceof ApiResponseError && error.status === 401) {

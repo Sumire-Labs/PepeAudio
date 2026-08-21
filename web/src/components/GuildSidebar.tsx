@@ -16,6 +16,7 @@ import { useCallback } from "react";
 
 import type { DashboardAccount, DashboardStatus, GuildSummary } from "../app/types";
 import { AccountPanel } from "./AccountPanel";
+import { guildSidebarStyles } from "./guild-sidebar.styles";
 
 interface GuildSidebarProps {
   readonly guilds: readonly GuildSummary[];
@@ -58,6 +59,7 @@ export function GuildSidebar({
 
   return (
     <SideNav
+      xstyle={guildSidebarStyles.root}
       collapsible={{
         defaultIsCollapsed: true,
         buttonLabel: "サーバー一覧を開閉"

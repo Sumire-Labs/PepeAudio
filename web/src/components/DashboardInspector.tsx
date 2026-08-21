@@ -10,6 +10,7 @@ import type {
   QueueItem
 } from "../app/types";
 import { dashboardInspectorStyles } from "./dashboard-inspector.styles";
+import { MediaSearchBar, type MediaSearchSeed } from "./MediaSearchBar";
 import { QueuePanel } from "./QueuePanel";
 import { SpatialPanel } from "./SpatialPanel";
 
@@ -22,6 +23,8 @@ interface DashboardInspectorProps {
   readonly snapshot: PlayerSnapshot;
   readonly connected: boolean;
   readonly commandPending: boolean;
+  readonly searchSuggestions: readonly MediaSearchSeed[];
+  readonly onEnqueue: (input: string) => Promise<void> | void;
   readonly onRemove: (trackId: string) => void;
   readonly onMove: (trackId: string, beforeTrackId: string | null) => void;
   readonly onPresetChange: (presetId: string) => void;
@@ -38,12 +41,22 @@ export function DashboardInspector({
   snapshot,
   connected,
   commandPending,
+  searchSuggestions,
+  onEnqueue,
   onRemove,
   onMove,
   onPresetChange,
   onSpatialToggle,
   onCollapse
 }: DashboardInspectorProps) {
+  const mediaSearch = (
+    <MediaSearchBar
+      isDisabled={!connected}
+      isLoading={commandPending}
+      suggestions={searchSuggestions}
+      onSubmit={onEnqueue}
+    />
+  );
   const queuePanel = (
     <QueuePanel
       queue={queue}
@@ -70,6 +83,11 @@ export function DashboardInspector({
     return (
       <Grid columns={{ minWidth: 260, max: 2, repeat: "fill" }} gap={4} align="start">
         <GridSpan columns="full">
+          <Card padding={4} xstyle={dashboardInspectorStyles.card}>
+            {mediaSearch}
+          </Card>
+        </GridSpan>
+        <GridSpan columns="full">
           <Card minHeight={320} padding={4} xstyle={dashboardInspectorStyles.card}>
             {queuePanel}
           </Card>
@@ -85,6 +103,11 @@ export function DashboardInspector({
 
   return (
     <VStack gap={0} height="100%">
+      <StackItem size="static">
+        <Section variant="transparent" padding={4} dividers={["bottom"]}>
+          {mediaSearch}
+        </Section>
+      </StackItem>
       <StackItem
         size="fill"
         isScrollable
