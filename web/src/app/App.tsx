@@ -17,6 +17,10 @@ import { GuildSidebar } from "../components/GuildSidebar";
 import { LoginScreen } from "../components/LoginScreen";
 import { NowPlaying } from "../components/NowPlaying";
 import { PlayerBar } from "../components/PlayerBar";
+import {
+  INSPECTOR_RAIL_WIDTH,
+  inspectorPanelSizing
+} from "./inspector-panel-sizing";
 import { useDashboard } from "./use-dashboard";
 
 export function App() {
@@ -29,7 +33,7 @@ export function App() {
     minSizePx: 360,
     maxSizePx: 600,
     collapsible: true,
-    collapsedSize: 64,
+    collapsedSize: INSPECTOR_RAIL_WIDTH,
     snaps: [400, 440, 520],
     autoSaveId: "pepeaudio-queue-inspector"
   });
@@ -44,6 +48,10 @@ export function App() {
     title: track.title,
     artist: track.artist ?? null
   }));
+  const inspectorPanel = inspectorPanelSizing(
+    inspectorSize.isCollapsed,
+    inspectorSize.props
+  );
 
   useEffect(() => {
     if (session.feedback === null) return;
@@ -158,7 +166,7 @@ export function App() {
                 />
               ) : null}
               <LayoutPanel
-                resizable={inspectorSize.props}
+                {...inspectorPanel}
                 padding={0}
                 isScrollable={false}
                 role="complementary"
