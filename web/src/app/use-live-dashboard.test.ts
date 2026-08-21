@@ -119,6 +119,36 @@ describe("useLiveDashboard session boundaries", () => {
       "リアルタイム接続を再接続しています（3秒以内）。"
     );
   });
+
+  it("stops reconnecting when the selected guild is no longer authorized", async () => {
+    const maintainEvents = vi.fn(async (
+      _guildId: string,
+      signal: AbortSignal,
+      _onSnapshot: (snapshot: PlayerSnapshotWire) => void,
+      onRetry: (error: unknown, delayMs: number) => void
+    ) => {
+      onRetry(new ApiResponseError(403, "アクセスできません。"), 1_000);
+      await waitUntilAborted("123", signal);
+    });
+    const dependencies = {
+      fetchBootstrap: vi.fn(async () => SESSION),
+      fetchPresets: vi.fn(async (): Promise<readonly HrirPreset[]> => []),
+      maintainEvents,
+      logout: vi.fn(async () => undefined)
+    };
+    const { result } = renderHook(() =>
+      useLiveDashboardWithDependencies(true, dependencies)
+    );
+
+    await waitFor(() => expect(result.current.status).toBe("unavailable"));
+
+    expect(result.current.model.selectedGuildId).toBe("");
+    expect(result.current.model.connected).toBe(false);
+    expect(result.current.message).toBe(
+      "このサーバーではPepeAudioを利用できません。Botの参加状態を確認して再試行してください。"
+    );
+    expect(maintainEvents).toHaveBeenCalledTimes(1);
+  });
 });
 
 function snapshotWire(): PlayerSnapshotWire {

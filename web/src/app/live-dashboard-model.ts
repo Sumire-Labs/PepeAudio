@@ -63,8 +63,8 @@ export function selectInitialGuild(
   current: string,
   guilds: readonly AuthGuild[]
 ): string {
-  if (guilds.some((guild) => guild.id === current)) return current;
-  return guilds.find((guild) => guild.botPresent)?.id ?? guilds[0]?.id ?? "";
+  if (guilds.some((guild) => guild.id === current && guild.botPresent)) return current;
+  return guilds.find((guild) => guild.botPresent)?.id ?? "";
 }
 
 function toGuildSummary(

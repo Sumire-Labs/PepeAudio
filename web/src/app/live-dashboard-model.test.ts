@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import type { AuthGuild } from "./auth-wire";
 import { createDemoSnapshot } from "./demo-data";
-import { buildLiveDashboardModel } from "./live-dashboard-model";
+import { buildLiveDashboardModel, selectInitialGuild } from "./live-dashboard-model";
 
 const GUILD_ID = "120000000000000001";
 const guild: AuthGuild = {
@@ -41,5 +41,23 @@ describe("buildLiveDashboardModel", () => {
       track_id: "queue-1",
       before_track_id: null
     });
+  });
+});
+
+describe("selectInitialGuild", () => {
+  const inactiveGuild: AuthGuild = {
+    ...guild,
+    id: "120000000000000002",
+    name: "Bot not installed",
+    botPresent: false
+  };
+
+  it("keeps the current guild only while the bot is present", () => {
+    expect(selectInitialGuild(GUILD_ID, [inactiveGuild, guild])).toBe(GUILD_ID);
+    expect(selectInitialGuild(inactiveGuild.id, [inactiveGuild, guild])).toBe(GUILD_ID);
+  });
+
+  it("does not open a player connection when the bot is absent from every guild", () => {
+    expect(selectInitialGuild(inactiveGuild.id, [inactiveGuild])).toBe("");
   });
 });

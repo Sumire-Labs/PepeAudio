@@ -143,6 +143,17 @@ export function useLiveDashboardWithDependencies(
           controller.abort();
           return;
         }
+        if (error instanceof ApiResponseError && error.status === 403) {
+          invalidateCommands();
+          setSelectedGuildId("");
+          setSnapshot(null);
+          setReconnecting(false);
+          setMessage(
+            "このサーバーではPepeAudioを利用できません。Botの参加状態を確認して再試行してください。"
+          );
+          controller.abort();
+          return;
+        }
         const seconds = Math.max(1, Math.ceil(delayMs / 1_000));
         setReconnecting(true);
         setMessage(`リアルタイム接続を再接続しています（${seconds}秒以内）。`);
