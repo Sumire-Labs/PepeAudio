@@ -4,7 +4,6 @@ import { createDemoSnapshot } from "./demo-data";
 import {
   formatDuration,
   interpolatedPositionMs,
-  orbitDegreesAt,
   progressPercent
 } from "./progress";
 
@@ -17,15 +16,6 @@ describe("player progress", () => {
     expect(
       interpolatedPositionMs({ ...snapshot, state: "paused" }, anchor + 2_000)
     ).toBe(104_000);
-  });
-
-  it("mirrors the one-minute sample-clocked horizontal orbit", () => {
-    const snapshot = createDemoSnapshot("1");
-    const anchor = snapshot.track?.anchorUnixMs ?? 0;
-    const frontOrigin = { ...snapshot, orbitDegrees: 0 };
-    expect(orbitDegreesAt(frontOrigin, anchor)).toBe(264);
-    expect(orbitDegreesAt(frontOrigin, anchor + 16_000)).toBe(0);
-    expect(orbitDegreesAt({ ...frontOrigin, state: "paused" }, anchor + 16_000)).toBe(264);
   });
 
   it("formats durations and clamps percentages", () => {

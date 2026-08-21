@@ -29,20 +29,9 @@ adapter alone does not enable the `f32le` decoder. Runtime images must provide a
 compatible `ffmpeg` executable. The executable and all input paths are passed as
 argument arrays without a shell.
 
-This crate supports horizontal 360-degree orbit only. HeSuVi has no elevation
-planes, so it is not a spherical HRTF renderer. DAVE is supplied by Songbird's
-driver and is below this PCM input boundary; it still requires validation in a
-real Discord voice channel.
-
-While spatial audio is enabled, the wet output follows a continuous clockwise
-horizontal orbit. One revolution is 60 seconds by default and can be configured
-from 1 second through 10 minutes with `PipelineConfig::orbit_period`. The orbit
-is driven by processed 48 kHz PCM frames, not wall time: pause freezes the
-audible sequence and resume continues it; bounded PCM already prepared before a
-pause retains its matching position. Seek creates a fresh worker at the seeked
-track-time phase, while a new track begins at the configured front/origin phase.
-Disabling spatial audio bypasses the wet signal but keeps the sample clock
-aligned, so re-enabling joins the current track-time phase instead of restarting
-or jumping to wall time.
-`set_orbit_position` rebases the active orbit immediately and stores that
-center/width as the origin for later track generations.
+This crate supports horizontal HeSuVi rendering only. HeSuVi has no elevation
+planes, so it is not a spherical HRTF renderer. Spatial audio keeps the stereo
+pair fixed at the configured front position; it never moves with playback time.
+`set_orbit_position` explicitly changes that position for the active and future
+tracks. DAVE is supplied by Songbird's driver and is below this PCM input
+boundary; it still requires validation in a real Discord voice channel.

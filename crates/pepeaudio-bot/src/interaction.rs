@@ -4,6 +4,7 @@ use pepeaudio_core::{
 };
 use thiserror::Error;
 
+use crate::components::HRIR_OFF_VALUE;
 use crate::{ComponentAction, DecodedComponentId};
 
 /// User-controlled value accompanying a verified component ID.
@@ -81,6 +82,9 @@ fn map_action(
             Ok(PlayerCommand::SetVolume { volume })
         }
         (ComponentAction::Hrir, InteractionInput::Select(value)) => {
+            if value == HRIR_OFF_VALUE {
+                return Ok(PlayerCommand::SetSpatialAudio { enabled: false });
+            }
             let preset = HrirPresetId::new(value).map_err(|_| InteractionMapError::InvalidValue)?;
             Ok(PlayerCommand::SetHrir { preset })
         }
@@ -107,7 +111,7 @@ mod tests {
         UnixTimeMillis, UserId, Volume,
     };
 
-    use super::{InteractionInput, map_interaction};
+    use super::{HRIR_OFF_VALUE, InteractionInput, map_interaction};
     use crate::{ComponentAction, DecodedComponentId};
 
     fn snapshot() -> PlayerSnapshot {
@@ -144,5 +148,25 @@ mod tests {
         )
         .expect("maps");
         assert_eq!(envelope.command, PlayerCommand::Pause);
+    }
+
+    #[test]
+    fn hrir_off_selection_disables_spatial_audio() {
+        let envelope = map_interaction(
+            DecodedComponentId {
+                action: ComponentAction::Hrir,
+                guild_id: GuildId::new(1).expect("guild"),
+                revision: StateRevision::new(2),
+            },
+            InteractionInput::Select(HRIR_OFF_VALUE.to_owned()),
+            UserId::new(3).expect("user"),
+            &snapshot(),
+            UnixTimeMillis::new(u64::MAX),
+        )
+        .expect("maps");
+        assert_eq!(
+            envelope.command,
+            PlayerCommand::SetSpatialAudio { enabled: false }
+        );
     }
 }

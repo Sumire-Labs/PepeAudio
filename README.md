@@ -9,7 +9,7 @@ Rustで動き、DiscordのコマンドとWebダッシュボードのどちらか
 - Spotify／Apple Musicの曲情報をYouTube／SoundCloudの安全な一致候補へ変換（任意設定）
 - pause、seek、skip、repeat、shuffle、音量調整
 - HeSuVi互換の7ch／14ch HRIRプリセットを切り替え
-- 水平方向を60秒で一周する360° Audio
+- HeSuVi HRIRを前方固定で適用する360° Audio
 - 再生状態をDiscord Components V2とWebへリアルタイム反映
 - 5分間何も再生しなければVoice Channelから自動退出
 - DiscordのステータスにBot本体のメモリ使用量を表示

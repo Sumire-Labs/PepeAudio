@@ -106,7 +106,6 @@ function disconnectedSnapshot(guildId: string): PlayerSnapshot {
     shuffleEnabled: false,
     hrirPresetId: null,
     spatialEnabled: false,
-    orbitDegrees: 0,
     observedAtUnixMs: Date.now()
   };
 }

@@ -20,7 +20,7 @@ use crate::{
     cancellation::Cancellation,
     decoder::DecoderProcessSlot,
     dsp::{DspMutation, DspState},
-    orbit::OrbitClock,
+    orbit::SpatialPosition,
     track::TrackLifecycle,
 };
 
@@ -90,12 +90,7 @@ async fn fragmented_pcm_is_processed_and_finished() {
         pump_pcm(
             &mut decoder,
             processor,
-            OrbitClock::new(
-                config.orbit_period,
-                Duration::ZERO,
-                HorizontalStereoPair::FRONT
-            )
-            .expect("orbit"),
+            SpatialPosition::new(HorizontalStereoPair::FRONT),
             writer,
             controls,
             config,
@@ -133,7 +128,6 @@ async fn cancellation_reaches_decoder_while_bounded_output_is_full() {
         None,
         test_state(),
         config,
-        Duration::ZERO,
         Arc::clone(&lifecycle),
     )
     .await
@@ -179,7 +173,6 @@ fn test_config() -> PipelineConfig {
         control_capacity: 4,
         event_capacity: 8,
         transition_frames: 1,
-        orbit_period: Duration::from_mins(1),
         shutdown_timeout: Duration::from_secs(1),
     }
 }

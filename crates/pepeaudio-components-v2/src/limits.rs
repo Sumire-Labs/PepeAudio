@@ -7,7 +7,10 @@ pub(crate) const THUMBNAIL: u8 = 11;
 pub(crate) const SEPARATOR: u8 = 14;
 pub(crate) const CONTAINER: u8 = 17;
 
+pub(crate) const PRIMARY_BUTTON: u8 = 1;
 pub(crate) const SECONDARY_BUTTON: u8 = 2;
+pub(crate) const SUCCESS_BUTTON: u8 = 3;
+pub(crate) const DANGER_BUTTON: u8 = 4;
 pub(crate) const LINK_BUTTON: u8 = 5;
 pub(crate) const MAX_COMPONENTS: usize = 40;
 pub(crate) const MAX_BUTTONS_PER_ROW: usize = 5;

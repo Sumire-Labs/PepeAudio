@@ -102,7 +102,6 @@ export function toPlayerSnapshot(wire: PlayerSnapshotWire): PlayerSnapshot {
     shuffleEnabled: wire.shuffle_enabled,
     hrirPresetId: wire.hrir_preset,
     spatialEnabled: wire.spatial_audio_enabled,
-    orbitDegrees: 0,
     observedAtUnixMs: observedAt
   };
 }

@@ -95,7 +95,6 @@ export interface PlayerSnapshot {
   readonly shuffleEnabled: boolean;
   readonly hrirPresetId: string | null;
   readonly spatialEnabled: boolean;
-  readonly orbitDegrees: number;
   readonly observedAtUnixMs: number;
 }
 

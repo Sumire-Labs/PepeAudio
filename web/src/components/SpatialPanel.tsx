@@ -7,9 +7,9 @@ import { Switch } from "@astryxdesign/core/Switch";
 import { Heading, Text } from "@astryxdesign/core/Text";
 import { Orbit, Sparkles } from "lucide-react";
 
-import { orbitDegreesAt } from "../app/progress";
 import type { HrirCatalogStatus, HrirPreset, PlayerSnapshot } from "../app/types";
-import { useClock } from "../app/use-clock";
+
+const SPATIAL_OFF_VALUE = "__pepeaudio_spatial_off__";
 
 interface SpatialPanelProps {
   readonly presets: readonly HrirPreset[];
@@ -34,8 +34,12 @@ export function SpatialPanel({
 }: SpatialPanelProps) {
   const enabled = snapshot.spatialEnabled;
   const selected = presets.find((preset) => preset.id === selectedPresetId);
-  const selectionValue = selected?.id ?? "";
-  const catalogMessage = describeCatalog(catalogStatus, presets.length, selected);
+  const selectionValue = enabled ? (selected?.id ?? SPATIAL_OFF_VALUE) : SPATIAL_OFF_VALUE;
+  const catalogMessage = describeCatalog(
+    catalogStatus,
+    presets.length,
+    enabled ? selected : undefined
+  );
   const unavailable = catalogStatus !== "ready" || presets.length === 0;
   const controlsUnavailable = !connected || commandPending;
   const controlMessage = connected
@@ -63,18 +67,25 @@ export function SpatialPanel({
       <Item
         density="compact"
         startContent={<Icon icon={Orbit} color="secondary" />}
-        label={enabled ? "水平音場を適用中" : "空間処理はオフ"}
-        description="HeSuViの水平7方向をサーバー全体へ適用"
-        endContent={<OrbitReadout snapshot={snapshot} />}
+        label={enabled ? "前方固定でHRIRを適用中" : "空間処理はオフ"}
+        description="音源を移動させず、HeSuViの前方ステレオ音場を適用"
+        endContent={
+          <Text type="code" color="secondary">
+            {enabled ? "前方固定" : "オフ"}
+          </Text>
+        }
       />
 
       <Selector
         label="HRIRプリセット"
-        options={presets.map((preset) => ({
-          value: preset.id,
-          label: preset.name,
-          icon: Sparkles
-        }))}
+        options={[
+          { value: SPATIAL_OFF_VALUE, label: "オフ", icon: Orbit },
+          ...presets.map((preset) => ({
+            value: preset.id,
+            label: preset.name,
+            icon: Sparkles
+          }))
+        ]}
         value={selectionValue}
         placeholder={catalogOption(catalogStatus, presets.length)}
         hasSearch={presets.length > 8}
@@ -83,7 +94,11 @@ export function SpatialPanel({
           <SelectorOption
             icon={option.icon}
             label={option.label ?? option.value}
-            description={presets.find((preset) => preset.id === option.value)?.description}
+            description={
+              option.value === SPATIAL_OFF_VALUE
+                ? "HRIR空間処理を無効にします"
+                : presets.find((preset) => preset.id === option.value)?.description
+            }
           />
         )}
         width="100%"
@@ -95,11 +110,15 @@ export function SpatialPanel({
           presets.length
         )}
         onChange={(presetId) => {
-          if (presetId) onPresetChange(presetId);
+          if (presetId === SPATIAL_OFF_VALUE) {
+            if (enabled) onToggle();
+          } else if (presetId) {
+            onPresetChange(presetId);
+          }
         }}
       />
 
-      {selected?.description ? (
+      {enabled && selected?.description ? (
         <Text type="body" color="primary">
           {selected.description}
         </Text>
@@ -109,7 +128,7 @@ export function SpatialPanel({
           {catalogMessage}
         </Text>
       ) : null}
-      {selected?.source.sourceUrl ? (
+      {enabled && selected?.source.sourceUrl ? (
         <Link
           href={selected.source.sourceUrl}
           isExternalLink
@@ -120,20 +139,6 @@ export function SpatialPanel({
         </Link>
       ) : null}
     </VStack>
-  );
-}
-
-function OrbitReadout({ snapshot }: { readonly snapshot: PlayerSnapshot }) {
-  const nowUnixMs = useClock();
-  return (
-    <Text
-      type="code"
-      color="secondary"
-      hasTabularNumbers
-      aria-label="現在の水平音源方向"
-    >
-      {Math.round(orbitDegreesAt(snapshot, nowUnixMs))}°
-    </Text>
   );
 }
 

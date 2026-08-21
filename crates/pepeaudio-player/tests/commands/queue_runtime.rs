@@ -6,11 +6,11 @@ use std::{
     time::Duration,
 };
 
-use pepeaudio_core::PlayerCommand;
+use pepeaudio_core::{HrirPresetId, PlayerCommand};
 use pepeaudio_player::{PlaybackSource, PlayerError, QueueTrack};
 
 use crate::{
-    common::{command, connect, harness, revision, track},
+    common::{PlaybackCall, command, connect, harness, revision, track},
     support::DropMarker,
 };
 
@@ -95,6 +95,38 @@ async fn single_enqueue_rejects_an_unpublishable_title() {
     assert_eq!(
         test.handle.snapshot().await.expect("snapshot").revision,
         revision(1)
+    );
+    test.runtime.shutdown().await.expect("clean shutdown");
+}
+
+#[tokio::test]
+async fn changing_hrir_during_playback_applies_it_and_enables_spatial_audio() {
+    let test = harness(Duration::from_mins(5), 4);
+    connect(&test.handle).await;
+    test.handle
+        .enqueue(track("current"), revision(1))
+        .await
+        .expect("current enqueue");
+    let preset = HrirPresetId::new("dht").expect("preset");
+
+    let snapshot = test
+        .handle
+        .apply(command(
+            2,
+            PlayerCommand::SetHrir {
+                preset: preset.clone(),
+            },
+        ))
+        .await
+        .expect("change HRIR");
+
+    assert_eq!(snapshot.hrir_preset.as_ref(), Some(&preset));
+    assert!(snapshot.spatial_audio_enabled);
+    assert!(
+        test.playback
+            .calls()
+            .await
+            .contains(&PlaybackCall::Hrir("dht".to_owned()))
     );
     test.runtime.shutdown().await.expect("clean shutdown");
 }

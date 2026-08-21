@@ -1,5 +1,4 @@
 use std::sync::Arc;
-use std::time::Duration;
 
 use pepeaudio_audio::AudioProcessor;
 use songbird::input::Input;
@@ -14,7 +13,7 @@ use crate::{
     decoder::{DecoderProcessSlot, DecoderReplacementPermit},
     dsp::{DspCommand, DspController, DspState, apply_command},
     event::WorkerFailure,
-    orbit::OrbitClock,
+    orbit::SpatialPosition,
     songbird_input::songbird_pcm_input,
     track::TrackLifecycle,
 };
@@ -33,7 +32,6 @@ pub(crate) async fn spawn_pcm_worker(
     replacement_permit: Option<DecoderReplacementPermit>,
     state: DspState,
     config: PipelineConfig,
-    track_position: Duration,
     lifecycle: Arc<TrackLifecycle>,
 ) -> PipelineResult<PcmWorker> {
     let orbit_origin = state.orbit_origin;
@@ -54,12 +52,18 @@ pub(crate) async fn spawn_pcm_worker(
     let input = songbird_pcm_input(reader, config.songbird_buffer_bytes);
     let (sender, receiver) = mpsc::channel(config.control_capacity);
     let controller = DspController::new(sender);
-    let orbit = OrbitClock::new(config.orbit_period, track_position, orbit_origin)?;
+    let spatial_position = SpatialPosition::new(orbit_origin);
     let task = tokio::spawn(async move {
         let _process_slot = process_slot;
         let _replacement_permit = replacement_permit;
         run_worker(
-            decoder, processor, orbit, writer, receiver, config, lifecycle,
+            decoder,
+            processor,
+            spatial_position,
+            writer,
+            receiver,
+            config,
+            lifecycle,
         )
         .await;
     });
@@ -73,7 +77,7 @@ pub(crate) async fn spawn_pcm_worker(
 async fn run_worker(
     mut decoder: Box<dyn DecodedPcm>,
     processor: AudioProcessor,
-    orbit: OrbitClock,
+    spatial_position: SpatialPosition,
     writer: DuplexStream,
     controls: mpsc::Receiver<DspCommand>,
     config: PipelineConfig,
@@ -82,7 +86,7 @@ async fn run_worker(
     let result = pump_pcm(
         decoder.as_mut(),
         processor,
-        orbit,
+        spatial_position,
         writer,
         controls,
         config,
@@ -112,7 +116,7 @@ enum WorkerCompletion {
 async fn pump_pcm(
     decoder: &mut dyn DecodedPcm,
     processor: AudioProcessor,
-    mut orbit: OrbitClock,
+    mut spatial_position: SpatialPosition,
     mut writer: DuplexStream,
     mut controls: mpsc::Receiver<DspCommand>,
     config: PipelineConfig,
@@ -144,7 +148,7 @@ async fn pump_pcm(
                     if let Some(command) = command {
                         apply_command(
                             &mut processor,
-                            &mut orbit,
+                            &mut spatial_position,
                             command,
                             config.transition_frames,
                         );
@@ -180,14 +184,12 @@ async fn pump_pcm(
             continue;
         }
         let samples = complete_bytes / size_of::<f32>();
-        let frames = samples / 2;
         decode_samples(&bytes[..complete_bytes], &mut input[..samples]);
         {
             let active_processor = processor.as_mut().ok_or(PipelineError::WorkerClosed)?;
-            active_processor.set_orbit_position(orbit.position()?)?;
+            active_processor.set_orbit_position(spatial_position.position())?;
             active_processor.process_block(&input[..samples], &mut output[..samples])?;
         }
-        orbit.advance(frames)?;
         encode_samples(&output[..samples], &mut encoded[..complete_bytes]);
         write_processed(
             &mut writer,
@@ -195,7 +197,7 @@ async fn pump_pcm(
             &mut controls,
             &mut controls_open,
             &mut processor,
-            &mut orbit,
+            &mut spatial_position,
             config.transition_frames,
             lifecycle,
         )
@@ -224,7 +226,7 @@ async fn write_processed(
     controls: &mut mpsc::Receiver<DspCommand>,
     controls_open: &mut bool,
     processor: &mut Option<AudioProcessor>,
-    orbit: &mut OrbitClock,
+    spatial_position: &mut SpatialPosition,
     transition_frames: usize,
     lifecycle: &TrackLifecycle,
 ) -> PipelineResult<()> {
@@ -235,7 +237,7 @@ async fn write_processed(
             () = lifecycle.cancellation().cancelled() => return Err(PipelineError::WorkerClosed),
             command = controls.recv(), if *controls_open => {
                 if let Some(command) = command {
-                    apply_command(processor, orbit, command, transition_frames);
+                    apply_command(processor, spatial_position, command, transition_frames);
                 } else {
                     *controls_open = false;
                 }

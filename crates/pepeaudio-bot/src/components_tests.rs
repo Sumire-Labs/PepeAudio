@@ -52,7 +52,7 @@ fn now_panel_with_provenance(provenance: TrackProvenance) -> serde_json::Value {
 }
 
 #[test]
-fn now_panel_is_components_v2_only_and_neutral() {
+fn now_panel_is_components_v2_only() {
     let codec = ComponentIdCodec::new([1; 32]).expect("codec");
     let message = build_now_panel(&snapshot(), &codec, &[]).expect("valid panel");
     let json = serde_json::to_value(message).expect("serialize");
@@ -64,7 +64,7 @@ fn now_panel_is_components_v2_only_and_neutral() {
 }
 
 #[test]
-fn now_panel_shows_origin_and_distinct_playback_pages() {
+fn now_panel_omits_external_source_buttons() {
     let provenance = TrackProvenance::new(
         Some(page(
             MediaProvider::Spotify,
@@ -78,41 +78,51 @@ fn now_panel_shows_origin_and_distinct_playback_pages() {
     .expect("provenance");
 
     let json = now_panel_with_provenance(provenance);
-    let links = json["components"][0]["components"][2]["components"]
-        .as_array()
-        .expect("link row");
-
-    assert_eq!(links.len(), 2);
-    assert_eq!(links[0]["label"], "Spotifyで開く");
-    assert_eq!(links[1]["label"], "YouTubeで再生");
-    assert_eq!(
-        links[0]["url"],
-        "https://open.spotify.com/track/4uLU6hMCjMI75M1A2tKUQC"
-    );
-    assert_eq!(
-        links[1]["url"],
-        "https://www.youtube.com/watch?v=dQw4w9WgXcQ"
-    );
-    assert_eq!(links[0]["style"], 5);
-    assert!(links[0].get("custom_id").is_none());
-    assert!(!json.to_string().contains("googlevideo"));
+    let serialized = json.to_string();
+    assert!(!serialized.contains("Spotifyで開く"));
+    assert!(!serialized.contains("YouTubeで再生"));
+    assert!(!serialized.contains("open.spotify.com"));
+    assert!(!serialized.contains("youtube.com"));
+    assert!(!serialized.contains("\"style\":5"));
 }
 
 #[test]
-fn now_panel_deduplicates_the_same_origin_and_playback_page() {
-    let youtube = page(
-        MediaProvider::YouTube,
-        "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
-    );
-    let provenance = TrackProvenance::new(Some(youtube.clone()), youtube).expect("provenance");
-
-    let json = now_panel_with_provenance(provenance);
-    let links = json["components"][0]["components"][2]["components"]
+fn transport_and_toggle_buttons_use_symbols_and_state_colors() {
+    let mut active = snapshot();
+    active.state = PlayerState::Playing;
+    active.repeat_mode = RepeatMode::Track;
+    active.shuffle_enabled = true;
+    active.spatial_audio_enabled = true;
+    active.current_track = Some(TrackSnapshot {
+        track_id: Uuid::from_u128(1),
+        title: "Example".to_owned(),
+        artist: None,
+        album: None,
+        provenance: None,
+        requester_user_id: None,
+        duration_ms: Some(120_000),
+        position_ms: 1_000,
+        seekable: true,
+    });
+    let codec = ComponentIdCodec::new([1; 32]).expect("codec");
+    let json = serde_json::to_value(build_now_panel(&active, &codec, &[]).expect("valid panel"))
+        .expect("serialize");
+    let rows = json["components"][0]["components"]
         .as_array()
-        .expect("link row");
+        .expect("container children");
+    let transport = rows[2]["components"].as_array().expect("transport row");
+    let modes = rows[3]["components"].as_array().expect("mode row");
 
-    assert_eq!(links.len(), 1);
-    assert_eq!(links[0]["label"], "YouTubeで開く");
+    assert_eq!(
+        transport
+            .iter()
+            .map(|button| button["label"].as_str().expect("label"))
+            .collect::<Vec<_>>(),
+        vec!["⏮", "⏸", "⏭", "⏹"]
+    );
+    assert_eq!(transport[1]["style"], 1);
+    assert_eq!(transport[3]["style"], 4);
+    assert!(modes.iter().all(|button| button["style"] == 1));
 }
 
 #[test]
@@ -147,11 +157,43 @@ fn selected_hrir_remains_visible_beyond_discords_option_limit() {
 
     let visible = visible_hrir_options(&options, Some("preset-29"));
 
-    assert_eq!(visible.len(), 25);
+    assert_eq!(visible.len(), 24);
     assert_eq!(
         visible.last().map(|option| option.id.as_str()),
         Some("preset-29")
     );
+}
+
+#[test]
+fn hrir_selector_includes_off_and_reflects_spatial_state() {
+    let codec = ComponentIdCodec::new([1; 32]).expect("codec");
+    let options = [HrirOption {
+        id: "dht".into(),
+        label: "Dolby Home Theater v4".into(),
+        description: None,
+    }];
+
+    let off =
+        serde_json::to_value(build_now_panel(&snapshot(), &codec, &options).expect("off panel"))
+            .expect("serialize");
+    let off_options = off["components"][0]["components"][5]["components"][0]["options"]
+        .as_array()
+        .expect("HRIR options");
+    assert_eq!(off_options[0]["label"], "オフ");
+    assert_eq!(off_options[0]["value"], super::HRIR_OFF_VALUE);
+    assert_eq!(off_options[0]["default"], true);
+
+    let mut enabled = snapshot();
+    enabled.spatial_audio_enabled = true;
+    enabled.hrir_preset = Some(pepeaudio_core::HrirPresetId::new("dht").expect("preset"));
+    let on =
+        serde_json::to_value(build_now_panel(&enabled, &codec, &options).expect("enabled panel"))
+            .expect("serialize");
+    let on_options = on["components"][0]["components"][5]["components"][0]["options"]
+        .as_array()
+        .expect("HRIR options");
+    assert_eq!(on_options[0]["default"], false);
+    assert_eq!(on_options[1]["default"], true);
 }
 
 #[test]

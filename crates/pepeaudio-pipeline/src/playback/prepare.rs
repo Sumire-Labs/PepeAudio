@@ -110,7 +110,6 @@ impl SongbirdPlayback {
             replacement_permit.clone(),
             self.state.clone(),
             self.config,
-            start,
             Arc::clone(&lifecycle),
         )
         .await?;

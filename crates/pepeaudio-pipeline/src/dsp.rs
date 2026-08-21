@@ -5,7 +5,7 @@ use pepeaudio_audio::{
 };
 use tokio::sync::{mpsc, oneshot};
 
-use crate::orbit::OrbitClock;
+use crate::orbit::SpatialPosition;
 use crate::{PipelineError, PipelineResult};
 
 #[derive(Clone, Debug)]
@@ -32,7 +32,10 @@ impl DspState {
 #[derive(Debug)]
 pub(crate) enum DspMutation {
     Gain(LinearGain),
-    Preset(PreparedRenderer),
+    Preset {
+        renderer: PreparedRenderer,
+        enable_wet: bool,
+    },
     Spatial(bool),
     Orbit(HorizontalStereoPair),
 }
@@ -68,7 +71,7 @@ impl DspController {
 
 pub(crate) fn apply_command(
     processor: &mut Option<AudioProcessor>,
-    orbit: &mut OrbitClock,
+    spatial_position: &mut SpatialPosition,
     command: DspCommand,
     transition_frames: usize,
 ) {
@@ -85,14 +88,18 @@ pub(crate) fn apply_command(
             .as_mut()
             .ok_or(PipelineError::WorkerClosed)
             .and_then(|processor| processor.set_orbit_position(position).map_err(Into::into))
-            .map(|()| orbit.rebase(position)),
-        DspMutation::Preset(prepared) => processor
+            .map(|()| spatial_position.rebase(position)),
+        DspMutation::Preset {
+            renderer,
+            enable_wet,
+        } => processor
             .as_mut()
             .ok_or(PipelineError::WorkerClosed)
             .and_then(|processor| {
                 processor
-                    .install_prepared_renderer(prepared, transition_frames)
+                    .install_prepared_renderer(renderer, transition_frames)
                     .map_err(Into::into)
+                    .map(|()| processor.set_wet_enabled(enable_wet, transition_frames))
             }),
     };
     let _ = command.acknowledgement.send(result);

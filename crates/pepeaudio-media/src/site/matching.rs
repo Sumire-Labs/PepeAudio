@@ -5,6 +5,16 @@ use super::{SiteError, SiteReference, SiteSearch};
 const MINIMUM_SCORE: u16 = 70;
 const MINIMUM_WINNING_MARGIN: u16 = 8;
 const MAXIMUM_CANDIDATES_TO_RESOLVE: usize = 3;
+const PRESENTATION_MARKERS: &[&[&str]] = &[
+    &["official", "music", "video"],
+    &["official", "lyric", "video"],
+    &["official", "visualizer"],
+    &["official", "video"],
+    &["official", "audio"],
+    &["lyric", "video"],
+    &["lyrics"],
+    &["visualizer"],
+];
 
 #[cfg(test)]
 pub(super) fn select_candidate<'a>(
@@ -41,8 +51,8 @@ pub(super) fn duration_matches(preferred: Option<u64>, actual: u64) -> bool {
 }
 
 fn candidate_score(candidate: &SiteReference, search: &SiteSearch) -> Option<u16> {
-    let title = normalize(candidate.title.as_deref()?);
-    let expected = normalize(&search.expected_title);
+    let title = normalize_title(candidate.title.as_deref()?);
+    let expected = normalize_title(&search.expected_title);
     if qualifier_conflict(&expected, &title) {
         return None;
     }
@@ -82,7 +92,16 @@ fn candidate_score(candidate: &SiteReference, search: &SiteSearch) -> Option<u16
         (Some(_), Some(_)) => 5,
         _ => 0,
     };
-    Some(title_score + artist_score + duration_score)
+    let presentation_penalty = u16::from(has_presentation_marker(
+        candidate.title.as_deref().unwrap_or_default(),
+    )) * 10;
+    let score = title_score + artist_score + duration_score;
+    let ranked_score = score.saturating_sub(presentation_penalty);
+    Some(if score >= MINIMUM_SCORE {
+        ranked_score.max(MINIMUM_SCORE)
+    } else {
+        ranked_score
+    })
 }
 
 fn artist_score(haystack: &str, expected_artists: &[String]) -> Option<u16> {
@@ -117,6 +136,39 @@ fn normalize(value: &str) -> String {
         .split_whitespace()
         .collect::<Vec<_>>()
         .join(" ")
+}
+
+fn normalize_title(value: &str) -> String {
+    let normalized = normalize(value);
+    let canonical = normalized
+        .split_whitespace()
+        .map(|token| match token {
+            "ft" | "featuring" => "feat",
+            token => token,
+        })
+        .collect::<Vec<_>>();
+    let mut semantic = canonical.clone();
+    for marker in PRESENTATION_MARKERS {
+        while let Some(position) = semantic
+            .windows(marker.len())
+            .position(|window| window == *marker)
+        {
+            semantic.drain(position..position + marker.len());
+        }
+    }
+    if semantic.is_empty() {
+        canonical.join(" ")
+    } else {
+        semantic.join(" ")
+    }
+}
+
+fn has_presentation_marker(value: &str) -> bool {
+    let normalized = normalize(value);
+    let tokens = normalized.split_whitespace().collect::<Vec<_>>();
+    PRESENTATION_MARKERS
+        .iter()
+        .any(|marker| tokens.windows(marker.len()).any(|window| window == *marker))
 }
 
 fn token_overlap(expected: &str, candidate: &str) -> u16 {
@@ -279,5 +331,33 @@ mod tests {
         let reupload = candidate("Alan Walker - Faded", "Unrelated Channel", 213_000);
 
         assert!(select_candidate(&[reupload], &expected).is_err());
+    }
+
+    #[test]
+    fn feature_aliases_and_official_video_labels_do_not_hide_a_strong_match() {
+        let expected = SiteSearch::new(
+            "Hall of Fame feat will i am The Script",
+            "Hall of Fame (feat. will.i.am)",
+            vec!["The Script".into()],
+            None,
+            None,
+        )
+        .expect("search");
+        let candidates = [
+            candidate(
+                "The Script - Hall of Fame (Official Video) ft. will.i.am",
+                "The Script",
+                204_000,
+            ),
+            candidate(
+                "The Script - Hall of Fame ft. will.i.am (Lyrics)",
+                "Unrelated Channel",
+                204_000,
+            ),
+        ];
+
+        let selected = select_candidate(&candidates, &expected).expect("official artist match");
+
+        assert_eq!(selected.artist.as_deref(), Some("The Script"));
     }
 }

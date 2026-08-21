@@ -1,4 +1,5 @@
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { createDemoSnapshot } from "../app/demo-data";
@@ -12,7 +13,6 @@ const baseProps = {
     ...createDemoSnapshot("guild-1"),
     state: "paused" as const,
     spatialEnabled: false,
-    orbitDegrees: 42,
     track: null
   },
   connected: true,
@@ -22,12 +22,54 @@ const baseProps = {
 } as const;
 
 describe("SpatialPanel catalog states", () => {
-  it("reads spatial state and direction from the player snapshot", () => {
+  it("shows a stable front position instead of an automatic orbit", () => {
     render(<SpatialPanel {...baseProps} presets={[]} catalogStatus="ready" />);
 
     expect(screen.getByText("空間処理はオフ")).toBeTruthy();
-    expect(screen.getByText("42°")).toBeTruthy();
-    expect(screen.getByLabelText("現在の水平音源方向")).toBeTruthy();
+    expect(screen.getAllByText("オフ").length).toBeGreaterThan(0);
+    expect(screen.queryByText(/°$/)).toBeNull();
+  });
+
+  it("offers Off and enables spatial audio when a preset is selected", async () => {
+    const user = userEvent.setup();
+    const onToggle = vi.fn();
+    const onPresetChange = vi.fn();
+    const presets = [{
+      id: "neutral",
+      name: "Neutral",
+      description: null,
+      source: { licenseName: null, sourceUrl: null, attribution: null }
+    }];
+    const { rerender } = render(
+      <SpatialPanel
+        {...baseProps}
+        catalogStatus="ready"
+        presets={presets}
+        onToggle={onToggle}
+        onPresetChange={onPresetChange}
+      />
+    );
+
+    await user.click(screen.getByRole("combobox", { name: "HRIRプリセット" }));
+    await user.click(screen.getByRole("option", { name: /Neutral/u, hidden: true }));
+    expect(onPresetChange).toHaveBeenCalledWith("neutral");
+
+    onPresetChange.mockClear();
+    rerender(
+      <SpatialPanel
+        {...baseProps}
+        snapshot={{ ...baseProps.snapshot, spatialEnabled: true, hrirPresetId: "neutral" }}
+        catalogStatus="ready"
+        selectedPresetId="neutral"
+        presets={presets}
+        onToggle={onToggle}
+        onPresetChange={onPresetChange}
+      />
+    );
+    await user.click(screen.getByRole("combobox", { name: "HRIRプリセット" }));
+    await user.click(screen.getByRole("option", { name: /オフ/u, hidden: true }));
+    expect(onToggle).toHaveBeenCalledOnce();
+    expect(onPresetChange).not.toHaveBeenCalled();
   });
 
   it("distinguishes an unavailable catalog from an empty catalog", () => {
@@ -47,6 +89,7 @@ describe("SpatialPanel catalog states", () => {
     render(
       <SpatialPanel
         {...baseProps}
+        snapshot={{ ...baseProps.snapshot, spatialEnabled: true, hrirPresetId: "neutral" }}
         catalogStatus="ready"
         selectedPresetId="neutral"
         presets={[{

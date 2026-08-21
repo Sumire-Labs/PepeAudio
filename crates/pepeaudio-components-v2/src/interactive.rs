@@ -5,9 +5,9 @@ use serde::Serialize;
 use crate::{
     ValidationError,
     limits::{
-        ACTION_ROW, BUTTON, LINK_BUTTON, MAX_BUTTON_LABEL_CHARS, MAX_BUTTON_URL_BYTES,
-        MAX_BUTTONS_PER_ROW, MAX_CUSTOM_ID_CHARS, MAX_SELECT_OPTIONS, SECONDARY_BUTTON,
-        STRING_SELECT,
+        ACTION_ROW, BUTTON, DANGER_BUTTON, LINK_BUTTON, MAX_BUTTON_LABEL_CHARS,
+        MAX_BUTTON_URL_BYTES, MAX_BUTTONS_PER_ROW, MAX_CUSTOM_ID_CHARS, MAX_SELECT_OPTIONS,
+        PRIMARY_BUTTON, SECONDARY_BUTTON, STRING_SELECT, SUCCESS_BUTTON,
     },
 };
 
@@ -117,9 +117,28 @@ pub struct ButtonComponent {
 impl ButtonComponent {
     #[must_use]
     pub fn neutral(custom_id: impl Into<String>, label: impl Into<String>) -> Self {
+        Self::action(custom_id, label, SECONDARY_BUTTON)
+    }
+
+    #[must_use]
+    pub fn primary(custom_id: impl Into<String>, label: impl Into<String>) -> Self {
+        Self::action(custom_id, label, PRIMARY_BUTTON)
+    }
+
+    #[must_use]
+    pub fn success(custom_id: impl Into<String>, label: impl Into<String>) -> Self {
+        Self::action(custom_id, label, SUCCESS_BUTTON)
+    }
+
+    #[must_use]
+    pub fn danger(custom_id: impl Into<String>, label: impl Into<String>) -> Self {
+        Self::action(custom_id, label, DANGER_BUTTON)
+    }
+
+    fn action(custom_id: impl Into<String>, label: impl Into<String>, style: u8) -> Self {
         Self {
             kind: BUTTON,
-            style: SECONDARY_BUTTON,
+            style,
             custom_id: Some(custom_id.into()),
             url: None,
             label: label.into(),
@@ -153,7 +172,12 @@ impl ButtonComponent {
 
     fn validate(&self) -> Result<(), ValidationError> {
         match (&self.custom_id, &self.url) {
-            (Some(custom_id), None) if self.style == SECONDARY_BUTTON => {
+            (Some(custom_id), None)
+                if matches!(
+                    self.style,
+                    PRIMARY_BUTTON | SECONDARY_BUTTON | SUCCESS_BUTTON | DANGER_BUTTON
+                ) =>
+            {
                 validate_custom_id(custom_id)?;
             }
             (None, Some(url)) if self.style == LINK_BUTTON && valid_link_url(url) => {}

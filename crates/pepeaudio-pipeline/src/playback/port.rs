@@ -140,10 +140,17 @@ impl SongbirdPlayback {
             if let Some(active) = &self.active
                 && active.lifecycle.accepts_dsp_control()
             {
-                active.dsp.apply(DspMutation::Preset(replacement)).await?;
+                active
+                    .dsp
+                    .apply(DspMutation::Preset {
+                        renderer: replacement,
+                        enable_wet: true,
+                    })
+                    .await?;
             }
         }
         self.state.preset = prepared;
+        self.state.spatial_enabled = true;
         Ok(())
     }
 

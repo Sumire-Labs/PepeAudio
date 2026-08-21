@@ -37,7 +37,10 @@ pub(super) fn apply(snapshot: &mut PlayerSnapshot, command: &PlayerCommand) {
         PlayerCommand::SetVolume { volume } => snapshot.volume = *volume,
         PlayerCommand::SetRepeat { mode } => snapshot.repeat_mode = *mode,
         PlayerCommand::SetShuffle { enabled } => snapshot.shuffle_enabled = *enabled,
-        PlayerCommand::SetHrir { preset } => snapshot.hrir_preset = Some(preset.clone()),
+        PlayerCommand::SetHrir { preset } => {
+            snapshot.hrir_preset = Some(preset.clone());
+            snapshot.spatial_audio_enabled = true;
+        }
         PlayerCommand::SetSpatialAudio { enabled } => {
             snapshot.spatial_audio_enabled = *enabled;
         }
@@ -133,6 +136,23 @@ mod tests {
             assert!(cleared.upcoming_tracks.is_empty());
             assert!(!cleared.has_previous_track);
         }
+    }
+
+    #[test]
+    fn selecting_an_hrir_preset_enables_spatial_audio() {
+        let mut updated = snapshot();
+        updated.spatial_audio_enabled = false;
+        let preset = pepeaudio_core::HrirPresetId::new("dht").expect("preset");
+
+        apply(
+            &mut updated,
+            &PlayerCommand::SetHrir {
+                preset: preset.clone(),
+            },
+        );
+
+        assert_eq!(updated.hrir_preset.as_ref(), Some(&preset));
+        assert!(updated.spatial_audio_enabled);
     }
 
     fn snapshot() -> PlayerSnapshot {

@@ -130,7 +130,6 @@ export function createDemoSnapshot(guildId: string): PlayerSnapshot {
     shuffleEnabled: false,
     hrirPresetId: "studio-neutral",
     spatialEnabled: true,
-    orbitDegrees: 42,
     observedAtUnixMs: Date.now()
   };
 }

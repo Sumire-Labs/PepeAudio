@@ -4,7 +4,8 @@ use pepeaudio_components_v2::{
 };
 use pepeaudio_core::{PlayerSnapshot, PlayerState, RepeatMode};
 
-mod source_links;
+pub(crate) const HRIR_OFF_VALUE: &str = "pepeaudio:hrir:off";
+const MAX_VISIBLE_HRIR_PRESETS: usize = 24;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct HrirOption {
@@ -25,18 +26,15 @@ pub fn build_now_panel(
 ) -> Result<Message, ValidationError> {
     let action = |action| component_ids.encode(action, snapshot.guild_id, snapshot.revision);
     let mut children = status_components(snapshot);
-    if let Some(links) = source_links::source_links(snapshot)? {
-        children.push(links);
-    }
     children.push(playback_controls(snapshot, &action)?);
     children.push(mode_controls(snapshot, &action)?);
     children.push(volume_selector(snapshot, &action)?);
     if let Some(selector) = hrir_selector(snapshot, hrir_options, &action)? {
         children.push(selector);
     }
-    if hrir_options.len() > 25 {
+    if hrir_options.len() > MAX_VISIBLE_HRIR_PRESETS {
         children.push(Component::text(
-            "Discordでは25件まで表示しています。すべてのHRIRプリセットはWebダッシュボードで選べます。",
+            "Discordでは24件まで表示しています。すべてのHRIRプリセットはWebダッシュボードで選べます。",
         ));
     }
     Message::new(vec![Component::container(children)])
@@ -95,21 +93,18 @@ fn playback_controls(
     snapshot: &PlayerSnapshot,
     action: &impl Fn(ComponentAction) -> String,
 ) -> Result<Component, ValidationError> {
+    let play_pause = if snapshot.state == PlayerState::Playing {
+        ButtonComponent::primary(action(ComponentAction::PlayPause), "⏸")
+    } else {
+        ButtonComponent::success(action(ComponentAction::PlayPause), "▶")
+    };
     Component::buttons(vec![
-        ButtonComponent::neutral(action(ComponentAction::Previous), "前へ")
+        ButtonComponent::neutral(action(ComponentAction::Previous), "⏮")
             .disabled(!snapshot.has_previous_track),
-        ButtonComponent::neutral(
-            action(ComponentAction::PlayPause),
-            if snapshot.state == PlayerState::Playing {
-                "一時停止"
-            } else {
-                "再生"
-            },
-        )
-        .disabled(snapshot.current_track.is_none()),
-        ButtonComponent::neutral(action(ComponentAction::Skip), "スキップ")
+        play_pause.disabled(snapshot.current_track.is_none()),
+        ButtonComponent::neutral(action(ComponentAction::Skip), "⏭")
             .disabled(snapshot.current_track.is_none()),
-        ButtonComponent::neutral(action(ComponentAction::Stop), "停止")
+        ButtonComponent::danger(action(ComponentAction::Stop), "⏹")
             .disabled(snapshot.current_track.is_none() && snapshot.queued_tracks == 0),
     ])
 }
@@ -118,28 +113,28 @@ fn mode_controls(
     snapshot: &PlayerSnapshot,
     action: &impl Fn(ComponentAction) -> String,
 ) -> Result<Component, ValidationError> {
-    Component::buttons(vec![
+    let repeat = if snapshot.repeat_mode == RepeatMode::Off {
         ButtonComponent::neutral(
             action(ComponentAction::Repeat),
             format!("リピート: {}", repeat_label(snapshot.repeat_mode)),
-        ),
-        ButtonComponent::neutral(
-            action(ComponentAction::Shuffle),
-            if snapshot.shuffle_enabled {
-                "シャッフル: 有効"
-            } else {
-                "シャッフル: 無効"
-            },
-        ),
-        ButtonComponent::neutral(
-            action(ComponentAction::Spatial),
-            if snapshot.spatial_audio_enabled {
-                "360° Audio: 有効"
-            } else {
-                "360° Audio: 無効"
-            },
-        ),
-    ])
+        )
+    } else {
+        ButtonComponent::primary(
+            action(ComponentAction::Repeat),
+            format!("リピート: {}", repeat_label(snapshot.repeat_mode)),
+        )
+    };
+    let shuffle = if snapshot.shuffle_enabled {
+        ButtonComponent::primary(action(ComponentAction::Shuffle), "シャッフル")
+    } else {
+        ButtonComponent::neutral(action(ComponentAction::Shuffle), "シャッフル")
+    };
+    let spatial = if snapshot.spatial_audio_enabled {
+        ButtonComponent::primary(action(ComponentAction::Spatial), "360° Audio")
+    } else {
+        ButtonComponent::neutral(action(ComponentAction::Spatial), "360° Audio")
+    };
+    Component::buttons(vec![repeat, shuffle, spatial])
 }
 
 fn volume_selector(
@@ -173,23 +168,33 @@ fn hrir_selector(
     if hrir_options.is_empty() {
         return Ok(None);
     }
-    let selected = snapshot
-        .hrir_preset
-        .as_ref()
-        .map(pepeaudio_core::HrirPresetId::as_str);
-    let options = visible_hrir_options(hrir_options, selected)
-        .into_iter()
-        .map(|option| {
-            let item = SelectOption::new(option.label.clone(), option.id.clone());
-            let item = option
-                .description
-                .as_deref()
-                .map_or(item.clone(), |description| {
-                    item.description(discord_option_description(description))
-                });
-            item.selected(selected == Some(option.id.as_str()))
-        })
-        .collect();
+    let selected = if snapshot.spatial_audio_enabled {
+        snapshot
+            .hrir_preset
+            .as_ref()
+            .map(pepeaudio_core::HrirPresetId::as_str)
+    } else {
+        None
+    };
+    let mut options = vec![
+        SelectOption::new("オフ", HRIR_OFF_VALUE)
+            .description("HRIR空間処理を無効にします")
+            .selected(!snapshot.spatial_audio_enabled),
+    ];
+    options.extend(
+        visible_hrir_options(hrir_options, selected)
+            .into_iter()
+            .map(|option| {
+                let item = SelectOption::new(option.label.clone(), option.id.clone());
+                let item = option
+                    .description
+                    .as_deref()
+                    .map_or(item.clone(), |description| {
+                        item.description(discord_option_description(description))
+                    });
+                item.selected(selected == Some(option.id.as_str()))
+            }),
+    );
     Component::select(StringSelectComponent::single(
         action(ComponentAction::Hrir),
         options,
@@ -215,14 +220,20 @@ fn visible_hrir_options<'a>(
     options: &'a [HrirOption],
     selected: Option<&str>,
 ) -> Vec<&'a HrirOption> {
-    let mut visible = options.iter().take(25).collect::<Vec<_>>();
+    let mut visible = options
+        .iter()
+        .take(MAX_VISIBLE_HRIR_PRESETS)
+        .collect::<Vec<_>>();
     let Some(selected) = selected else {
         return visible;
     };
     if visible.iter().any(|option| option.id == selected) {
         return visible;
     }
-    if let Some(selected_option) = options.iter().skip(25).find(|option| option.id == selected)
+    if let Some(selected_option) = options
+        .iter()
+        .skip(MAX_VISIBLE_HRIR_PRESETS)
+        .find(|option| option.id == selected)
         && let Some(last) = visible.last_mut()
     {
         *last = selected_option;

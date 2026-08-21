@@ -1,7 +1,5 @@
 import type { PlayerSnapshot } from "./types";
 
-export const ORBIT_PERIOD_MS = 60_000;
-
 export function interpolatedPositionMs(
   snapshot: PlayerSnapshot,
   nowUnixMs: number
@@ -19,11 +17,6 @@ export function interpolatedPositionMs(
   return track.durationMs === null
     ? Math.max(0, position)
     : Math.min(Math.max(0, position), track.durationMs);
-}
-
-export function orbitDegreesAt(snapshot: PlayerSnapshot, nowUnixMs: number): number {
-  const progress = interpolatedPositionMs(snapshot, nowUnixMs) % ORBIT_PERIOD_MS;
-  return (snapshot.orbitDegrees + (progress / ORBIT_PERIOD_MS) * 360) % 360;
 }
 
 export function formatDuration(durationMs: number | null): string {

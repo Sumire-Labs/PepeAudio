@@ -256,7 +256,7 @@ where
         &mut self,
         preset: pepeaudio_core::HrirPresetId,
     ) -> Result<PlayerSnapshot, PlayerError> {
-        if self.model.hrir_preset.as_ref() == Some(&preset) {
+        if self.model.hrir_preset.as_ref() == Some(&preset) && self.model.spatial_audio_enabled {
             return Ok(self.current_snapshot());
         }
         let next_revision = self.next_revision()?;
@@ -268,6 +268,7 @@ where
         }
         let was_idle = self.model.is_idle_connected();
         self.model.hrir_preset = Some(preset);
+        self.model.spatial_audio_enabled = true;
         self.finish_change(was_idle, next_revision).await
     }
 

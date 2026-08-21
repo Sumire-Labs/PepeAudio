@@ -91,7 +91,8 @@ export function useDemoDashboard(): DashboardModel {
       update((current) => ({
         ...current,
         revision: current.revision + 1,
-        hrirPresetId
+        hrirPresetId,
+        spatialEnabled: true
       })),
     toggleSpatial: () =>
       update((current) => ({
