@@ -51,8 +51,8 @@ pub(super) fn duration_matches(preferred: Option<u64>, actual: u64) -> bool {
 }
 
 fn candidate_score(candidate: &SiteReference, search: &SiteSearch) -> Option<u16> {
-    let title = normalize_title(candidate.title.as_deref()?);
-    let expected = normalize_title(&search.expected_title);
+    let title = normalize_title(candidate.title.as_deref()?, &search.expected_artists);
+    let expected = normalize_title(&search.expected_title, &search.expected_artists);
     if qualifier_conflict(&expected, &title) {
         return None;
     }
@@ -81,7 +81,11 @@ fn candidate_score(candidate: &SiteReference, search: &SiteSearch) -> Option<u16
         return None;
     }
     let candidate_artist = normalize(candidate.artist.as_deref().unwrap_or_default());
-    let artist_score = artist_score(&candidate_artist, &search.expected_artists)?;
+    let artist_score = artist_score(
+        &candidate_artist,
+        &candidate_context,
+        &search.expected_artists,
+    )?;
     let duration_score = match (search.preferred_duration_ms, candidate.duration_ms) {
         (Some(expected), Some(actual)) if !duration_matches(Some(expected), actual) => return None,
         (Some(expected), Some(actual))
@@ -104,14 +108,25 @@ fn candidate_score(candidate: &SiteReference, search: &SiteSearch) -> Option<u16
     })
 }
 
-fn artist_score(haystack: &str, expected_artists: &[String]) -> Option<u16> {
+fn artist_score(
+    uploader: &str,
+    candidate_context: &str,
+    expected_artists: &[String],
+) -> Option<u16> {
     if expected_artists.is_empty() {
         return Some(10);
     }
     let matched = expected_artists
         .iter()
         .map(|artist| normalize(artist))
-        .filter(|artist| phrase_present(haystack, artist) || token_overlap(artist, haystack) >= 70)
+        .filter(|artist| {
+            phrase_present(uploader, artist)
+                || token_overlap(artist, uploader) >= 70
+                || (phrase_present(artist, uploader)
+                    && artist
+                        .split_whitespace()
+                        .all(|token| phrase_present(candidate_context, token)))
+        })
         .count()
         .min(2);
     (matched > 0).then(|| u16::try_from(matched).unwrap_or(2) * 15)
@@ -138,8 +153,8 @@ fn normalize(value: &str) -> String {
         .join(" ")
 }
 
-fn normalize_title(value: &str) -> String {
-    let normalized = normalize(value);
+fn normalize_title(value: &str, expected_artists: &[String]) -> String {
+    let normalized = normalize(&strip_artist_credit_groups(value, expected_artists));
     let canonical = normalized
         .split_whitespace()
         .map(|token| match token {
@@ -161,6 +176,54 @@ fn normalize_title(value: &str) -> String {
     } else {
         semantic.join(" ")
     }
+}
+
+fn strip_artist_credit_groups(value: &str, expected_artists: &[String]) -> String {
+    let mut output = String::with_capacity(value.len());
+    let mut cursor = 0;
+    while let Some((opening, closing)) = next_group(value, cursor) {
+        output.push_str(&value[cursor..opening]);
+        let content = &value[opening + 1..closing];
+        if is_artist_credit(content, expected_artists) {
+            output.push(' ');
+        } else {
+            output.push_str(&value[opening..=closing]);
+        }
+        cursor = closing + 1;
+    }
+    output.push_str(&value[cursor..]);
+    output
+}
+
+fn next_group(value: &str, cursor: usize) -> Option<(usize, usize)> {
+    let (relative_opening, opening_character) = value[cursor..]
+        .char_indices()
+        .find(|(_, character)| matches!(character, '(' | '['))?;
+    let opening = cursor + relative_opening;
+    let closing_character = if opening_character == '(' { ')' } else { ']' };
+    let relative_closing = value[opening + 1..].find(closing_character)?;
+    Some((opening, opening + 1 + relative_closing))
+}
+
+fn is_artist_credit(content: &str, expected_artists: &[String]) -> bool {
+    let normalized = normalize(content);
+    let mut parts = normalized.split_whitespace();
+    let Some(marker) = parts.next() else {
+        return false;
+    };
+    if !matches!(marker, "with" | "feat" | "featuring" | "ft") {
+        return false;
+    }
+    let credited = parts.collect::<Vec<_>>().join(" ");
+    !credited.is_empty()
+        && expected_artists
+            .iter()
+            .map(|artist| normalize(artist))
+            .any(|artist| {
+                phrase_present(&credited, &artist)
+                    || phrase_present(&artist, &credited)
+                    || token_overlap(&artist, &credited) >= 70
+            })
 }
 
 fn has_presentation_marker(value: &str) -> bool {
@@ -359,5 +422,29 @@ mod tests {
         let selected = select_candidate(&candidates, &expected).expect("official artist match");
 
         assert_eq!(selected.artist.as_deref(), Some("The Script"));
+    }
+
+    #[test]
+    fn combined_spotify_artists_match_an_official_contributor_upload() {
+        let expected = SiteSearch::new(
+            "Good Life with G-Eazy Kehlani",
+            "Good Life (with G-Eazy & Kehlani)",
+            vec!["G-Eazy, Kehlani".into()],
+            None,
+            None,
+        )
+        .expect("search");
+        let candidates = [
+            candidate(
+                "Kehlani & G-Eazy - Good Life (from The Fate of the Furious: The Album) [Official Music Video]",
+                "Kehlani",
+                225_000,
+            ),
+            candidate("G-Eazy & Kehlani - Good Life (Lyrics)", "Reupload", 225_000),
+        ];
+
+        let selected = select_candidate(&candidates, &expected).expect("official contributor");
+
+        assert_eq!(selected.artist.as_deref(), Some("Kehlani"));
     }
 }
