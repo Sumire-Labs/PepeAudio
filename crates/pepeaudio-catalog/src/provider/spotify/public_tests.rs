@@ -54,6 +54,31 @@ fn ignores_missing_malformed_or_unbounded_public_duration() {
 }
 
 #[tokio::test]
+async fn separates_spotify_public_artist_lists_for_cross_script_matching() {
+    let document = r#"
+        <meta property="og:title" content="はぐ (feat. 初音ミク &amp; 可不)">
+        <meta property="og:description" content="MIMI, Hatsune Miku, Kafu · はぐ · Song · 2023">
+        <meta name="music:duration" content="159">
+    "#;
+    let transport = ScriptedTransport::new([HttpResponse::new(200, document.as_bytes().to_vec())]);
+    let client = SpotifyPublicCatalog::with_transport(transport);
+
+    let collection = client
+        .resolve(
+            &reference("https://open.spotify.com/track/2CQP6nWv8VvYQAYaKgy7AC"),
+            25,
+        )
+        .await
+        .expect("public metadata");
+
+    assert_eq!(
+        collection.tracks[0].artists,
+        ["MIMI", "Hatsune Miku", "Kafu"]
+    );
+    assert_eq!(collection.tracks[0].duration_ms, Some(159_000));
+}
+
+#[tokio::test]
 async fn rejects_public_collections_before_network_access() {
     let transport = ScriptedTransport::new(Vec::<HttpResponse>::new());
     let client = SpotifyPublicCatalog::with_transport(transport.clone());

@@ -371,6 +371,27 @@ mod tests {
     }
 
     #[test]
+    fn spotify_vocaloid_artist_list_matches_the_official_topic_upload() {
+        let expected = SiteSearch::new(
+            "はぐ feat 初音ミク 可不 MIMI Hatsune Miku Kafu",
+            "はぐ (feat. 初音ミク & 可不)",
+            vec!["MIMI".into(), "Hatsune Miku".into(), "Kafu".into()],
+            Some(159_000),
+            None,
+        )
+        .expect("search");
+        let candidates = [candidate(
+            "はぐ (feat. 初音ミク & 可不)",
+            "MIMI - Topic",
+            159_000,
+        )];
+
+        let selected = select_candidate(&candidates, &expected).expect("official topic match");
+
+        assert_eq!(selected.artist.as_deref(), Some("MIMI - Topic"));
+    }
+
+    #[test]
     fn spotify_duration_and_audio_presentation_avoid_a_long_music_video() {
         let expected = SiteSearch::new(
             "Thriller Michael Jackson",

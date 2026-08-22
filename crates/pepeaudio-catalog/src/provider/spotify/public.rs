@@ -14,6 +14,7 @@ use crate::{
 const PUBLIC_TRACK_BASE: &str = "https://open.spotify.com/track/";
 const MAX_PUBLIC_RESPONSE_BYTES: usize = 512 * 1024;
 const MAX_META_TAG_BYTES: usize = 4 * 1024;
+const MAX_PUBLIC_ARTISTS: usize = 10;
 
 pub struct SpotifyPublicCatalog {
     transport: SharedTransport,
@@ -75,16 +76,16 @@ impl SpotifyPublicCatalog {
             .ok_or(CatalogError::InvalidResponse(CatalogProvider::Spotify))?;
         let description = meta_value(document, "og:description", 1024)
             .ok_or(CatalogError::InvalidResponse(CatalogProvider::Spotify))?;
-        let artist = description
+        let artists = description
             .split_once('·')
-            .and_then(|(artist, _)| clean_text(artist, 256))
+            .and_then(|(artists, _)| public_artists(artists))
             .ok_or(CatalogError::InvalidResponse(CatalogProvider::Spotify))?;
         let duration_ms =
             meta_value(document, "music:duration", 20).and_then(|value| public_duration_ms(&value));
         let track = CatalogTrackMetadata {
             reference: reference.clone(),
             title: title.clone(),
-            artists: vec![artist],
+            artists,
             album: None,
             duration_ms,
             isrc: None,
@@ -124,6 +125,15 @@ impl ProviderCatalog for SpotifyPublicCatalog {
 fn public_duration_ms(value: &str) -> Option<u64> {
     let duration_ms = value.trim().parse::<u64>().ok()?.checked_mul(1_000)?;
     (duration_ms > 0 && duration_ms <= MAX_DURATION_MS).then_some(duration_ms)
+}
+
+fn public_artists(value: &str) -> Option<Vec<String>> {
+    let artists = value
+        .split(',')
+        .take(MAX_PUBLIC_ARTISTS)
+        .filter_map(|artist| clean_text(artist, 256))
+        .collect::<Vec<_>>();
+    (!artists.is_empty()).then_some(artists)
 }
 
 fn meta_value(document: &str, property: &str, maximum_bytes: usize) -> Option<String> {
