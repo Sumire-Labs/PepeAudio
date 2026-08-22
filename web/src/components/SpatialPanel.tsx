@@ -90,6 +90,7 @@ export function SpatialPanel({
         placeholder={catalogOption(catalogStatus, presets.length)}
         hasSearch={presets.length > 8}
         searchPlaceholder="HRIRプリセットを検索…"
+        placement="above"
         renderOption={(option) => (
           <SelectorOption
             icon={option.icon}

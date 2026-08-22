@@ -3,7 +3,7 @@ use url::Url;
 use super::wire::{NamedObject, SimplifiedTrack, Track};
 use crate::{CatalogItemKind, CatalogProvider, CatalogReference, CatalogTrackMetadata};
 
-const MAX_DURATION_MS: u64 = 7 * 24 * 60 * 60 * 1_000;
+pub(super) const MAX_DURATION_MS: u64 = 7 * 24 * 60 * 60 * 1_000;
 
 pub(super) fn track_metadata(
     track: Track,

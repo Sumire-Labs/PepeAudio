@@ -3,7 +3,7 @@ use std::{str, sync::Arc};
 use async_trait::async_trait;
 use url::Url;
 
-use super::metadata::{clean_text, valid_spotify_id};
+use super::metadata::{MAX_DURATION_MS, clean_text, valid_spotify_id};
 use crate::{
     CatalogCollection, CatalogError, CatalogItemKind, CatalogProvider, CatalogReference,
     CatalogResult, CatalogTrackMetadata,
@@ -79,12 +79,14 @@ impl SpotifyPublicCatalog {
             .split_once('·')
             .and_then(|(artist, _)| clean_text(artist, 256))
             .ok_or(CatalogError::InvalidResponse(CatalogProvider::Spotify))?;
+        let duration_ms =
+            meta_value(document, "music:duration", 20).and_then(|value| public_duration_ms(&value));
         let track = CatalogTrackMetadata {
             reference: reference.clone(),
             title: title.clone(),
             artists: vec![artist],
             album: None,
-            duration_ms: None,
+            duration_ms,
             isrc: None,
         };
         Ok(CatalogCollection {
@@ -117,6 +119,11 @@ impl ProviderCatalog for SpotifyPublicCatalog {
         }
         self.resolve_track(reference).await
     }
+}
+
+fn public_duration_ms(value: &str) -> Option<u64> {
+    let duration_ms = value.trim().parse::<u64>().ok()?.checked_mul(1_000)?;
+    (duration_ms > 0 && duration_ms <= MAX_DURATION_MS).then_some(duration_ms)
 }
 
 fn meta_value(document: &str, property: &str, maximum_bytes: usize) -> Option<String> {

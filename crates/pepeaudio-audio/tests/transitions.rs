@@ -39,6 +39,28 @@ fn gain_ramp_is_sample_accurate_across_block_boundaries() {
 }
 
 #[test]
+fn output_gain_prevents_wet_peak_clipping_before_the_final_safety_ceiling() {
+    let prepared = PreparedHrir::from_hesuvi(&load_preset(48_000, &identity_front_pairs(2.0)))
+        .expect("prepare");
+    let mut processor =
+        AudioProcessor::new(&prepared, RenderMode::FixedFront, 1).expect("processor");
+    processor.set_output_gain(LinearGain::new(0.1).expect("gain"), 0);
+
+    let mut quiet_output = [0.0; 2];
+    processor
+        .process_block(&[1.0, 1.0], &mut quiet_output)
+        .expect("render below the ceiling");
+    assert_close(&quiet_output, &[0.2, 0.2], 1.0e-6);
+
+    processor.set_output_gain(LinearGain::UNITY, 0);
+    let mut loud_output = [0.0; 2];
+    processor
+        .process_block(&[1.0, 1.0], &mut loud_output)
+        .expect("render at the ceiling");
+    assert_close(&loud_output, &[1.0, 1.0], 0.0);
+}
+
+#[test]
 fn wet_to_bypass_transition_is_equal_power_and_block_continuous() {
     let prepared = PreparedHrir::from_hesuvi(&load_preset(48_000, &identity_front_pairs(0.5)))
         .expect("prepare");

@@ -34,7 +34,7 @@ async fn resolves_bounded_public_track_metadata_without_credentials() {
     assert_eq!(collection.tracks.len(), 1);
     assert_eq!(collection.tracks[0].artists, ["Primary & Guest"]);
     assert_eq!(collection.tracks[0].album, None);
-    assert_eq!(collection.tracks[0].duration_ms, None);
+    assert_eq!(collection.tracks[0].duration_ms, Some(213_000));
     assert_eq!(collection.tracks[0].isrc, None);
     assert_eq!(transport.request_urls(), [TRACK_URL]);
     assert_eq!(
@@ -43,6 +43,14 @@ async fn resolves_bounded_public_track_metadata_without_credentials() {
     );
     assert_eq!(transport.request_header(0, "authorization"), None);
     assert_eq!(transport.request_header(0, "cookie"), None);
+}
+
+#[test]
+fn ignores_missing_malformed_or_unbounded_public_duration() {
+    assert_eq!(public_duration_ms("359"), Some(359_000));
+    assert_eq!(public_duration_ms("0"), None);
+    assert_eq!(public_duration_ms("unknown"), None);
+    assert_eq!(public_duration_ms("604801"), None);
 }
 
 #[tokio::test]

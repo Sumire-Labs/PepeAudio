@@ -4,7 +4,7 @@ use super::{
 };
 use crate::{
     DspError, HorizontalStereoPair, PreparedHrir, blend_for_azimuth,
-    signal::{ensure_finite_output, validate_stereo_blocks},
+    signal::{ensure_finite_intermediate, validate_stereo_blocks},
 };
 
 /// The two input sources own shared frequency-domain histories. Moving across
@@ -48,8 +48,10 @@ impl StereoRenderer for HorizontalOrbitRenderer {
         let left = Selection::from(blend_for_azimuth(self.position.left_degrees())?);
         let right = Selection::from(blend_for_azimuth(self.position.right_degrees())?);
         self.engine.render_validated(input, output, left, right)?;
+        // Keep the wet-path headroom intact until the processor applies the
+        // user gain and the final Songbird safety ceiling.
         for (index, sample) in output.iter_mut().enumerate() {
-            *sample = ensure_finite_output(index, *sample)?;
+            *sample = ensure_finite_intermediate(index, *sample)?;
         }
         Ok(())
     }

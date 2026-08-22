@@ -159,6 +159,9 @@ pub(super) fn map_site_error(error: &pepeaudio_media::SiteError) -> ResolveError
         pepeaudio_media::SiteError::NoSearchMatch => ResolveError::NoSearchMatch,
         pepeaudio_media::SiteError::DurationLimit => ResolveError::TrackLimitExceeded,
         pepeaudio_media::SiteError::InvalidUrl => ResolveError::UnsupportedUrl,
-        _ => ResolveError::Failed("site media resolution failed".into()),
+        error => {
+            tracing::warn!(error = %error, "site media resolution failed");
+            ResolveError::Failed("site media resolution failed".into())
+        }
     }
 }

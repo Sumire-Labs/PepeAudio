@@ -44,10 +44,14 @@ pub(crate) fn validate_stereo_blocks(input: &[f32], output: &[f32]) -> Result<us
     Ok(input.len() / 2)
 }
 
+pub(crate) fn ensure_finite_intermediate(index: usize, sample: f32) -> Result<f32, DspError> {
+    sample
+        .is_finite()
+        .then_some(sample)
+        .ok_or(DspError::NonFiniteOutput { index })
+}
+
 pub(crate) fn ensure_finite_output(index: usize, sample: f32) -> Result<f32, DspError> {
-    if sample.is_finite() {
-        Ok(sample.clamp(-MAX_ABS_OUTPUT_SAMPLE, MAX_ABS_OUTPUT_SAMPLE))
-    } else {
-        Err(DspError::NonFiniteOutput { index })
-    }
+    ensure_finite_intermediate(index, sample)
+        .map(|sample| sample.clamp(-MAX_ABS_OUTPUT_SAMPLE, MAX_ABS_OUTPUT_SAMPLE))
 }

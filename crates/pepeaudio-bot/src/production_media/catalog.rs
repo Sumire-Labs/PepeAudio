@@ -177,7 +177,10 @@ pub(super) fn map_catalog_error(error: CatalogError) -> ResolveError {
             provider: CatalogProvider::AppleMusic,
             kind: CatalogItemKind::Playlist,
         } => ResolveError::AppleMusicPlaylistRequiresDeveloperCredentials,
-        _ => ResolveError::Failed("catalog metadata resolution failed".into()),
+        error => {
+            tracing::warn!(error = %error, "catalog metadata resolution failed");
+            ResolveError::Failed("catalog metadata resolution failed".into())
+        }
     }
 }
 

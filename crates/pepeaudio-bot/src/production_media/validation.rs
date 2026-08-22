@@ -90,6 +90,9 @@ pub(super) fn map_ingest(
         IngestError::Probe(ProcessError::NoAudioStream | ProcessError::InvalidProbe) => {
             unsupported_media(source)
         }
-        _ => ResolveError::Failed("media ingestion failed".into()),
+        error => {
+            tracing::warn!(error = %error, "managed media ingestion failed");
+            ResolveError::Failed("media ingestion failed".into())
+        }
     }
 }

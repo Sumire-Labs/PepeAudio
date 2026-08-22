@@ -18,11 +18,11 @@ fn fixed_front_routes_both_input_channels_to_both_ears() {
     renderer
         .render_block(&input, &mut output)
         .expect("render right source");
-    assert_close(&output, &[0.75, 1.0, -0.25, -0.5], 1.0e-6);
+    assert_close(&output, &[0.75, 2.0, -0.25, -0.5], 1.0e-6);
 }
 
 #[test]
-fn renderer_applies_a_final_finite_pcm_safety_ceiling() {
+fn renderer_preserves_finite_wet_headroom_for_the_processor() {
     let mut pairs = zero_pairs(1);
     pairs[0] = (vec![2.0], vec![-2.0]);
     let preset = PreparedHrir::from_hesuvi(&load_preset(48_000, &pairs)).expect("prepare");
@@ -31,7 +31,7 @@ fn renderer_applies_a_final_finite_pcm_safety_ceiling() {
     renderer
         .render_block(&[1.0, 0.0], &mut output)
         .expect("render");
-    assert_close(&output, &[1.0, -1.0], 0.0);
+    assert_close(&output, &[2.0, -2.0], 0.0);
 }
 
 #[test]

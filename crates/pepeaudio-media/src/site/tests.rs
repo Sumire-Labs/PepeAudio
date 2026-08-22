@@ -188,6 +188,20 @@ async fn commands_disable_ambient_configuration_and_select_safe_direct_audio() {
     ] {
         assert!(arguments.iter().any(|argument| argument == required));
     }
+    assert!(
+        !arguments
+            .iter()
+            .any(|argument| argument == "--no-cache-dir")
+    );
+    let expected_cache = PathBuf::from("/tmp/pepeaudio-deno")
+        .join("yt-dlp-cache")
+        .to_string_lossy()
+        .into_owned();
+    assert!(
+        arguments
+            .windows(2)
+            .any(|window| { window == ["--cache-dir".to_owned(), expected_cache.clone()] })
+    );
     assert!(!arguments.iter().any(|argument| argument == "--no-netrc"));
     assert!(
         arguments

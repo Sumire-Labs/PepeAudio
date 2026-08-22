@@ -15,6 +15,15 @@ const PRESENTATION_MARKERS: &[&[&str]] = &[
     &["lyrics"],
     &["visualizer"],
 ];
+const VISUAL_PRESENTATION_MARKERS: &[&[&str]] = &[
+    &["official", "music", "video"],
+    &["official", "lyric", "video"],
+    &["official", "visualizer"],
+    &["official", "video"],
+    &["lyric", "video"],
+    &["lyrics"],
+    &["visualizer"],
+];
 
 #[cfg(test)]
 pub(super) fn select_candidate<'a>(
@@ -127,7 +136,7 @@ fn candidate_score(candidate: &SiteReference, search: &SiteSearch) -> Option<u16
         (Some(_), Some(_)) => 5,
         _ => 0,
     };
-    let presentation_penalty = u16::from(has_presentation_marker(
+    let presentation_penalty = u16::from(has_visual_presentation_marker(
         candidate.title.as_deref().unwrap_or_default(),
     )) * 10;
     let score = title_score + artist_score + duration_score;
@@ -257,10 +266,10 @@ fn is_artist_credit(content: &str, expected_artists: &[String]) -> bool {
             })
 }
 
-fn has_presentation_marker(value: &str) -> bool {
+fn has_visual_presentation_marker(value: &str) -> bool {
     let normalized = normalize(value);
     let tokens = normalized.split_whitespace().collect::<Vec<_>>();
-    PRESENTATION_MARKERS
+    VISUAL_PRESENTATION_MARKERS
         .iter()
         .any(|marker| tokens.windows(marker.len()).any(|window| window == *marker))
 }
@@ -410,6 +419,64 @@ mod tests {
         let selected = select_candidate(&candidates, &expected).expect("official artist match");
 
         assert_eq!(selected.artist.as_deref(), Some("Alan Walker"));
+    }
+
+    #[test]
+    fn spotify_duration_and_audio_presentation_avoid_a_long_music_video() {
+        let expected = SiteSearch::new(
+            "Thriller Michael Jackson",
+            "Thriller",
+            vec!["Michael Jackson".into()],
+            Some(359_000),
+            None,
+        )
+        .expect("search");
+        let candidates = [
+            candidate(
+                "Michael Jackson - Thriller (Official 4K Video)",
+                "Michael Jackson",
+                822_000,
+            ),
+            candidate(
+                "Michael Jackson - Thriller (Official Audio)",
+                "Michael Jackson",
+                358_000,
+            ),
+        ];
+
+        let selected = select_candidate(&candidates, &expected).expect("duration match");
+
+        assert_eq!(
+            selected.title.as_deref(),
+            Some("Michael Jackson - Thriller (Official Audio)")
+        );
+    }
+
+    #[test]
+    fn official_audio_is_preferred_to_an_equally_strong_music_video() {
+        let expected = SiteSearch::new(
+            "Example Song Primary Artist",
+            "Example Song",
+            vec!["Primary Artist".into()],
+            None,
+            None,
+        )
+        .expect("search");
+        let candidates = [
+            candidate(
+                "Example Song (Official Music Video)",
+                "Primary Artist",
+                180_000,
+            ),
+            candidate("Example Song (Official Audio)", "Primary Artist", 180_000),
+        ];
+
+        let selected = select_candidate(&candidates, &expected).expect("audio match");
+
+        assert_eq!(
+            selected.title.as_deref(),
+            Some("Example Song (Official Audio)")
+        );
     }
 
     #[test]

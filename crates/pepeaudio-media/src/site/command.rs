@@ -79,13 +79,17 @@ fn specification(config: &YtDlpConfig, arguments: Vec<OsString>) -> CommandSpec 
 
 fn base(config: &YtDlpConfig, provider: SiteProvider) -> Vec<OsString> {
     let runtime = format!("deno:{}", config.deno_executable.display());
-    strings([
+    let cache_directory = config.deno_directory.join("yt-dlp-cache");
+    let mut arguments = strings([
         "--ignore-config",
         "--no-config-locations",
         "--no-plugin-dirs",
         "--no-remote-components",
         "--no-cookies",
-        "--no-cache-dir",
+        "--cache-dir",
+    ]);
+    arguments.push(cache_directory.into_os_string());
+    arguments.extend(strings([
         "--no-exec",
         "--quiet",
         "--no-warnings",
@@ -103,7 +107,8 @@ fn base(config: &YtDlpConfig, provider: SiteProvider) -> Vec<OsString> {
         &runtime,
         "--use-extractors",
         provider.extractor_allowlist(),
-    ])
+    ]));
+    arguments
 }
 
 fn strings<const N: usize>(values: [&str; N]) -> Vec<OsString> {
