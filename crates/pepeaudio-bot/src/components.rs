@@ -1,4 +1,4 @@
-use crate::{ComponentAction, ComponentIdCodec, display_text::escape_discord_markdown};
+use crate::{ComponentAction, ComponentIdCodec, now_playing::status_components};
 use pepeaudio_components_v2::{
     ButtonComponent, Component, Message, SelectOption, StringSelectComponent, ValidationError,
 };
@@ -25,7 +25,7 @@ pub fn build_now_panel(
     hrir_options: &[HrirOption],
 ) -> Result<Message, ValidationError> {
     let action = |action| component_ids.encode(action, snapshot.guild_id, snapshot.revision);
-    let mut children = status_components(snapshot);
+    let mut children = status_components(snapshot)?;
     children.push(playback_controls(snapshot, &action)?);
     children.push(mode_controls(snapshot, &action)?);
     children.push(volume_selector(snapshot, &action)?);
@@ -52,51 +52,6 @@ pub fn build_status_panel(text: impl Into<String>) -> Result<Message, Validation
 /// Returns when the text cannot form a valid Components V2 message.
 pub fn build_ephemeral_status_panel(text: impl Into<String>) -> Result<Message, ValidationError> {
     Message::ephemeral(vec![Component::container(vec![Component::text(text)])])
-}
-
-fn status_components(snapshot: &PlayerSnapshot) -> Vec<Component> {
-    let title = snapshot.current_track.as_ref().map_or_else(
-        || "## 再生中の曲はありません".to_owned(),
-        |track| {
-            let title = escape_discord_markdown(&track.title);
-            track.provenance.as_ref().map_or_else(
-                || format!("## {title}"),
-                |provenance| {
-                    let page = provenance.origin().unwrap_or_else(|| provenance.playback());
-                    format!("## [{title}]({})", markdown_link_destination(page.url()))
-                },
-            )
-        },
-    );
-
-    vec![
-        Component::text(title),
-        Component::text(progress_bar(snapshot)),
-    ]
-}
-
-fn markdown_link_destination(value: &str) -> String {
-    value.replace('(', "%28").replace(')', "%29")
-}
-
-fn progress_bar(snapshot: &PlayerSnapshot) -> String {
-    const SEGMENTS: usize = 18;
-    let Some(track) = snapshot.current_track.as_ref() else {
-        return format!("`{}`", "─".repeat(SEGMENTS));
-    };
-    let Some(duration) = track.duration_ms.filter(|duration| *duration > 0) else {
-        return format!("`{}`", "━".repeat(SEGMENTS));
-    };
-    let maximum_index = SEGMENTS - 1;
-    let marker = u128::from(track.position_ms.min(duration))
-        .saturating_mul(u128::try_from(maximum_index).unwrap_or(u128::MAX))
-        / u128::from(duration);
-    let marker = usize::try_from(marker).unwrap_or(maximum_index);
-    format!(
-        "`{}●{}`",
-        "━".repeat(marker),
-        "─".repeat(maximum_index.saturating_sub(marker))
-    )
 }
 
 fn playback_controls(

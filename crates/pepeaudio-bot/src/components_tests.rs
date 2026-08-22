@@ -87,11 +87,12 @@ fn now_panel_embeds_the_origin_in_the_title_without_link_buttons() {
         serialized.contains("## [Example](https://open.spotify.com/track/4uLU6hMCjMI75M1A2tKUQC)")
     );
     assert!(!serialized.contains("youtube.com"));
+    assert!(serialized.contains("https://i.ytimg.com/vi/dQw4w9WgXcQ/hqdefault.jpg"));
     assert!(!serialized.contains("\"style\":5"));
 }
 
 #[test]
-fn now_panel_replaces_textual_timestamps_with_a_progress_bar() {
+fn now_panel_shows_elapsed_and_total_time_around_the_progress_bar() {
     let provenance = TrackProvenance::new(
         None,
         page(
@@ -104,8 +105,8 @@ fn now_panel_replaces_textual_timestamps_with_a_progress_bar() {
 
     assert!(serialized.contains('●'));
     assert!(serialized.contains('─'));
-    assert!(!serialized.contains("0:01"));
-    assert!(!serialized.contains("2:00"));
+    assert!(serialized.contains("0:01"));
+    assert!(serialized.contains("2:00"));
     assert!(!serialized.contains("音量:"));
     assert!(!serialized.contains("キュー:"));
 }

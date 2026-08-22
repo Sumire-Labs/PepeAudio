@@ -16,6 +16,8 @@ mod guild_lifecycle_actor;
 mod guild_policy;
 mod interaction;
 mod media;
+mod now_panel_updater;
+mod now_playing;
 mod permissions;
 mod process_memory;
 mod production;
@@ -46,6 +48,7 @@ pub use guild_policy::{
 };
 pub use interaction::{InteractionInput, InteractionMapError, map_interaction};
 pub use media::{AttachmentSource, MediaResolver, ResolveError, ResolvedMediaBatch};
+pub use now_panel_updater::NowPanelUpdater;
 pub use permissions::{
     ControlPolicy, VoiceContext, VoicePolicyError, authorize_guild_control, authorize_voice_control,
 };

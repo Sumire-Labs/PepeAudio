@@ -20,5 +20,9 @@ pub(crate) async fn now(ctx: Context<'_>) -> Result<(), CommandError> {
         &ctx.data().component_ids,
         &ctx.data().hrir_options,
     )?;
-    edit_deferred(ctx, &panel).await
+    let message_id = edit_deferred(ctx, &panel).await?;
+    ctx.data()
+        .now_panels
+        .track(guild_id, ctx.channel_id(), message_id, player, &snapshot);
+    Ok(())
 }

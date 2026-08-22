@@ -27,8 +27,8 @@ const MAX_PARTITIONED_HRIR_FRAMES: usize = 9_600;
 const SNAPSHOT_TTL: Duration = Duration::from_hours(24);
 
 use crate::{
-    BotConfig, BotData, BotError, ComponentIdCodec, DiscordComponentsV2Rest, HrirOption,
-    PlayerRegistry,
+    BotConfig, BotData, BotError, ComponentIdCodec, ComponentsV2Responder, DiscordComponentsV2Rest,
+    HrirOption, NowPanelUpdater, PlayerRegistry,
     guild_lifecycle::GuildLifecycleRuntime,
     guild_policy::PostgresGuildPolicy,
     production_factory::ProductionPlayerFactory,
@@ -113,15 +113,23 @@ pub(crate) async fn assemble(
     )
     .map_err(|_| BotError::RuntimeDependency)?;
     let guild_lifecycle = GuildLifecycleRuntime::start(valkey.clone(), presence.handle());
+    let components: Arc<dyn ComponentsV2Responder> = Arc::new(DiscordComponentsV2Rest::new(
+        Arc::new(Http::new(&discord.discord_token)),
+    ));
+    let component_ids = ComponentIdCodec::new(&discord.component_signing_key)
+        .expect("BotConfig validates the component signing key");
+    let now_panels = NowPanelUpdater::new(
+        components.clone(),
+        component_ids.clone(),
+        hrir_options.clone(),
+    );
     let data = BotData {
         players: players.clone(),
         media,
-        components: Arc::new(DiscordComponentsV2Rest::new(Arc::new(Http::new(
-            &discord.discord_token,
-        )))),
-        component_ids: ComponentIdCodec::new(&discord.component_signing_key)
-            .expect("BotConfig validates the component signing key"),
+        components,
+        component_ids,
         hrir_options,
+        now_panels,
         guild_policy: Arc::new(PostgresGuildPolicy::new(postgres.clone())),
         guild_lifecycle: Some(guild_lifecycle.handle()),
     };

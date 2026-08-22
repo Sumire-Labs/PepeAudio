@@ -6,8 +6,8 @@ use songbird::{SerenityInit as _, Songbird};
 
 use crate::{
     BotConfig, BotError, CommandError, ComponentIdCodec, ComponentsV2Responder,
-    GuildLifecycleHandle, GuildPolicyProvider, HrirOption, MediaResolver, PlayerRegistry,
-    ShardConfig,
+    GuildLifecycleHandle, GuildPolicyProvider, HrirOption, MediaResolver, NowPanelUpdater,
+    PlayerRegistry, ShardConfig,
     commands::{leave, now, play, stop},
     component_dispatch,
     discord_status::{DiscordStatusRuntime, initial_activity},
@@ -20,6 +20,7 @@ pub struct BotData {
     pub components: Arc<dyn ComponentsV2Responder>,
     pub component_ids: ComponentIdCodec,
     pub hrir_options: Arc<[HrirOption]>,
+    pub now_panels: NowPanelUpdater,
     pub guild_policy: Arc<dyn GuildPolicyProvider>,
     /// Optional restart-safe guild lifecycle and presence handle.
     pub guild_lifecycle: Option<GuildLifecycleHandle>,
@@ -134,6 +135,7 @@ impl BotData {
             components: self.components.clone(),
             component_ids: self.component_ids.clone(),
             hrir_options: self.hrir_options.clone(),
+            now_panels: self.now_panels.clone(),
             guild_policy: self.guild_policy.clone(),
             guild_lifecycle: self.guild_lifecycle.clone(),
         }
