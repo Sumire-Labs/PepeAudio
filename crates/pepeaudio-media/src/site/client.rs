@@ -108,18 +108,7 @@ impl YtDlpClient {
             return Err(SiteError::InvalidSearch);
         }
         for provider in [SiteProvider::YouTube, SiteProvider::SoundCloud] {
-            let output = self
-                .runner
-                .run(
-                    &command::resolve_query(&self.config, provider, query),
-                    OutputLimits {
-                        timeout: Duration::from_secs(45),
-                        max_stdout_bytes: RESOLVE_STDOUT_BYTES,
-                        max_stderr_bytes: STDERR_BYTES,
-                    },
-                )
-                .await?;
-            match parse::resolved_search(&output.stdout, provider, &self.config) {
+            match self.resolve_first_result(provider, query).await {
                 Ok(track) => return Ok(track),
                 Err(SiteError::NoSearchMatch | SiteError::UnsupportedStream) => {}
                 Err(error) => return Err(error),
@@ -182,14 +171,47 @@ impl YtDlpClient {
         &self,
         search: &SiteSearch,
     ) -> Result<SiteResolvedTrack, SiteError> {
-        for provider in [SiteProvider::YouTube, SiteProvider::SoundCloud] {
-            match self.search_provider(search, provider).await {
-                Ok(track) => return Ok(track),
-                Err(SiteError::NoSearchMatch | SiteError::UnsupportedStream) => {}
-                Err(error) => return Err(error),
+        match self
+            .resolve_first_result(SiteProvider::YouTube, &search.query)
+            .await
+        {
+            Ok(track) if matching::resolved_matches(&track, search) => return Ok(track),
+            Ok(_) | Err(SiteError::UnsupportedStream) => {
+                match self.search_provider(search, SiteProvider::YouTube).await {
+                    Ok(track) => return Ok(track),
+                    Err(SiteError::NoSearchMatch | SiteError::UnsupportedStream) => {}
+                    Err(error) => return Err(error),
+                }
             }
+            Err(SiteError::NoSearchMatch) => {}
+            Err(error) => return Err(error),
         }
-        Err(SiteError::NoSearchMatch)
+        match self.search_provider(search, SiteProvider::SoundCloud).await {
+            Ok(track) => Ok(track),
+            Err(SiteError::NoSearchMatch | SiteError::UnsupportedStream) => {
+                Err(SiteError::NoSearchMatch)
+            }
+            Err(error) => Err(error),
+        }
+    }
+
+    async fn resolve_first_result(
+        &self,
+        provider: SiteProvider,
+        query: &str,
+    ) -> Result<SiteResolvedTrack, SiteError> {
+        let output = self
+            .runner
+            .run(
+                &command::resolve_query(&self.config, provider, query),
+                OutputLimits {
+                    timeout: Duration::from_secs(45),
+                    max_stdout_bytes: RESOLVE_STDOUT_BYTES,
+                    max_stderr_bytes: STDERR_BYTES,
+                },
+            )
+            .await?;
+        parse::resolved_search(&output.stdout, provider, &self.config)
     }
 
     async fn search_provider(

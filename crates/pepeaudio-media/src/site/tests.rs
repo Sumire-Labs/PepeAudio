@@ -155,6 +155,18 @@ fn provider_policy_accepts_only_expected_https_page_hosts() {
     );
 }
 
+#[test]
+fn youtube_mix_urls_use_the_bounded_collection_path() {
+    let runner = std::sync::Arc::new(FakeRunner::json([]));
+    let client = YtDlpClient::new(config(), runner).expect("client");
+
+    assert!(
+        !client
+            .is_single_item_url("https://www.youtube.com/watch?v=abcdefghijk&list=RDabcdefghijk")
+            .expect("YouTube mix URL")
+    );
+}
+
 #[tokio::test]
 async fn commands_disable_ambient_configuration_and_select_safe_direct_audio() {
     let runner = std::sync::Arc::new(FakeRunner::json([
@@ -338,6 +350,32 @@ fn catalog_search() -> SiteSearch {
 }
 
 #[tokio::test]
+async fn matching_first_youtube_result_skips_flat_search_and_second_resolution() {
+    let runner = std::sync::Arc::new(FakeRunner::json([r#"{
+        "_type":"playlist","entries":[{
+          "id":"abcdefghijk","webpage_url":"https://www.youtube.com/watch?v=abcdefghijk",
+          "title":"Example Song","uploader":"Primary Artist","duration":180,
+          "protocol":"https","vcodec":"none","acodec":"opus",
+          "url":"https://rr1.googlevideo.com/videoplayback","http_headers":{}
+        }]
+    }"#]));
+    let client = YtDlpClient::new(config(), runner.clone()).expect("client");
+
+    let resolved = client
+        .resolve_search(&catalog_search())
+        .await
+        .expect("safe first result");
+
+    assert_eq!(resolved.title, "Example Song");
+    let commands = runner.commands.lock().expect("commands");
+    assert_eq!(commands.len(), 1);
+    assert_eq!(
+        commands[0].arguments().last(),
+        Some(&OsString::from("ytsearch1:Example Song Primary Artist"))
+    );
+}
+
+#[tokio::test]
 async fn empty_youtube_search_falls_back_to_a_strong_soundcloud_match() {
     let runner = std::sync::Arc::new(FakeRunner::json([
         r#"{"_type":"playlist","entries":[]}"#,
@@ -358,6 +396,7 @@ async fn empty_youtube_search_falls_back_to_a_strong_soundcloud_match() {
 #[tokio::test]
 async fn full_metadata_duration_is_rechecked_after_flat_search_ranking() {
     let runner = std::sync::Arc::new(FakeRunner::json([
+        r#"{"_type":"playlist","entries":[{"id":"abcdefghijk","webpage_url":"https://www.youtube.com/watch?v=abcdefghijk","title":"Example Song","uploader":"Primary Artist","duration":400,"protocol":"https","vcodec":"none","acodec":"opus","url":"https://rr1.googlevideo.com/videoplayback","http_headers":{}}]}"#,
         r#"{"_type":"playlist","entries":[{"id":"abcdefghijk","title":"Example Song","uploader":"Primary Artist","duration":180}]}"#,
         r#"{"title":"Example Song","duration":400,"protocol":"https","vcodec":"none","acodec":"opus","url":"https://rr1.googlevideo.com/videoplayback","http_headers":{}}"#,
         r#"{"_type":"playlist","entries":[]}"#,
@@ -373,6 +412,7 @@ async fn full_metadata_duration_is_rechecked_after_flat_search_ranking() {
 #[tokio::test]
 async fn an_unsupported_top_candidate_advances_to_the_next_ranked_match() {
     let runner = std::sync::Arc::new(FakeRunner::json([
+        r#"{"_type":"playlist","entries":[{"id":"abcdefghijk","webpage_url":"https://www.youtube.com/watch?v=abcdefghijk","title":"Example Song","uploader":"Primary Artist","duration":180,"protocol":"m3u8_native","vcodec":"none","acodec":"aac","url":"https://rr1.googlevideo.com/manifest.m3u8","http_headers":{}}]}"#,
         r#"{"_type":"playlist","entries":[
           {"id":"abcdefghijk","title":"Example Song","uploader":"Primary Artist","duration":180},
           {"id":"lmnopqrstuv","title":"Example Song Official Audio","uploader":"Primary Artist","duration":188}
@@ -399,10 +439,15 @@ async fn operational_and_security_failures_are_not_masked_as_search_misses() {
         Err(SiteError::Process(ProcessError::Timeout))
     ));
 
-    let runner = std::sync::Arc::new(FakeRunner::json([
-        r#"{"_type":"playlist","entries":[{"id":"abcdefghijk","title":"Example Song","uploader":"Primary Artist","duration":180}]}"#,
-        r#"{"title":"Example Song","duration":180,"protocol":"https","vcodec":"none","acodec":"opus","url":"https://rr1.googlevideo.com/videoplayback","http_headers":{"Authorization":"secret"}}"#,
-    ]));
+    let runner = std::sync::Arc::new(FakeRunner::json([r#"{
+        "_type":"playlist","entries":[{
+          "id":"abcdefghijk","webpage_url":"https://www.youtube.com/watch?v=abcdefghijk",
+          "title":"Example Song","uploader":"Primary Artist","duration":180,
+          "protocol":"https","vcodec":"none","acodec":"opus",
+          "url":"https://rr1.googlevideo.com/videoplayback",
+          "http_headers":{"Authorization":"secret"}
+        }]
+    }"#]));
     let client = YtDlpClient::new(config(), runner).expect("client");
     assert!(matches!(
         client.resolve_search(&catalog_search()).await,

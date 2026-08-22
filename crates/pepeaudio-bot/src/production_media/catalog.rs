@@ -32,11 +32,6 @@ impl ProductionMediaResolver {
             .catalog_resolver
             .as_ref()
             .ok_or(ResolveError::CrossServiceMatchingDisabled)?;
-        if reference.provider() == CatalogProvider::Spotify
-            && reference.kind() == CatalogItemKind::Playlist
-        {
-            return Err(ResolveError::SpotifyPlaylistRequiresUserAuthorization);
-        }
         let client = self
             .site_client
             .as_ref()

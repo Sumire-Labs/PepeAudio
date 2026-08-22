@@ -39,7 +39,7 @@ async fn resolves_bounded_public_track_metadata_without_credentials() {
     assert_eq!(transport.request_urls(), [TRACK_URL]);
     assert_eq!(
         transport.request_response_limit(0),
-        Some(MAX_PUBLIC_RESPONSE_BYTES)
+        Some(MAX_PUBLIC_TRACK_RESPONSE_BYTES)
     );
     assert_eq!(transport.request_header(0, "authorization"), None);
     assert_eq!(transport.request_header(0, "cookie"), None);
@@ -79,28 +79,22 @@ async fn separates_spotify_public_artist_lists_for_cross_script_matching() {
 }
 
 #[tokio::test]
-async fn rejects_public_collections_before_network_access() {
+async fn rejects_public_albums_before_network_access() {
     let transport = ScriptedTransport::new(Vec::<HttpResponse>::new());
     let client = SpotifyPublicCatalog::with_transport(transport.clone());
 
-    for (url, kind) in [
-        (
-            "https://open.spotify.com/album/4aawyAB9vmqN3uQ7FjRGTy",
-            CatalogItemKind::Album,
-        ),
-        (
-            "https://open.spotify.com/playlist/37i9dQZF1DXcBWIGoYBM5M",
-            CatalogItemKind::Playlist,
-        ),
-    ] {
-        assert_eq!(
-            client.resolve(&reference(url), 25).await,
-            Err(CatalogError::PublicMetadataUnsupported {
-                provider: CatalogProvider::Spotify,
-                kind,
-            })
-        );
-    }
+    assert_eq!(
+        client
+            .resolve(
+                &reference("https://open.spotify.com/album/4aawyAB9vmqN3uQ7FjRGTy"),
+                25,
+            )
+            .await,
+        Err(CatalogError::PublicMetadataUnsupported {
+            provider: CatalogProvider::Spotify,
+            kind: CatalogItemKind::Album,
+        })
+    );
     assert!(transport.request_urls().is_empty());
 }
 

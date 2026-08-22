@@ -4,6 +4,7 @@ use async_trait::async_trait;
 use url::Url;
 
 use super::metadata::{MAX_DURATION_MS, clean_text, valid_spotify_id};
+use super::public_playlist::resolve_public_playlist;
 use crate::{
     CatalogCollection, CatalogError, CatalogItemKind, CatalogProvider, CatalogReference,
     CatalogResult, CatalogTrackMetadata,
@@ -12,7 +13,7 @@ use crate::{
 };
 
 const PUBLIC_TRACK_BASE: &str = "https://open.spotify.com/track/";
-const MAX_PUBLIC_RESPONSE_BYTES: usize = 512 * 1024;
+const MAX_PUBLIC_TRACK_RESPONSE_BYTES: usize = 512 * 1024;
 const MAX_META_TAG_BYTES: usize = 4 * 1024;
 const MAX_PUBLIC_ARTISTS: usize = 10;
 
@@ -21,7 +22,8 @@ pub struct SpotifyPublicCatalog {
 }
 
 impl SpotifyPublicCatalog {
-    /// Creates a credential-free client for public Spotify track metadata.
+    /// Creates a credential-free client for public Spotify track and playlist
+    /// metadata.
     ///
     /// # Errors
     ///
@@ -35,7 +37,7 @@ impl SpotifyPublicCatalog {
         Ok(Self::with_transport(transport))
     }
 
-    fn with_transport(transport: SharedTransport) -> Self {
+    pub(super) fn with_transport(transport: SharedTransport) -> Self {
         Self { transport }
     }
 
@@ -51,7 +53,7 @@ impl SpotifyPublicCatalog {
         let request = HttpRequest::get(url)
             .with_header("accept", "text/html,application/xhtml+xml;q=0.9".to_owned())
             .with_header("accept-language", "en-US,en;q=0.5".to_owned())
-            .with_response_limit(MAX_PUBLIC_RESPONSE_BYTES);
+            .with_response_limit(MAX_PUBLIC_TRACK_RESPONSE_BYTES);
         let response = self
             .transport
             .execute(request)
@@ -107,18 +109,21 @@ impl ProviderCatalog for SpotifyPublicCatalog {
     async fn resolve(
         &self,
         reference: &CatalogReference,
-        _collection_limit: usize,
+        collection_limit: usize,
     ) -> CatalogResult<CatalogCollection> {
         if reference.provider() != CatalogProvider::Spotify {
             return Err(CatalogError::UnsupportedUrl);
         }
-        if reference.kind() != CatalogItemKind::Track {
-            return Err(CatalogError::PublicMetadataUnsupported {
+        match reference.kind() {
+            CatalogItemKind::Track => self.resolve_track(reference).await,
+            CatalogItemKind::Playlist => {
+                resolve_public_playlist(self.transport.as_ref(), reference, collection_limit).await
+            }
+            kind @ CatalogItemKind::Album => Err(CatalogError::PublicMetadataUnsupported {
                 provider: CatalogProvider::Spotify,
-                kind: reference.kind(),
-            });
+                kind,
+            }),
         }
-        self.resolve_track(reference).await
     }
 }
 
@@ -154,7 +159,11 @@ fn meta_value(document: &str, property: &str, maximum_bytes: usize) -> Option<St
     None
 }
 
-fn find_ascii_case_insensitive(haystack: &[u8], needle: &[u8], start: usize) -> Option<usize> {
+pub(super) fn find_ascii_case_insensitive(
+    haystack: &[u8],
+    needle: &[u8],
+    start: usize,
+) -> Option<usize> {
     haystack
         .get(start..)?
         .windows(needle.len())
@@ -162,7 +171,7 @@ fn find_ascii_case_insensitive(haystack: &[u8], needle: &[u8], start: usize) -> 
         .map(|offset| start + offset)
 }
 
-fn find_tag_end(bytes: &[u8], start: usize) -> Option<usize> {
+pub(super) fn find_tag_end(bytes: &[u8], start: usize) -> Option<usize> {
     let boundary = bytes.len().min(start.saturating_add(MAX_META_TAG_BYTES));
     let mut quote = None;
     for (offset, byte) in bytes.get(start..boundary)?.iter().copied().enumerate() {
@@ -176,7 +185,7 @@ fn find_tag_end(bytes: &[u8], start: usize) -> Option<usize> {
     None
 }
 
-fn attribute<'a>(tag: &'a str, wanted: &str) -> Option<&'a str> {
+pub(super) fn attribute<'a>(tag: &'a str, wanted: &str) -> Option<&'a str> {
     let bytes = tag.as_bytes();
     let mut cursor = b"<meta".len();
     while cursor < bytes.len() {
@@ -275,7 +284,7 @@ fn push_bounded(output: &mut String, character: char, maximum_bytes: usize) -> O
     (output.len() + character.len_utf8() <= maximum_bytes).then(|| output.push(character))
 }
 
-fn map_http_error(error: HttpError) -> CatalogError {
+pub(super) fn map_http_error(error: HttpError) -> CatalogError {
     match error {
         HttpError::Transport => CatalogError::Transport(CatalogProvider::Spotify),
         HttpError::ResponseTooLarge => CatalogError::ResponseTooLarge(CatalogProvider::Spotify),

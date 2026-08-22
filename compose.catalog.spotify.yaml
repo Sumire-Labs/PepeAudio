@@ -1,5 +1,5 @@
-# Credential-backed Spotify mode. For the secret-free track-only fallback, use
-# compose.catalog.public-metadata.yaml instead.
+# Credential-backed Spotify track/album mode. For secret-free tracks/public
+# playlists, use compose.catalog.public-metadata.yaml instead.
 services:
   bot:
     environment:

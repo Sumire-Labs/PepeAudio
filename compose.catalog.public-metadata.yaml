@@ -1,4 +1,5 @@
-# Explicit keyless catalog mode for Spotify tracks and Apple Music songs/albums.
+# Explicit keyless catalog mode for Spotify tracks/public playlists and Apple
+# Music songs/albums.
 # It reads only bounded public metadata and never mounts provider credentials.
 services:
   bot:

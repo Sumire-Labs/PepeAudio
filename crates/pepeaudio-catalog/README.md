@@ -12,14 +12,19 @@ and keep source attribution visible.
 ## Supported catalog access
 
 - Spotify track and album metadata use the client credentials flow.
-- Spotify playlist links are recognized so the application can return a clear
-  `SpotifyPlaylistAccessDenied` error. The current playlist-items API requires
-  a user token for the owner or a collaborator; this project intentionally has
-  no Spotify user OAuth flow. Client credentials therefore support tracks and
-  albums only, not arbitrary or public playlists.
+- The explicit credential-free mode reads bounded metadata from public Spotify
+  track and playlist pages. It never uses cookies, user tokens, Spotify audio,
+  or undocumented JSON endpoints. Public playlist pages may expose only an
+  initial subset; results retain the reported total and mark that subset as
+  truncated. The embedded page schema is not a supported API and can change
+  without notice.
+- The official playlist-items API requires a user token for a playlist owner or
+  collaborator. This project intentionally has no Spotify user OAuth flow, so
+  the credential-backed client still returns `SpotifyPlaylistAccessDenied` for
+  playlists. Use the public-metadata mode for a public playlist page.
 - Apple Music songs, albums, and catalog playlists use an ES256 developer
   token. Apple Music user-library playlists are not supported.
-- Short-link scraping, browser cookies, and user tokens are not accepted.
+- Short links, browser cookies, and user tokens are not accepted.
 
 Albums and playlists process 25 source items by default. Applications may
 choose a limit from 1 through the hard maximum of 100. Results say when the

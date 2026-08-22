@@ -6,7 +6,7 @@ Rustで動き、DiscordのコマンドとWebダッシュボードのどちらか
 ## できること
 
 - YouTube／SoundCloudの曲・プレイリスト、URL、添付ファイルを`/play`でキューへ追加
-- Spotify／Apple Musicの曲情報をYouTube／SoundCloudの安全な一致候補へ変換（任意設定）
+- Spotify／Apple Musicの曲情報とSpotify公開プレイリストをYouTube／SoundCloudの安全な一致候補へ変換（任意設定）
 - pause、seek、skip、repeat、shuffle、音量調整
 - HeSuVi互換の7ch／14ch HRIRプリセットを切り替え
 - HeSuVi HRIRを前方固定で適用する360° Audio

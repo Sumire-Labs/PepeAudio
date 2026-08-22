@@ -72,7 +72,7 @@ fn artists(values: Vec<NamedObject>) -> Option<Vec<String>> {
     (!artists.is_empty()).then_some(artists)
 }
 
-fn spotify_track_reference(id: &str) -> CatalogReference {
+pub(super) fn spotify_track_reference(id: &str) -> CatalogReference {
     CatalogReference::new(
         CatalogProvider::Spotify,
         CatalogItemKind::Track,

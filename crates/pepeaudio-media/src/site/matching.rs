@@ -1,6 +1,6 @@
 use std::{cmp::Reverse, collections::HashSet};
 
-use super::{SiteError, SiteReference, SiteSearch};
+use super::{SiteError, SiteReference, SiteResolvedTrack, SiteSearch};
 
 const MINIMUM_SCORE: u16 = 55;
 const MAXIMUM_CANDIDATES_TO_RESOLVE: usize = 3;
@@ -51,6 +51,17 @@ pub(super) fn ranked_candidates<'a>(
     scored.retain(|(score, _)| *score >= MINIMUM_SCORE);
     scored.truncate(MAXIMUM_CANDIDATES_TO_RESOLVE);
     Ok(scored.into_iter().map(|(_, candidate)| candidate).collect())
+}
+
+pub(super) fn resolved_matches(candidate: &SiteResolvedTrack, search: &SiteSearch) -> bool {
+    let reference = SiteReference {
+        provider: candidate.provider,
+        page_url: candidate.page_url.clone(),
+        title: Some(candidate.title.clone()),
+        artist: candidate.artist.clone(),
+        duration_ms: Some(candidate.duration_ms),
+    };
+    candidate_score(&reference, search).is_some_and(|score| score >= MINIMUM_SCORE)
 }
 
 pub(super) fn duration_matches(preferred: Option<u64>, actual: u64) -> bool {
