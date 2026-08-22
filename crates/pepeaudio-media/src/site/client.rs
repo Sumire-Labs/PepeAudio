@@ -171,12 +171,13 @@ impl YtDlpClient {
         parse::resolved(&output.stdout, reference, &self.config)
     }
 
-    /// Finds a high-confidence `YouTube` result, then tries `SoundCloud`.
+    /// Finds the best matching `YouTube` result, then tries `SoundCloud`.
     ///
     /// # Errors
     ///
-    /// Returns [`SiteError::NoSearchMatch`] when no unambiguous candidate is
-    /// safe. Operational and security errors are propagated without fallback.
+    /// Returns [`SiteError::NoSearchMatch`] when no candidate has matching
+    /// title, artist, version, and duration metadata. Operational and security
+    /// errors are propagated without fallback.
     pub async fn resolve_search(
         &self,
         search: &SiteSearch,

@@ -2,9 +2,9 @@ use std::{cmp::Reverse, collections::HashSet};
 
 use super::{SiteError, SiteReference, SiteSearch};
 
-const MINIMUM_SCORE: u16 = 70;
-const MINIMUM_WINNING_MARGIN: u16 = 8;
+const MINIMUM_SCORE: u16 = 55;
 const MAXIMUM_CANDIDATES_TO_RESOLVE: usize = 3;
+const DURATION_TOLERANCE_MS: u64 = 15_000;
 const PRESENTATION_MARKERS: &[&[&str]] = &[
     &["official", "music", "video"],
     &["official", "lyric", "video"],
@@ -41,53 +41,20 @@ pub(super) fn ranked_candidates<'a>(
         .iter()
         .filter_map(|candidate| candidate_score(candidate, search).map(|score| (score, candidate)))
         .collect::<Vec<_>>();
-    scored.sort_unstable_by_key(|candidate| Reverse(candidate.0));
-    let Some((best, candidate)) = scored.first().copied() else {
+    scored.sort_by_key(|candidate| Reverse(candidate.0));
+    let Some((best, _)) = scored.first().copied() else {
         return Err(SiteError::NoSearchMatch);
     };
-    let runner_up = scored.get(1).map_or(0, |(score, _)| *score);
-    if best < MINIMUM_SCORE
-        || (best.saturating_sub(runner_up) < MINIMUM_WINNING_MARGIN
-            && !authoritative_tie(&scored, search, best))
-    {
+    if best < MINIMUM_SCORE {
         return Err(SiteError::NoSearchMatch);
     }
-    let _ = candidate;
     scored.retain(|(score, _)| *score >= MINIMUM_SCORE);
     scored.truncate(MAXIMUM_CANDIDATES_TO_RESOLVE);
     Ok(scored.into_iter().map(|(_, candidate)| candidate).collect())
 }
 
-fn authoritative_tie(scored: &[(u16, &SiteReference)], search: &SiteSearch, best: u16) -> bool {
-    scored
-        .iter()
-        .take_while(|(score, _)| best.saturating_sub(*score) < MINIMUM_WINNING_MARGIN)
-        .all(|(_, candidate)| authoritative_artist(candidate, &search.expected_artists))
-}
-
-fn authoritative_artist(candidate: &SiteReference, expected_artists: &[String]) -> bool {
-    let uploader = normalize(candidate.artist.as_deref().unwrap_or_default());
-    let channel = uploader.strip_suffix(" topic").unwrap_or(&uploader);
-    let candidate_context = normalize(&format!(
-        "{} {}",
-        candidate.title.as_deref().unwrap_or_default(),
-        candidate.artist.as_deref().unwrap_or_default()
-    ));
-    !channel.is_empty()
-        && expected_artists
-            .iter()
-            .map(|artist| normalize(artist))
-            .any(|artist| {
-                channel == artist
-                    || (phrase_present(&artist, channel)
-                        && artist
-                            .split_whitespace()
-                            .all(|token| phrase_present(&candidate_context, token)))
-            })
-}
-
 pub(super) fn duration_matches(preferred: Option<u64>, actual: u64) -> bool {
-    preferred.is_none_or(|preferred| preferred.abs_diff(actual) <= duration_tolerance(preferred))
+    preferred.is_none_or(|preferred| preferred.abs_diff(actual) <= DURATION_TOLERANCE_MS)
 }
 
 fn candidate_score(candidate: &SiteReference, search: &SiteSearch) -> Option<u16> {
@@ -120,12 +87,7 @@ fn candidate_score(candidate: &SiteReference, search: &SiteSearch) -> Option<u16
     if qualifier_conflict(&expected_context, &candidate_context) {
         return None;
     }
-    let candidate_artist = normalize(candidate.artist.as_deref().unwrap_or_default());
-    let artist_score = artist_score(
-        &candidate_artist,
-        &candidate_context,
-        &search.expected_artists,
-    )?;
+    let artist_score = artist_score(&candidate_context, &search.expected_artists)?;
     let duration_score = match (search.preferred_duration_ms, candidate.duration_ms) {
         (Some(expected), Some(actual)) if !duration_matches(Some(expected), actual) => return None,
         (Some(expected), Some(actual))
@@ -140,19 +102,10 @@ fn candidate_score(candidate: &SiteReference, search: &SiteSearch) -> Option<u16
         candidate.title.as_deref().unwrap_or_default(),
     )) * 10;
     let score = title_score + artist_score + duration_score;
-    let ranked_score = score.saturating_sub(presentation_penalty);
-    Some(if score >= MINIMUM_SCORE {
-        ranked_score.max(MINIMUM_SCORE)
-    } else {
-        ranked_score
-    })
+    Some(score.saturating_sub(presentation_penalty))
 }
 
-fn artist_score(
-    uploader: &str,
-    candidate_context: &str,
-    expected_artists: &[String],
-) -> Option<u16> {
+fn artist_score(candidate_context: &str, expected_artists: &[String]) -> Option<u16> {
     if expected_artists.is_empty() {
         return Some(10);
     }
@@ -160,20 +113,14 @@ fn artist_score(
         .iter()
         .map(|artist| normalize(artist))
         .filter(|artist| {
-            phrase_present(uploader, artist)
-                || token_overlap(artist, uploader) >= 70
-                || (phrase_present(artist, uploader)
-                    && artist
-                        .split_whitespace()
-                        .all(|token| phrase_present(candidate_context, token)))
+            !artist.is_empty()
+                && artist
+                    .split_whitespace()
+                    .all(|token| phrase_present(candidate_context, token))
         })
         .count()
         .min(2);
     (matched > 0).then(|| u16::try_from(matched).unwrap_or(2) * 15)
-}
-
-fn duration_tolerance(preferred: u64) -> u64 {
-    (preferred / 20).clamp(5_000, 10_000)
 }
 
 fn normalize(value: &str) -> String {
@@ -393,12 +340,14 @@ mod tests {
     }
 
     #[test]
-    fn tied_strong_candidates_are_ambiguous() {
+    fn tied_strong_candidates_keep_search_order() {
         let candidates = [
             candidate("Example Song", "Primary Artist - Topic", 180_000),
             candidate("Example Song", "Primary Artist Official", 180_000),
         ];
-        assert!(select_candidate(&candidates, &search("Example Song")).is_err());
+        let selected = select_candidate(&candidates, &search("Example Song")).expect("match");
+
+        assert_eq!(selected.artist.as_deref(), Some("Primary Artist - Topic"));
     }
 
     #[test]
@@ -480,7 +429,7 @@ mod tests {
     }
 
     #[test]
-    fn artist_name_in_title_cannot_replace_an_artist_match() {
+    fn artist_name_in_title_can_match_a_reupload() {
         let expected = SiteSearch::new(
             "Faded Alan Walker",
             "Faded",
@@ -490,8 +439,11 @@ mod tests {
         )
         .expect("search");
         let reupload = candidate("Alan Walker - Faded", "Unrelated Channel", 213_000);
+        let candidates = [reupload];
 
-        assert!(select_candidate(&[reupload], &expected).is_err());
+        let selected = select_candidate(&candidates, &expected).expect("metadata match");
+
+        assert_eq!(selected.artist.as_deref(), Some("Unrelated Channel"));
     }
 
     #[test]
@@ -578,7 +530,7 @@ mod tests {
     }
 
     #[test]
-    fn combined_artist_credits_do_not_authorize_reupload_ties() {
+    fn combined_artist_credits_can_match_a_reupload() {
         let expected = SiteSearch::new(
             "Monster Alan Walker Emyrson Flora",
             "Monster",
@@ -600,6 +552,43 @@ mod tests {
             ),
         ];
 
-        assert!(select_candidate(&candidates, &expected).is_err());
+        let selected = select_candidate(&candidates, &expected).expect("metadata match");
+
+        assert_eq!(selected.artist.as_deref(), Some("Unofficial Uploads"));
+    }
+
+    #[test]
+    fn spotify_thriller_matches_the_same_length_lyrics_upload() {
+        let expected = SiteSearch::new(
+            "Thriller Michael Jackson",
+            "Thriller",
+            vec!["Michael Jackson".into()],
+            Some(359_000),
+            None,
+        )
+        .expect("search");
+        let candidates = [
+            candidate(
+                "Michael Jackson - Thriller (Official 4K Video)",
+                "Michael Jackson",
+                822_000,
+            ),
+            candidate(
+                "Michael Jackson - Thriller (Official Video - Shortened Version)",
+                "Michael Jackson",
+                202_000,
+            ),
+            candidate(
+                "Michael Jackson - Thriller (Lyrics)",
+                "LyricLandia",
+                358_000,
+            ),
+            candidate("Thriller 7\" (Special Edit)", "Michael Jackson", 279_000),
+            candidate("Thriller (2003 Edit)", "Michael Jackson", 312_000),
+        ];
+
+        let selected = select_candidate(&candidates, &expected).expect("metadata match");
+
+        assert_eq!(selected.artist.as_deref(), Some("LyricLandia"));
     }
 }
