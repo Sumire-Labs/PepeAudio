@@ -19,7 +19,7 @@ url = "2"
 uuid.workspace = true
 
 [target.'cfg(unix)'.dependencies]
-nix = { version = "0.30", default-features = false, features = ["process", "signal"] }
+nix = { version = "0.31", default-features = false, features = ["process", "signal"] }
 
 [dev-dependencies]
 tokio = { version = "1", features = ["macros", "rt-multi-thread", "test-util"] }
