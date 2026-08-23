@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1.12
 
-FROM rust:1.97.0-bookworm AS builder
+FROM rust:1.97.1-bookworm AS builder
 WORKDIR /build
 
 ARG PEPEAUDIO_BINARY
