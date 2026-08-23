@@ -10,7 +10,7 @@ publish = false
 async-trait = "0.1"
 base64 = "0.22"
 futures-util = "0.3"
-hmac = "0.12"
+hmac = "0.13"
 pepeaudio-components-v2 = { path = "../pepeaudio-components-v2" }
 pepeaudio-catalog = { path = "../pepeaudio-catalog" }
 pepeaudio-config = { path = "../pepeaudio-config" }
