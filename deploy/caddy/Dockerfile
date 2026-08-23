@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1.12
 
-FROM node:24.19.0-bookworm-slim AS web-builder
+FROM node:26.7.0-bookworm-slim AS web-builder
 WORKDIR /web
 
 RUN npm install --global pnpm@11.3.0
