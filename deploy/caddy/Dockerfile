@@ -22,7 +22,7 @@ RUN VITE_PEPEAUDIO_DEMO_MODE="${VITE_PEPEAUDIO_DEMO_MODE}" \
     VITE_PEPEAUDIO_DEV_CSRF_TOKEN="${PEPEAUDIO_WEB_DEV_BOOTSTRAP}" \
     pnpm build
 
-FROM caddy:2.10.2-alpine
+FROM caddy:2.11.3-alpine
 RUN setcap -r /usr/bin/caddy && test -z "$(getcap /usr/bin/caddy)"
 COPY deploy/caddy/Caddyfile /etc/caddy/Caddyfile
 COPY deploy/caddy/Caddyfile.tunnel /etc/caddy/Caddyfile.tunnel
