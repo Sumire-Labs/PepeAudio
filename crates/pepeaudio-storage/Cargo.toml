@@ -10,7 +10,7 @@ publish = false
 async-trait = "0.1"
 futures-util = { version = "0.3", default-features = false, features = ["std"] }
 pepeaudio-core = { path = "../pepeaudio-core" }
-redis = { version = "=1.5.0", default-features = false, features = [
+redis = { version = "=1.7.1", default-features = false, features = [
     "connection-manager",
     "script",
     "streams",

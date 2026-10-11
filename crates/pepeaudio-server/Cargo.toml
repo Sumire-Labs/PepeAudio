@@ -19,10 +19,10 @@ pepeaudio-core = { path = "../pepeaudio-core" }
 pepeaudio-runtime = { path = "../pepeaudio-runtime" }
 pepeaudio-storage = { path = "../pepeaudio-storage" }
 thiserror.workspace = true
-tokio = { version = "=1.53.1", features = ["macros", "net", "rt-multi-thread", "signal", "sync", "time"] }
+tokio = { version = "=1.53.2", features = ["macros", "net", "rt-multi-thread", "signal", "sync", "time"] }
 
 [dev-dependencies]
-tokio = { version = "=1.53.1", features = ["test-util"] }
+tokio = { version = "=1.53.2", features = ["test-util"] }
 
 [lints]
 workspace = true
